@@ -1,5 +1,6 @@
 import Image from "next/image"
 import { SectionDivider, SectionHeader } from "@/components/shared"
+import { TeamWalkingListCta } from "@/components/sections/team-walking-list-cta"
 import { FOUNDERS } from "@/lib/data/founders"
 
 export function TeamSection() {
@@ -40,6 +41,8 @@ export function TeamSection() {
             </article>
           ))}
         </div>
+
+        <TeamWalkingListCta />
       </div>
     </section>
   )

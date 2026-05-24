@@ -64,7 +64,7 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
     >
       <DialogContent
         showCloseButton={false}
-        className="modal-panel w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl p-0"
+        className="modal-panel flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden overscroll-y-contain rounded-2xl p-0"
       >
         {pillar && (
           <>
@@ -73,7 +73,7 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
             </button>
 
             {/* Image Carousel */}
-            <div className="modal-image-frame aspect-[4/3]">
+            <div className="modal-image-frame relative aspect-[4/3] w-full shrink-0 md:aspect-auto md:h-[min(38vh,320px)]">
               {pillar.gallery.map((img, index) => (
                 <div
                   key={img}
@@ -121,8 +121,8 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
               </div>
             </div>
 
-            {/* Content */}
-            <div className="p-6 md:p-8">
+            {/* Content — scroll independiente del carrusel en desktop */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6 md:p-8">
               <div className="mb-6">
                 <span className="text-sm gladwell-gradient-text uppercase tracking-wider font-medium">
                   {pillar.subtitle}
@@ -132,21 +132,32 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
                 </DialogTitle>
               </div>
 
-              <DialogDescription className="sr-only">
-                {pillar.subtitle} — {pillar.description}
+              <DialogDescription className="mb-8 text-lg leading-relaxed text-muted-foreground">
+                {pillar.fullDescription}
               </DialogDescription>
 
-              <p className="text-muted-foreground text-lg leading-relaxed mb-8">
-                {pillar.fullDescription}
+              <p className="sr-only">
+                Incluye: {pillar.highlights.join("; ")}.
               </p>
 
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-foreground mb-4">Lo que incluye:</h3>
-                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <h3
+                  id="pillar-highlights-heading"
+                  className="text-lg font-semibold text-foreground mb-4"
+                >
+                  Lo que incluye:
+                </h3>
+                <ul
+                  aria-labelledby="pillar-highlights-heading"
+                  className="grid grid-cols-1 md:grid-cols-2 gap-3"
+                >
                   {pillar.highlights.map((highlight, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <span className="w-1.5 h-1.5 rounded-full gladwell-gradient mt-2 shrink-0" />
-                      <span className="text-muted-foreground">{highlight}</span>
+                    <li key={index} className="flex gap-3">
+                      <span
+                        className="mt-[0.55rem] h-1.5 w-1.5 shrink-0 rounded-full gladwell-gradient"
+                        aria-hidden="true"
+                      />
+                      <span className="text-muted-foreground leading-relaxed">{highlight}</span>
                     </li>
                   ))}
                 </ul>
@@ -154,13 +165,13 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
 
               <SectionDivider position="inline" className="mb-8" />
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <p className="text-muted-foreground text-sm text-center sm:text-left">
-                  Forma parte de nuestra comunidad y accede a experiencias exclusivas.
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-muted-foreground text-sm text-center sm:text-left sm:max-w-md">
+                  {pillar.modalCta}
                 </p>
                 <button
                   onClick={handleJoinWalkingList}
-                  className="px-8 py-3 rounded-full gladwell-gradient text-white font-semibold tracking-wide hover:scale-105 hover:shadow-[0_0_40px_rgba(124,58,237,0.4)] transition-all duration-300 whitespace-nowrap"
+                  className="w-full min-h-11 shrink-0 px-8 py-3 rounded-full gladwell-gradient text-white font-semibold tracking-wide hover:scale-105 hover:shadow-[0_0_40px_rgba(124,58,237,0.4)] transition-all duration-300 sm:w-auto"
                 >
                   Unirme a la Walking List
                 </button>

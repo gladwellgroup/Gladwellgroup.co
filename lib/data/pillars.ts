@@ -4,6 +4,7 @@ export interface Pillar {
   subtitle: string
   description: string
   fullDescription: string
+  modalCta: string
   image: string
   number: string
   highlights: string[]
@@ -17,13 +18,14 @@ export const PILLARS: Pillar[] = [
     subtitle: "Vivencias transformadoras",
     description: "Eventos exclusivos diseñados para crear conexiones significativas entre estrategas.",
     fullDescription:
-      "Nuestras experiencias son mucho más que eventos. Son encuentros cuidadosamente diseñados para crear conexiones profundas entre estrategas de alto nivel. Desde cenas íntimas en locaciones exclusivas hasta retiros de inmersión en la naturaleza, cada experiencia está pensada para expandir tu red, desafiar tu perspectiva y generar vínculos que trascienden lo profesional.",
+      "Nuestras experiencias son encuentros diseñados para estrategas de alto nivel: conexiones profundas, perspectivas nuevas y vínculos que trascienden lo profesional.",
+    modalCta: "Forma parte de nuestra comunidad y accede a experiencias exclusivas.",
     image: "/images/experience/experience-01.jpg",
     number: "01",
     highlights: [
-      "Cenas ejecutivas mensuales con líderes de industria",
+      "Cenas ejecutivas mensuales con líderes de la industria",
       "Retiros de inmersión estratégica trimestrales",
-      "Encuentros exclusivos con speakers internacionales",
+      "Encuentros exclusivos con ponentes internacionales",
       "Networking con la comunidad Gladwell global",
       "Acceso prioritario a eventos limitados",
       "Experiencias personalizadas según intereses",
@@ -45,7 +47,8 @@ export const PILLARS: Pillar[] = [
     subtitle: "Estrategia aplicada",
     description: "Acompañamiento estratégico para organizaciones que buscan transformarse.",
     fullDescription:
-      "Nuestro equipo de consultores combina décadas de experiencia con metodologías probadas y perspectivas innovadoras. Trabajamos junto a tu organización para diseñar e implementar estrategias que generan impacto real y sostenible. No somos consultores tradicionales: somos socios estratégicos comprometidos con tu éxito.",
+      "Combinamos experiencia, metodologías probadas y visión innovadora para diseñar e implementar estrategias con impacto real. Somos socios estratégicos comprometidos con la transformación de tu organización.",
+    modalCta: "Conecta con consultores estrategas y lleva la transformación a tu organización.",
     image: "/images/consulting/consulting-01.jpg",
     number: "02",
     highlights: [
@@ -73,7 +76,8 @@ export const PILLARS: Pillar[] = [
     subtitle: "Conocimiento que transforma",
     description: "Programas de formación diseñados para líderes que quieren dominar el arte de la estrategia.",
     fullDescription:
-      "Creemos que el conocimiento estratégico debe ser accesible, práctico y transformador. Nuestros programas de formación están diseñados por y para estrategas, combinando teoría de vanguardia con aplicación práctica inmediata. Desde workshops intensivos de un día hasta programas de desarrollo ejecutivo de largo plazo.",
+      "Programas diseñados por y para estrategas: teoría de vanguardia y aplicación práctica inmediata, desde workshops intensivos hasta desarrollo ejecutivo de largo plazo.",
+    modalCta: "Únete a programas de formación diseñados para líderes que piensan en estrategia.",
     image: "/images/education/education-01.jpg",
     number: "03",
     highlights: [

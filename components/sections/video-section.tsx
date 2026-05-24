@@ -14,7 +14,7 @@ export function VideoSection() {
       <SectionDivider />
 
       <div className="container mx-auto px-6">
-        <SectionHeader eyebrow="Nuestra Comunidad" title="Conoce Gladwell" />
+        <SectionHeader eyebrow="Nuestra Comunidad" title="Conoce más de Gladwell" />
 
         <div className="relative max-w-5xl mx-auto aspect-video rounded-2xl overflow-hidden group glass-gradient gladwell-border-gradient">
           {!isPlaying ? (
