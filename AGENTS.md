@@ -46,8 +46,10 @@ lib/
   validations/          zod schemas
 
 public/
+  brand/                fuente wordmark (favicon + OG)
+  og/                   gladwell-og.png (Open Graph 1200×630)
   images/               assets activos (~9 MB tras optimización)
-  *.png / *.svg         iconos OG y favicon
+  *.png                 favicon y apple-icon
 ```
 
 ---

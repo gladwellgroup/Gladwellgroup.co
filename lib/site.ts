@@ -1,4 +1,4 @@
-export const SITE_URL = "https://gladwellgroup-landing.vercel.app"
+export const SITE_URL = "https://www.gladwellgroup.co"
 export const SITE_NAME = "Gladwell"
 export const SITE_LOCALE = "es_CO"
 export const SITE_DESCRIPTION =

@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     images: [
       {
-        url: '/images/hero-bg-desktop.jpg',
+        url: '/og/gladwell-og.png',
         width: 1200,
         height: 630,
         alt: 'Gladwell — Apasionados por la Estrategia',
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: `${SITE_NAME} | Apasionados por la Estrategia`,
     description: SITE_DESCRIPTION,
-    images: ['/images/hero-bg-desktop.jpg'],
+    images: ['/og/gladwell-og.png'],
   },
   icons: {
     icon: [

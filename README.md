@@ -106,19 +106,30 @@ lib/
   validations/walking-list.ts    schema Zod del formulario
 
 public/
-  brand/gladwell-logo-wordmark.png   fuente del favicon (wordmark oficial)
+  brand/gladwell-logo-wordmark.png   fuente de favicon y OG (wordmark oficial)
+  og/gladwell-og.png                 imagen Open Graph 1200×630 (redes / WhatsApp)
   images/  (~9 MB — optimizadas con calidad 82)
   apple-icon.png  icon-dark-32x32.png  icon-light-32x32.png
 app/icon.png                         favicon 512px (convención Next.js)
 ```
 
-### Regenerar favicons
+`SITE_URL` en `lib/site.ts` debe ser el dominio canónico de producción (`https://www.gladwellgroup.co`).
+
+### Regenerar assets de marca
 
 Tras sustituir el PNG en `public/brand/`:
 
 ```bash
 npm run generate:favicons
+npm run generate:og
 ```
+
+### Vista previa al compartir en WhatsApp
+
+WhatsApp cachea la miniatura del enlace. Tras un deploy:
+
+1. Abre [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) y pega `https://www.gladwellgroup.co` → **Volver a recopilar**.
+2. Prueba en WhatsApp una URL nueva, por ejemplo `https://www.gladwellgroup.co/?v=og1`.
 
 ---
 
