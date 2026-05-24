@@ -106,8 +106,18 @@ lib/
   validations/walking-list.ts    schema Zod del formulario
 
 public/
+  brand/gladwell-logo-wordmark.png   fuente del favicon (wordmark oficial)
   images/  (~9 MB — optimizadas con calidad 82)
-  apple-icon.png  icon-dark-32x32.png  icon-light-32x32.png  icon.svg
+  apple-icon.png  icon-dark-32x32.png  icon-light-32x32.png
+app/icon.png                         favicon 512px (convención Next.js)
+```
+
+### Regenerar favicons
+
+Tras sustituir el PNG en `public/brand/`:
+
+```bash
+npm run generate:favicons
 ```
 
 ---

@@ -15,6 +15,9 @@ out/
 # macOS
 .DS_Store
 
+# Local favicon experiments (use public/brand + npm run generate:favicons)
+favicon-preview/
+
 # Zip / assets
 *.zip
 Landingladwellgroup.zip
