@@ -1,0 +1,46 @@
+---
+description: Convenciones del proyecto Gladwell Landing para agentes IA
+globs: ["**/*.tsx", "**/*.ts", "**/*.css"]
+alwaysApply: true
+---
+
+# Convenciones — Gladwell Landing
+
+## Datos de contenido
+
+- Los arrays de datos (pilares, fundadores, conceptos, navegación) viven **exclusivamente** en `lib/data/`.
+- Nunca incrustar arrays de más de 5 ítems dentro de un componente de sección.
+- Los tipos TypeScript de cada entidad se exportan desde su archivo de datos.
+
+## Componentes compartidos
+
+- Toda sección usa `<Section id="..." withDivider>` de `@/components/shared`.
+- Los separadores visuales se añaden con `<SectionDivider />`, nunca con `<div className="absolute top-0 ... divider-gradient" />` directamente.
+- Los encabezados de sección usan `<SectionHeader eyebrow="..." title="..." />`.
+
+## shadcn/ui
+
+- Solo instalar componentes que se usarán activamente (`npx shadcn@latest add <componente>`).
+- Los modales usan `Dialog` de shadcn para garantizar a11y (focus trap, Escape, aria-labelledby).
+
+## Estilos
+
+- El copy y las etiquetas de UI están **siempre en español**.
+- Las clases utilitarias personalizadas (`.gladwell-gradient`, `.glass`, `.divider-gradient`) están definidas en `app/globals.css`.
+- No añadir colores hardcoded inline cuando ya existe una clase utilitaria equivalente.
+
+## Navegación
+
+- `lib/data/navigation.ts` es la única fuente de verdad para enlaces de navbar, footer y hero.
+- Para añadir o renombrar un enlace, editar **solo** `navigation.ts`.
+
+## API y Supabase
+
+- El cliente Supabase se obtiene con `getSupabaseServer()` de `lib/supabase/server.ts` (lazy init).
+- Nunca importar `supabaseServer` directamente (fue eliminado); usar siempre `getSupabaseServer()`.
+- Validar el body de cada endpoint con Zod antes de tocar la base de datos.
+
+## Variables de entorno
+
+- Nunca commitear `.env*.local` ni archivos con credenciales.
+- Referenciar `SITE_URL`, `SITE_NAME`, etc. desde `lib/site.ts` en lugar de strings literales.
