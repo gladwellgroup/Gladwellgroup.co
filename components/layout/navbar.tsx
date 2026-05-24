@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { Menu } from "lucide-react"
 import { useWalkingList } from "@/components/providers/walking-list-provider"
 import { NAV_LINKS } from "@/lib/data/navigation"
+import { scrollToAnchor } from "@/lib/scroll-to-anchor"
 import {
   Sheet,
   SheetContent,
@@ -51,9 +52,7 @@ export function Navbar() {
 
   const handleMobileNav = (href: string) => {
     setMobileOpen(false)
-    setTimeout(() => {
-      document.querySelector(href)?.scrollIntoView({ behavior: "smooth" })
-    }, 150)
+    setTimeout(() => scrollToAnchor(href), 150)
   }
 
   const handleMobileWalkingList = () => {
@@ -134,7 +133,7 @@ export function Navbar() {
                   <Menu size={22} />
                 </button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-72 bg-[#0d0d1a]/98 border-white/10 backdrop-blur-xl">
+              <SheetContent side="right" className="w-72 bg-background/95 border-border backdrop-blur-xl">
                 <SheetHeader>
                   <SheetTitle className="text-left gladwell-gradient-text text-xl font-bold">
                     GLADWELL
@@ -145,12 +144,12 @@ export function Navbar() {
                     <button
                       key={label}
                       onClick={() => handleMobileNav(href)}
-                      className="text-left px-4 py-3 rounded-xl text-white/80 hover:text-white hover:bg-white/5 transition-all text-base font-medium"
+                      className="text-left px-4 py-3 rounded-xl text-foreground/80 hover:text-foreground hover:bg-muted/50 transition-all text-base font-medium"
                     >
                       {label}
                     </button>
                   ))}
-                  <div className="h-px w-full bg-white/10 my-2" />
+                  <div className="h-px w-full bg-border my-2" />
                   <button
                     onClick={handleMobileWalkingList}
                     className="flex items-center justify-center px-6 py-3 rounded-full gladwell-gradient text-white font-semibold text-sm hover:scale-105 hover:shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all duration-300"

@@ -7,7 +7,7 @@ export interface Founder {
 
 export const FOUNDERS: Founder[] = [
   {
-    name: "José Daniel Gonzáles Calvo",
+    name: "José Daniel González Calvo",
     role: "Co-Fundador",
     description:
       "Estratega especializado en transformación digital y desarrollo organizacional con más de 20 años de experiencia liderando iniciativas de cambio estructural.",

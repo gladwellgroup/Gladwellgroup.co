@@ -24,7 +24,7 @@ export function Footer() {
 
       <div className="container mx-auto px-6">
         <div className="flex flex-col gap-8">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
             <div className="flex flex-col items-center md:items-start gap-3">
               <a href="#inicio">
                 <span className="text-xl font-bold tracking-tight gladwell-gradient-text">GLADWELL</span>
@@ -42,7 +42,7 @@ export function Footer() {
               </div>
             </div>
 
-            <nav className="flex flex-wrap items-center justify-center md:justify-end gap-x-8 gap-y-3">
+            <nav className="flex flex-col items-center gap-3 max-w-xs mx-auto sm:max-w-none sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-6 sm:gap-y-2 md:pt-1">
               {FOOTER_NAV_LINKS.map(({ label, href }) => (
                 <a key={href} href={href} className={navLinkClass}>
                   {label}
@@ -52,9 +52,11 @@ export function Footer() {
                 Contacto
               </button>
             </nav>
+
+            <div className="hidden md:block" aria-hidden="true" />
           </div>
 
-          <p className="text-sm text-muted-foreground text-center md:text-left border-t border-border pt-6">
+          <p className="text-sm text-muted-foreground text-center border-t border-border pt-6">
             &copy; {new Date().getFullYear()} Gladwell.{" "}
             <span className="gladwell-gradient-text">Apasionados por la estrategia.</span>
           </p>

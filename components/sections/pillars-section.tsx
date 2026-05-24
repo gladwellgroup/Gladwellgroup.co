@@ -39,11 +39,15 @@ export function PillarsSection() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {PILLARS.map((pillar) => (
-            <article
-              key={pillar.title}
+            <div key={pillar.title} className="relative">
+            <div
               id={pillar.id}
+              className="scroll-mt-[var(--scroll-offset)] pointer-events-none relative -top-[var(--scroll-offset)] h-0"
+              aria-hidden="true"
+            />
+            <article
               onClick={() => openPillarModal(pillar)}
-              className="group relative glass rounded-2xl overflow-hidden gladwell-border-gradient hover:glass-glow transition-all duration-500 cursor-pointer scroll-mt-24"
+              className="group relative glass rounded-2xl overflow-hidden gladwell-border-gradient hover:glass-glow transition-all duration-500 cursor-pointer"
               role="button"
               tabIndex={0}
               onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openPillarModal(pillar)}
@@ -79,6 +83,7 @@ export function PillarsSection() {
                 </p>
               </div>
             </article>
+            </div>
           ))}
         </div>
       </div>

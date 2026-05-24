@@ -38,6 +38,9 @@
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(0.30 0.03 280);
   --sidebar-ring: oklch(0.70 0.15 195);
+
+  /* Fixed navbar scroll offset (h-20 = 5rem) */
+  --scroll-offset: 5rem;
   
   /* Gladwell Gradient Colors */
   --gladwell-purple: #7C3AED;
@@ -179,6 +182,10 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: var(--scroll-offset);
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -206,6 +213,50 @@
     background: rgba(255, 255, 255, 0.7);
     border: 1px solid rgba(124, 58, 237, 0.2);
     box-shadow: 0 8px 32px rgba(124, 58, 237, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  .modal-panel {
+    background: color-mix(in oklch, var(--background) 92%, transparent);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border: 1px solid var(--border);
+    box-shadow: 0 16px 56px rgba(124, 58, 237, 0.18);
+  }
+
+  .modal-field {
+    @apply w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-all focus:border-[#7C3AED]/60 focus:outline-none focus:ring-1 focus:ring-[#7C3AED]/40;
+  }
+
+  .modal-label {
+    @apply text-xs font-medium text-muted-foreground uppercase tracking-wider;
+  }
+
+  /* Overlay idéntico al de las cards de pilares */
+  .modal-image-overlay {
+    @apply absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent;
+  }
+
+  /* Marco de imagen: sombra en claro (como cards), limpio en oscuro */
+  .modal-image-frame {
+    @apply relative w-full overflow-hidden rounded-t-2xl;
+  }
+
+  .light .modal-image-frame {
+    box-shadow: 0 8px 32px rgba(124, 58, 237, 0.1);
+  }
+
+  /* Controles sobre foto: mismo estilo que flechas del carrusel */
+  .modal-image-control {
+    @apply flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white backdrop-blur-md transition-all hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30;
+  }
+
+  .modal-close-button {
+    @apply absolute right-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white backdrop-blur-md transition-all hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30;
+  }
+
+  /* Cierre sobre panel de contenido (sin foto detrás) */
+  .modal-close-button-panel {
+    @apply absolute right-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background/80 text-foreground shadow-lg backdrop-blur-md transition-all hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
   
   .glass-subtle {

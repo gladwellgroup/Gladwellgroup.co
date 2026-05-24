@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { type Pillar } from "@/lib/data/pillars"
 import {
   Dialog,
@@ -62,11 +62,18 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
         }
       }}
     >
-      <DialogContent className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#0d0d1a]/95 backdrop-blur-xl border border-white/10 shadow-[0_0_80px_rgba(124,58,237,0.2)] p-0">
+      <DialogContent
+        showCloseButton={false}
+        className="modal-panel w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl p-0"
+      >
         {pillar && (
           <>
+            <button onClick={onClose} className="modal-close-button" aria-label="Cerrar modal">
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+
             {/* Image Carousel */}
-            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-2xl">
+            <div className="modal-image-frame aspect-[4/3]">
               {pillar.gallery.map((img, index) => (
                 <div
                   key={img}
@@ -81,20 +88,20 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
                     className="object-cover"
                     priority={index === 0}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d1a] via-transparent to-transparent" />
+                  <div className="modal-image-overlay" />
                 </div>
               ))}
 
               <button
                 onClick={prevImage}
-                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 backdrop-blur-md border border-white/10 hover:bg-black/70 transition-all text-white"
+                className="absolute left-4 top-1/2 -translate-y-1/2 modal-image-control"
                 aria-label="Imagen anterior"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
                 onClick={nextImage}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 backdrop-blur-md border border-white/10 hover:bg-black/70 transition-all text-white"
+                className="absolute right-4 top-1/2 -translate-y-1/2 modal-image-control"
                 aria-label="Siguiente imagen"
               >
                 <ChevronRight className="w-5 h-5" />
@@ -120,7 +127,7 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
                 <span className="text-sm gladwell-gradient-text uppercase tracking-wider font-medium">
                   {pillar.subtitle}
                 </span>
-                <DialogTitle className="text-3xl md:text-4xl font-bold text-white mt-2">
+                <DialogTitle className="text-3xl md:text-4xl font-bold text-foreground mt-2">
                   {pillar.title}
                 </DialogTitle>
               </div>
@@ -129,17 +136,17 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
                 {pillar.subtitle} — {pillar.description}
               </DialogDescription>
 
-              <p className="text-white/80 text-lg leading-relaxed mb-8">
+              <p className="text-muted-foreground text-lg leading-relaxed mb-8">
                 {pillar.fullDescription}
               </p>
 
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-white mb-4">Lo que incluye:</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-4">Lo que incluye:</h3>
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {pillar.highlights.map((highlight, index) => (
                     <li key={index} className="flex items-start gap-3">
                       <span className="w-1.5 h-1.5 rounded-full gladwell-gradient mt-2 shrink-0" />
-                      <span className="text-white/70">{highlight}</span>
+                      <span className="text-muted-foreground">{highlight}</span>
                     </li>
                   ))}
                 </ul>
@@ -148,7 +155,7 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
               <SectionDivider position="inline" className="mb-8" />
 
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <p className="text-white/60 text-sm text-center sm:text-left">
+                <p className="text-muted-foreground text-sm text-center sm:text-left">
                   Forma parte de nuestra comunidad y accede a experiencias exclusivas.
                 </p>
                 <button
