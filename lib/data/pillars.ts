@@ -14,7 +14,7 @@ export interface Pillar {
 export const PILLARS: Pillar[] = [
   {
     id: "experience",
-    title: "Experience",
+    title: "Xperience",
     subtitle: "Vivencias transformadoras",
     description: "Eventos exclusivos diseñados para crear conexiones significativas entre estrategas.",
     fullDescription:
@@ -23,9 +23,9 @@ export const PILLARS: Pillar[] = [
     image: "/images/experience/experience-01.jpg",
     number: "01",
     highlights: [
-      "Cenas ejecutivas mensuales con líderes de la industria",
+      "Espacios de encuentro quincenales con líderes de industria.",
       "Retiros de inmersión estratégica trimestrales",
-      "Encuentros exclusivos con ponentes internacionales",
+      "Encuentros exclusivos",
       "Networking con la comunidad Gladwell global",
       "Acceso prioritario a eventos limitados",
       "Experiencias personalizadas según intereses",
@@ -47,7 +47,7 @@ export const PILLARS: Pillar[] = [
     subtitle: "Estrategia aplicada",
     description: "Acompañamiento estratégico para organizaciones que buscan transformarse.",
     fullDescription:
-      "Combinamos experiencia, metodologías probadas y visión innovadora para diseñar e implementar estrategias con impacto real. Somos socios estratégicos comprometidos con la transformación de tu organización.",
+      "Combinamos experiencia, metodologías propias y visión innovadora para diseñar e implementar estrategias con impacto real. Somos socios estratégicos comprometidos con la transformación de tu organización.",
     modalCta: "Conecta con consultores estrategas y lleva la transformación a tu organización.",
     image: "/images/consulting/consulting-01.jpg",
     number: "02",
@@ -73,7 +73,7 @@ export const PILLARS: Pillar[] = [
   {
     id: "education",
     title: "Education",
-    subtitle: "Conocimiento que transforma",
+    subtitle: "Conocimiento actualizado",
     description: "Programas de formación diseñados para líderes que quieren dominar el arte de la estrategia.",
     fullDescription:
       "Programas diseñados por y para estrategas: teoría de vanguardia y aplicación práctica inmediata, desde workshops intensivos hasta desarrollo ejecutivo de largo plazo.",
@@ -84,7 +84,7 @@ export const PILLARS: Pillar[] = [
       "Masterclasses con expertos reconocidos",
       "Workshops intensivos de estrategia",
       "Programa de desarrollo ejecutivo",
-      "Certificaciones en metodologías estratégicas",
+      "Networking con integrantes de la comunidad",
       "Biblioteca de recursos exclusivos",
       "Mentoría grupal e individual",
     ],

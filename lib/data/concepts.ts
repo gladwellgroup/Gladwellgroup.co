@@ -8,16 +8,19 @@ export const CONCEPTS: Concept[] = [
   {
     src: "/images/conceptos/conceptos-comunidad.jpg",
     title: "Comunidad",
-    description: "Un espacio donde estrategas crecen y se conectan",
+    description:
+      "El corazón de Gladwell: espacio donde estrategas crecen, se conectan e impactan a través del Emprendimiento y la Educación.",
   },
   {
     src: "/images/conceptos/conceptos-charlas-catarticas.jpg",
     title: "Charlas Catárticas",
-    description: "Conversaciones profundas que transforman perspectivas",
+    description:
+      "Encuentros con la comunidad para conocer emprendimientos colombianos y, en conversación genuina, entender sus retos.",
   },
   {
     src: "/images/conceptos/conceptos-terapia-organizacional.jpg",
     title: "Terapia Organizacional",
-    description: "Acompañamiento para sanar y fortalecer equipos",
+    description:
+      "Acompañamos organizaciones y emprendimientos para implementar soluciones de alto impacto frente a sus desafíos.",
   },
 ]

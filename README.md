@@ -1,6 +1,6 @@
 # Gladwell Landing
 
-Landing page de [Gladwell](https://gladwellgroup-landing.vercel.app) — comunidad de estrategas con los pilares Experience, Consulting y Education.
+Landing page de [Gladwell](https://gladwellgroup-landing.vercel.app) — comunidad de estrategas con los pilares Xperience, Consulting y Education.
 
 Stack: **Next.js 16 · TypeScript · Tailwind CSS 4 · shadcn/ui · Supabase · Vercel**
 
@@ -159,7 +159,7 @@ Checklist manual tras deploy en Vercel:
 
 - [ ] Formulario Walking List → respuesta 201 / mensaje de éxito
 - [ ] Correo duplicado → mensaje de error (409)
-- [ ] Anclas de navegación funcionan (Experience, Consulting, Education, Comunidad, Galería, Equipo)
+- [ ] Anclas de navegación funcionan (Xperience, Consulting, Education, Comunidad, Galería, Equipo)
 - [ ] Modales de pilares abren, carrusel interno funciona, botón "Unirme" abre Walking List
 - [ ] Toggle de tema claro/oscuro funciona
 - [ ] Menú mobile (Sheet) abre y cierra correctamente

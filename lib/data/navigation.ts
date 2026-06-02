@@ -5,7 +5,7 @@ export interface NavLink {
 
 /** Links in the top navbar */
 export const NAV_LINKS: NavLink[] = [
-  { label: "Experience", href: "#experience" },
+  { label: "Xperience", href: "#experience" },
   { label: "Consulting", href: "#consulting" },
   { label: "Education", href: "#education" },
   { label: "Comunidad", href: "#comunidad" },
@@ -15,7 +15,7 @@ export const NAV_LINKS: NavLink[] = [
 
 /** Links shown in the footer navigation */
 export const FOOTER_NAV_LINKS: NavLink[] = [
-  { label: "Experience", href: "#experience" },
+  { label: "Xperience", href: "#experience" },
   { label: "Consulting", href: "#consulting" },
   { label: "Education", href: "#education" },
   { label: "Comunidad", href: "#comunidad" },
