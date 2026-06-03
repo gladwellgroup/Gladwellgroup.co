@@ -48,14 +48,10 @@ export function VideoSection() {
           )}
         </div>
 
-        <div className="text-center max-w-2xl mx-auto mt-8">
-          <div className="glass-subtle rounded-xl px-8 py-6">
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              Una comunidad de líderes y estrategas que transforman organizaciones a través del
-              pensamiento estratégico y la acción decidida.
-            </p>
-          </div>
-        </div>
+        <p className="mx-auto mt-8 max-w-3xl text-center font-(family-name:--font-playfair) text-xl leading-relaxed text-muted-foreground text-balance md:text-2xl lg:text-[1.75rem] lg:leading-relaxed">
+          Somos una comunidad de apasionados por la estrategia, unidos por la educación y los
+          negocios.
+        </p>
       </div>
     </section>
   )

@@ -21,6 +21,6 @@ export const CONCEPTS: Concept[] = [
     src: "/images/conceptos/conceptos-terapia-organizacional.jpg",
     title: "Terapia Organizacional",
     description:
-      "Acompañamos organizaciones y emprendimientos para implementar soluciones de alto impacto frente a sus desafíos.",
+      "Acompañamos organizaciones y emprendimientos a implementar soluciones escalables, sostenibles y de alto impacto.",
   },
 ]

@@ -74,7 +74,8 @@ export const PILLARS: Pillar[] = [
     id: "education",
     title: "Education",
     subtitle: "Conocimiento actualizado",
-    description: "Programas de formación diseñados para líderes que quieren dominar el arte de la estrategia.",
+    description:
+      "Sesiones para la comunidad diseñadas para volvernos expertos en estrategia.",
     fullDescription:
       "Programas diseñados por y para estrategas: teoría de vanguardia y aplicación práctica inmediata, desde workshops intensivos hasta desarrollo ejecutivo de largo plazo.",
     modalCta: "Únete a programas de formación diseñados para líderes que piensan en estrategia.",

@@ -39,9 +39,9 @@ export function GallerySection() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <div className="rounded-xl px-4 py-3 bg-black/60 backdrop-blur-md border border-white/10">
-                        <h3 className="text-lg font-bold text-white mb-1">{concept.title}</h3>
-                        <p className="text-sm text-white/70">{concept.description}</p>
+                      <div className="rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-center backdrop-blur-md lg:text-left">
+                        <h3 className="mb-1 text-lg font-bold text-white">{concept.title}</h3>
+                        <p className="text-sm leading-relaxed text-white/70">{concept.description}</p>
                       </div>
                     </div>
                   </div>

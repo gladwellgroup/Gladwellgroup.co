@@ -71,7 +71,7 @@ export function PillarsSection() {
                 </div>
               </div>
 
-              <div className="p-6">
+              <div className="p-6 text-center lg:text-left">
                 <span className="text-sm gladwell-gradient-text uppercase tracking-wider font-medium">
                   {pillar.subtitle}
                 </span>

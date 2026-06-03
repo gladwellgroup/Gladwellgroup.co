@@ -32,7 +32,7 @@ function MoonIcon() {
 }
 
 export function Navbar() {
-  const { theme, setTheme } = useTheme()
+  const { setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -41,14 +41,18 @@ export function Navbar() {
   useEffect(() => {
     setMounted(true)
     const handleScroll = () => setScrolled(window.scrollY > 20)
+    handleScroll()
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  const isDark = theme === "dark"
-  const linkClass = scrolled && !isDark
-    ? "text-sm font-medium text-foreground/80 hover:text-foreground transition-colors relative group"
-    : "text-sm font-medium text-white/80 hover:text-white transition-colors relative group drop-shadow-md"
+  const isDark = !mounted || resolvedTheme === "dark"
+  const onHero = !scrolled
+  const linkClass = onHero
+    ? isDark
+      ? "text-sm font-medium text-white/80 hover:text-white transition-colors relative group drop-shadow-md"
+      : "text-sm font-medium text-foreground/80 hover:text-foreground transition-colors relative group"
+    : "text-sm font-medium text-foreground/80 hover:text-foreground transition-colors relative group"
 
   const handleMobileNav = (href: string) => {
     setMobileOpen(false)
@@ -127,24 +131,31 @@ export function Navbar() {
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
                 <button
-                  className="md:hidden p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
+                  className={`md:hidden p-2 rounded-lg transition-colors ${
+                    onHero && isDark
+                      ? "text-white hover:bg-white/10"
+                      : "text-foreground hover:bg-muted/50"
+                  }`}
                   aria-label="Abrir menú"
                 >
                   <Menu size={22} />
                 </button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-72 bg-background/95 border-border backdrop-blur-xl">
-                <SheetHeader>
-                  <SheetTitle className="text-left gladwell-gradient-text text-xl font-bold">
+              <SheetContent
+                side="right"
+                className="w-72 border-border bg-background/95 text-center backdrop-blur-xl"
+              >
+                <SheetHeader className="items-center">
+                  <SheetTitle className="gladwell-gradient-text text-xl font-bold">
                     GLADWELL
                   </SheetTitle>
                 </SheetHeader>
-                <nav className="flex flex-col gap-2 mt-8">
+                <nav className="mt-8 flex flex-col items-center gap-2">
                   {NAV_LINKS.map(({ label, href }) => (
                     <button
                       key={label}
                       onClick={() => handleMobileNav(href)}
-                      className="text-left px-4 py-3 rounded-xl text-foreground/80 hover:text-foreground hover:bg-muted/50 transition-all text-base font-medium"
+                      className="w-full rounded-xl px-4 py-3 text-center text-base font-medium text-foreground/80 transition-all hover:bg-muted/50 hover:text-foreground"
                     >
                       {label}
                     </button>

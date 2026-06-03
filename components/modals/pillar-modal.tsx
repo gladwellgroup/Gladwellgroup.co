@@ -122,7 +122,7 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
             </div>
 
             {/* Content — scroll independiente del carrusel en desktop */}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6 md:p-8">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6 text-center md:p-8 md:text-left">
               <div className="mb-6">
                 <span className="text-sm gladwell-gradient-text uppercase tracking-wider font-medium">
                   {pillar.subtitle}
@@ -149,10 +149,13 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
                 </h3>
                 <ul
                   aria-labelledby="pillar-highlights-heading"
-                  className="grid grid-cols-1 md:grid-cols-2 gap-3"
+                  className="grid grid-cols-1 gap-3 md:grid-cols-2"
                 >
                   {pillar.highlights.map((highlight, index) => (
-                    <li key={index} className="flex gap-3">
+                    <li
+                      key={index}
+                      className="flex justify-center gap-3 md:justify-start"
+                    >
                       <span
                         className="mt-[0.55rem] h-1.5 w-1.5 shrink-0 rounded-full gladwell-gradient"
                         aria-hidden="true"
@@ -166,7 +169,7 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
               <SectionDivider position="inline" className="mb-8" />
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-muted-foreground text-sm text-center sm:text-left sm:max-w-md">
+                <p className="mx-auto max-w-md text-center text-sm text-muted-foreground md:mx-0 md:text-left">
                   {pillar.modalCta}
                 </p>
                 <button

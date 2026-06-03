@@ -8,20 +8,49 @@ export function HeroSection() {
 
   return (
     <section id="inicio" className="relative min-h-screen flex items-center justify-center overflow-hidden scroll-mt-0">
-      {/* Background Image - Desktop */}
+      {/* Mobile backgrounds */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat hidden md:block"
-        style={{ backgroundImage: "url('/images/hero-bg-desktop.jpg')" }}
+        className="absolute inset-0 md:hidden bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out opacity-100 dark:opacity-0"
+        style={{ backgroundImage: "url('/images/hero-bg-mobile-light.jpg')" }}
+        aria-hidden
       />
-
-      {/* Background Image - Mobile */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat md:hidden"
+        className="absolute inset-0 md:hidden bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out opacity-0 dark:opacity-100"
         style={{ backgroundImage: "url('/images/hero-bg-mobile.jpg')" }}
+        aria-hidden
       />
 
-      {/* Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/90" />
+      {/* Mobile overlays */}
+      <div
+        className="absolute inset-0 md:hidden bg-gradient-to-b from-white/15 via-black/25 to-black/55 transition-opacity duration-500 ease-in-out opacity-100 dark:opacity-0 pointer-events-none"
+        aria-hidden
+      />
+      <div
+        className="absolute inset-0 md:hidden bg-gradient-to-b from-black/30 via-black/50 to-black/90 transition-opacity duration-500 ease-in-out opacity-0 dark:opacity-100 pointer-events-none"
+        aria-hidden
+      />
+
+      {/* Desktop backgrounds */}
+      <div
+        className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out opacity-0 dark:opacity-100"
+        style={{ backgroundImage: "url('/images/hero-bg-desktop.jpg')" }}
+        aria-hidden
+      />
+      <div
+        className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out opacity-100 dark:opacity-0"
+        style={{ backgroundImage: "url('/images/hero-bg-desktop-light.jpg')" }}
+        aria-hidden
+      />
+
+      {/* Desktop overlays */}
+      <div
+        className="absolute inset-0 hidden md:block bg-gradient-to-b from-white/15 via-black/25 to-black/55 transition-opacity duration-500 ease-in-out opacity-100 dark:opacity-0 pointer-events-none"
+        aria-hidden
+      />
+      <div
+        className="absolute inset-0 hidden md:block bg-gradient-to-b from-black/30 via-black/50 to-black/90 transition-opacity duration-500 ease-in-out opacity-0 dark:opacity-100 pointer-events-none"
+        aria-hidden
+      />
 
       {/* Content */}
       <div className="relative z-10 container mx-auto px-6 text-center pt-24 md:pt-20">
@@ -29,13 +58,13 @@ export function HeroSection() {
           GLADWELL
         </h1>
 
-        <div className="inline-block rounded-full px-8 py-3 mb-8 bg-black/40 backdrop-blur-md border border-white/10">
-          <p className="text-lg md:text-xl text-white tracking-wide">
+        <div className="inline-block rounded-full px-8 py-3 mb-8 backdrop-blur-md border transition-colors duration-500 ease-in-out bg-white/75 text-foreground border-border dark:bg-black/40 dark:text-white dark:border-white/10">
+          <p className="text-lg md:text-xl tracking-wide">
             apasionados por la estrategia
           </p>
         </div>
 
-        <p className="text-sm md:text-base text-white/70 uppercase tracking-[0.3em] mb-8">
+        <p className="text-sm md:text-base uppercase tracking-[0.3em] mb-8 transition-colors duration-500 ease-in-out text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.55)]">
           Descubre más
         </p>
 
@@ -55,8 +84,10 @@ export function HeroSection() {
           <a
             key={num}
             href={href}
-            className={`flex items-center gap-3 transition-all ${
-              i === 0 ? "text-white" : "text-white/50 hover:text-white"
+            className={`flex items-center gap-3 transition-all duration-500 ease-in-out ${
+              i === 0
+                ? "text-foreground dark:text-white"
+                : "text-foreground/50 hover:text-foreground dark:text-white/50 dark:hover:text-white"
             }`}
           >
             <span className={`text-sm ${i === 0 ? "font-bold gladwell-gradient-text" : ""}`}>

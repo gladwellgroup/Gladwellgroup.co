@@ -113,8 +113,10 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
           </div>
         ) : (
           <>
-            <DialogHeader className="mb-7">
-              <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground mb-1">Comunidad Gladwell</p>
+            <DialogHeader className="mb-7 text-center sm:text-left">
+              <p className="mb-1 text-xs uppercase tracking-[0.25em] text-muted-foreground">
+                Comunidad Gladwell
+              </p>
               <DialogTitle className="text-2xl font-bold gladwell-gradient-text">
                 Únete a la Walking List
               </DialogTitle>
@@ -123,28 +125,38 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-4 max-sm:text-center sm:text-left"
+              noValidate
+            >
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="nombre" className="modal-label">Nombre</label>
+                  <label htmlFor="nombre" className="modal-label max-sm:text-center">
+                    Nombre
+                  </label>
                   <input id="nombre" name="nombre" type="text" required placeholder="José Daniel"
                     value={form.nombre} onChange={handleChange} className="modal-field" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="apellidos" className="modal-label">Apellidos</label>
+                  <label htmlFor="apellidos" className="modal-label max-sm:text-center">
+                    Apellidos
+                  </label>
                   <input id="apellidos" name="apellidos" type="text" required placeholder="González"
                     value={form.apellidos} onChange={handleChange} className="modal-field" />
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="correo" className="modal-label">Correo electrónico</label>
+                <label htmlFor="correo" className="modal-label max-sm:text-center">
+                  Correo electrónico
+                </label>
                 <input id="correo" name="correo" type="email" required placeholder="tu@correo.com"
                   value={form.correo} onChange={handleChange} className="modal-field" />
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="modal-label">Red social preferida</span>
+                <span className="modal-label max-sm:text-center">Red social preferida</span>
                 <div className="grid grid-cols-2 gap-3">
                   {(["linkedin", "instagram"] as const).map((red) => (
                     <button
@@ -166,7 +178,7 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
 
               {form.red && (
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="perfil" className="modal-label">
+                  <label htmlFor="perfil" className="modal-label max-sm:text-center">
                     {form.red === "linkedin" ? "URL de LinkedIn" : "Usuario de Instagram"}
                   </label>
                   <input
@@ -178,7 +190,7 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
               )}
 
               {error && (
-                <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                <div className="flex items-start justify-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400 max-sm:flex-col max-sm:items-center sm:justify-start sm:text-left">
                   <AlertCircle size={16} className="shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
