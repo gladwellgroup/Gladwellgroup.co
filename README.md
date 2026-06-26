@@ -41,6 +41,10 @@ create table if not exists public.walking_list_leads (
   nombre text not null check (char_length(trim(nombre)) >= 2),
   apellidos text not null check (char_length(trim(apellidos)) >= 2),
   correo text not null check (correo ~* '^[^@]+@[^@]+\.[^@]+$'),
+  whatsapp_pais text,
+  whatsapp_indicativo text,
+  whatsapp_numero text,
+  whatsapp_e164 text,
   red_social text not null check (red_social in ('linkedin', 'instagram')),
   perfil text,
   source text not null default 'landing',
@@ -55,6 +59,8 @@ create index if not exists walking_list_leads_created_at_idx
 
 alter table public.walking_list_leads enable row level security;
 ```
+
+Si la tabla ya existe, aplica la migración en `supabase/migrations/20250603_walking_list_whatsapp.sql`.
 
 ### 4. Iniciar servidor de desarrollo
 

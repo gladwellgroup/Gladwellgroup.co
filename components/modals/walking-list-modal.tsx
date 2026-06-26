@@ -9,6 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AMERICAS_PHONE_CODES,
+  DEFAULT_PHONE_COUNTRY,
+} from "@/lib/data/americas-phone-codes"
+import { normalizePhoneDigits } from "@/lib/phone"
 
 interface WalkingListModalProps {
   isOpen: boolean
@@ -19,6 +24,8 @@ const INITIAL_FORM = {
   nombre: "",
   apellidos: "",
   correo: "",
+  whatsapp_pais: DEFAULT_PHONE_COUNTRY,
+  whatsapp_numero: "",
   red: "" as "linkedin" | "instagram" | "",
   perfil: "",
 }
@@ -39,6 +46,16 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
     setError(null)
   }
 
+  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setForm((prev) => ({ ...prev, whatsapp_pais: e.target.value }))
+    setError(null)
+  }
+
+  const handleWhatsappNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, whatsapp_numero: normalizePhoneDigits(e.target.value) }))
+    setError(null)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -52,6 +69,8 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
           nombre: form.nombre,
           apellidos: form.apellidos,
           correo: form.correo,
+          whatsapp_pais: form.whatsapp_pais,
+          whatsapp_numero: form.whatsapp_numero,
           red_social: form.red,
           perfil: form.perfil || undefined,
         }),
@@ -153,6 +172,40 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
                 </label>
                 <input id="correo" name="correo" type="email" required placeholder="tu@correo.com"
                   value={form.correo} onChange={handleChange} className="modal-field" />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="whatsapp_numero" className="modal-label max-sm:text-center">
+                  WhatsApp
+                </label>
+                <div className="grid grid-cols-[minmax(8.5rem,40%)_1fr] gap-3">
+                  <select
+                    id="whatsapp_pais"
+                    name="whatsapp_pais"
+                    value={form.whatsapp_pais}
+                    onChange={handleCountryChange}
+                    className="modal-field"
+                    aria-label="Indicativo de país"
+                  >
+                    {AMERICAS_PHONE_CODES.map(({ iso, name, dialCode }) => (
+                      <option key={iso} value={iso}>
+                        {name} ({dialCode})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    id="whatsapp_numero"
+                    name="whatsapp_numero"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    required
+                    placeholder="300 123 4567"
+                    value={form.whatsapp_numero}
+                    onChange={handleWhatsappNumberChange}
+                    className="modal-field"
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">

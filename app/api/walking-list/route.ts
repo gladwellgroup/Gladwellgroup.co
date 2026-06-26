@@ -17,12 +17,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: firstError }, { status: 400 })
   }
 
-  const { nombre, apellidos, correo, red_social, perfil } = result.data
+  const {
+    nombre,
+    apellidos,
+    correo,
+    red_social,
+    perfil,
+    whatsapp_pais,
+    whatsapp_indicativo,
+    whatsapp_numero,
+    whatsapp_e164,
+  } = result.data
 
   const supabase = getSupabaseServer()
   const { error } = await supabase
     .from('walking_list_leads')
-    .insert({ nombre, apellidos, correo, red_social, perfil: perfil || null })
+    .insert({
+      nombre,
+      apellidos,
+      correo,
+      red_social,
+      perfil: perfil || null,
+      whatsapp_pais,
+      whatsapp_indicativo,
+      whatsapp_numero,
+      whatsapp_e164,
+    })
 
   if (error) {
     if (error.code === '23505') {
