@@ -227,6 +227,10 @@
     @apply w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-all focus:border-[#7C3AED]/60 focus:outline-none focus:ring-1 focus:ring-[#7C3AED]/40;
   }
 
+  .country-phone-trigger {
+    @apply appearance-none text-left;
+  }
+
   .modal-label {
     @apply text-xs font-medium text-muted-foreground uppercase tracking-wider;
   }

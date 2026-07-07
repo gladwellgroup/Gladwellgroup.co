@@ -11,7 +11,7 @@ const walkingListBaseSchema = z.object({
     .string()
     .trim()
     .transform(normalizePhoneDigits)
-    .pipe(z.string().regex(/^\d{7,15}$/, 'Ingresa un número de WhatsApp válido')),
+    .pipe(z.string().regex(/^\d{9,15}$/, 'Ingresa un número de WhatsApp válido')),
   red_social: z.enum(['linkedin', 'instagram'], {
     errorMap: () => ({ message: 'Selecciona una red social' }),
   }),

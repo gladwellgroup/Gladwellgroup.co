@@ -9,11 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { CountryPhoneSelect } from "@/components/shared/country-phone-select"
+import { DEFAULT_PHONE_COUNTRY } from "@/lib/data/americas-phone-codes"
 import {
-  AMERICAS_PHONE_CODES,
-  DEFAULT_PHONE_COUNTRY,
-} from "@/lib/data/americas-phone-codes"
-import { normalizePhoneDigits } from "@/lib/phone"
+  WHATSAPP_MAX_DIGITS,
+  WHATSAPP_MIN_DIGITS,
+  isWhatsappDigitsValid,
+  normalizePhoneDigits,
+} from "@/lib/phone"
 
 interface WalkingListModalProps {
   isOpen: boolean
@@ -46,18 +49,24 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
     setError(null)
   }
 
-  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setForm((prev) => ({ ...prev, whatsapp_pais: e.target.value }))
-    setError(null)
-  }
+  const whatsappLen = form.whatsapp_numero.length
+  const whatsappTooShort = whatsappLen > 0 && whatsappLen < WHATSAPP_MIN_DIGITS
+  const whatsappValid = isWhatsappDigitsValid(form.whatsapp_numero)
 
   const handleWhatsappNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({ ...prev, whatsapp_numero: normalizePhoneDigits(e.target.value) }))
+    const digits = normalizePhoneDigits(e.target.value).slice(0, WHATSAPP_MAX_DIGITS)
+    setForm((prev) => ({ ...prev, whatsapp_numero: digits }))
     setError(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!isWhatsappDigitsValid(form.whatsapp_numero)) {
+      setError(`El número de WhatsApp debe tener al menos ${WHATSAPP_MIN_DIGITS} dígitos.`)
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -178,21 +187,15 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
                 <label htmlFor="whatsapp_numero" className="modal-label max-sm:text-center">
                   WhatsApp
                 </label>
-                <div className="grid grid-cols-[minmax(8.5rem,40%)_1fr] gap-3">
-                  <select
+                <div className="grid grid-cols-[auto_1fr] gap-3">
+                  <CountryPhoneSelect
                     id="whatsapp_pais"
-                    name="whatsapp_pais"
                     value={form.whatsapp_pais}
-                    onChange={handleCountryChange}
-                    className="modal-field"
-                    aria-label="Indicativo de país"
-                  >
-                    {AMERICAS_PHONE_CODES.map(({ iso, name, dialCode }) => (
-                      <option key={iso} value={iso}>
-                        {name} ({dialCode})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(iso) => {
+                      setForm((prev) => ({ ...prev, whatsapp_pais: iso }))
+                      setError(null)
+                    }}
+                  />
                   <input
                     id="whatsapp_numero"
                     name="whatsapp_numero"
@@ -203,9 +206,16 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
                     placeholder="300 123 4567"
                     value={form.whatsapp_numero}
                     onChange={handleWhatsappNumberChange}
+                    aria-invalid={whatsappTooShort}
+                    aria-describedby={whatsappTooShort ? "whatsapp-numero-error" : undefined}
                     className="modal-field"
                   />
                 </div>
+                {whatsappTooShort && (
+                  <p id="whatsapp-numero-error" className="text-xs text-red-400 max-sm:text-center sm:text-left">
+                    El número debe tener al menos {WHATSAPP_MIN_DIGITS} dígitos.
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col gap-2">
@@ -251,7 +261,7 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
 
               <button
                 type="submit"
-                disabled={loading || !form.red}
+                disabled={loading || !form.red || !whatsappValid}
                 className="mt-2 flex items-center justify-center gap-2 px-8 py-3.5 rounded-full gladwell-gradient text-white font-semibold text-sm tracking-wide hover:scale-105 hover:shadow-[0_0_30px_rgba(124,58,237,0.4)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {loading ? (
