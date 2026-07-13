@@ -10,7 +10,7 @@ export const FOUNDERS: Founder[] = [
     name: "José Daniel González Calvo",
     role: "Co-Fundador",
     description:
-      "Estratega especializado en innovación y desarrollo organizacional, como profesional. Docente Universitario en la PUJ y La Sabana, diseñador de soluciones de impacto para organizaciones desde el emprendimiento y la educación.",
+      "Estratega especializado en innovación y desarrollo organizacional. Docente Universitario en La Javeriana y La Sabana, diseñador de soluciones de impacto para organizaciones desde el emprendimiento y la educación.",
     image: "/images/founder-1.2.jpg",
   },
   {
