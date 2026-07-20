@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       apellidos,
       correo,
       red_social,
-      perfil: perfil || null,
+      perfil,
       whatsapp_pais,
       whatsapp_indicativo,
       whatsapp_numero,

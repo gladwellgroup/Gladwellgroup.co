@@ -15,7 +15,7 @@ const walkingListBaseSchema = z.object({
   red_social: z.enum(['linkedin', 'instagram'], {
     errorMap: () => ({ message: 'Selecciona una red social' }),
   }),
-  perfil: z.string().trim().optional(),
+  perfil: z.string().trim().min(1, 'Ingresa tu usuario o enlace de red social'),
 })
 
 export const walkingListSchema = walkingListBaseSchema
@@ -25,6 +25,26 @@ export const walkingListSchema = walkingListBaseSchema
         code: z.ZodIssueCode.custom,
         message: 'Selecciona un país válido',
         path: ['whatsapp_pais'],
+      })
+    }
+
+    const perfil = data.perfil.toLowerCase()
+    if (data.red_social === 'linkedin' && !perfil.includes('linkedin.com')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Ingresa la URL completa de tu perfil de LinkedIn (ej. linkedin.com/in/tuperfil)',
+        path: ['perfil'],
+      })
+    }
+    if (
+      data.red_social === 'instagram' &&
+      !data.perfil.startsWith('@') &&
+      !perfil.includes('instagram.com')
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Ingresa tu usuario de Instagram (@usuario) o la URL de tu perfil',
+        path: ['perfil'],
       })
     }
   })

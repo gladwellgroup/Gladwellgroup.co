@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Linkedin, Instagram, Youtube, MapPin } from "lucide-react"
 import { useWalkingList } from "@/components/providers/walking-list-provider"
 import { SectionDivider } from "@/components/shared"
@@ -28,6 +29,9 @@ export function Footer() {
             <a href="#inicio">
               <span className="text-xl font-bold tracking-tight gladwell-gradient-text">GLADWELL</span>
             </a>
+            <Link href="/login" className={navLinkClass}>
+              Iniciar sesión
+            </Link>
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <MapPin size={16} className="shrink-0 text-[#7C3AED]" aria-hidden />
               Bogotá, Colombia

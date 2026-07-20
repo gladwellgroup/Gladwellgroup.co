@@ -53,6 +53,16 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
   const whatsappTooShort = whatsappLen > 0 && whatsappLen < WHATSAPP_MIN_DIGITS
   const whatsappValid = isWhatsappDigitsValid(form.whatsapp_numero)
 
+  const perfilLower = form.perfil.trim().toLowerCase()
+  const perfilValid =
+    form.red === "linkedin"
+      ? perfilLower.includes("linkedin.com")
+      : form.red === "instagram"
+        ? form.perfil.trim().startsWith("@") || perfilLower.includes("instagram.com")
+        : false
+  const perfilTouched = form.perfil.trim().length > 0
+  const perfilInvalid = perfilTouched && !perfilValid
+
   const handleWhatsappNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = normalizePhoneDigits(e.target.value).slice(0, WHATSAPP_MAX_DIGITS)
     setForm((prev) => ({ ...prev, whatsapp_numero: digits }))
@@ -242,13 +252,22 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
               {form.red && (
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="perfil" className="modal-label max-sm:text-center">
-                    {form.red === "linkedin" ? "URL de LinkedIn" : "Usuario de Instagram"}
+                    {form.red === "linkedin" ? "URL de LinkedIn" : "Usuario o URL de Instagram"}
                   </label>
                   <input
-                    id="perfil" name="perfil" type="text"
-                    placeholder={form.red === "linkedin" ? "linkedin.com/in/tuperfil" : "@tuperfil"}
+                    id="perfil" name="perfil" type="text" required
+                    placeholder={form.red === "linkedin" ? "linkedin.com/in/tuperfil" : "@tuperfil o instagram.com/tuperfil"}
                     value={form.perfil} onChange={handleChange} className="modal-field"
+                    aria-invalid={perfilInvalid}
+                    aria-describedby={perfilInvalid ? "perfil-error" : undefined}
                   />
+                  {perfilInvalid && (
+                    <p id="perfil-error" className="text-xs text-red-400 max-sm:text-center sm:text-left">
+                      {form.red === "linkedin"
+                        ? "Debe ser la URL completa de tu perfil (ej. linkedin.com/in/tuperfil)."
+                        : "Escribe tu usuario con @ o la URL de tu perfil de Instagram."}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -261,7 +280,7 @@ export function WalkingListModal({ isOpen, onClose }: WalkingListModalProps) {
 
               <button
                 type="submit"
-                disabled={loading || !form.red || !whatsappValid}
+                disabled={loading || !form.red || !whatsappValid || !perfilValid}
                 className="mt-2 flex items-center justify-center gap-2 px-8 py-3.5 rounded-full gladwell-gradient text-white font-semibold text-sm tracking-wide hover:scale-105 hover:shadow-[0_0_30px_rgba(124,58,237,0.4)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {loading ? (

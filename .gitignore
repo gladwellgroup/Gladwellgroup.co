@@ -28,6 +28,15 @@ image.png
 *.suo
 *.user
 
+# Claude Code (config local, no compartida)
+.claude/
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+
+# Supabase CLI (caché local)
+supabase/.temp/
+
 # v0 sandbox internal files
 __v0_runtime_loader.js
 __v0_devtools.tsx

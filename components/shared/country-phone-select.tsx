@@ -71,7 +71,7 @@ export function CountryPhoneSelect({
         <ul
           role="listbox"
           aria-label="Países de América"
-          className="max-h-60 overflow-y-auto overscroll-contain"
+          className="max-h-[min(15rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain"
           onWheel={(e) => e.stopPropagation()}
         >
           {AMERICAS_PHONE_CODES.map(({ iso, name, dialCode }) => {

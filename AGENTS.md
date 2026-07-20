@@ -105,6 +105,18 @@ npm run build       # build verde
 
 ---
 
+## Portal interno
+
+La documentación de producto del portal (roles, permisos, flujos, Terapia Organizacional) vive en
+[`docs/plataforma-historia-y-usuarios.md`](docs/plataforma-historia-y-usuarios.md).
+
+La matriz de permisos está codificada en `lib/permissions/` (`roles.ts` + `matrix.ts`).
+Mantener sincronizados ambos archivos al agregar permisos o roles.
+
+Las rutas del portal viven en `app/(portal)/`; la landing pública sigue en `app/(public)/`.
+
+---
+
 ## Rate limiting
 
 El endpoint `/api/walking-list` no tiene rate limiting activo. Está documentado como
