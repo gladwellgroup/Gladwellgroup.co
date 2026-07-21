@@ -92,9 +92,11 @@ export function DeliverableEditor({
   const problemaRef = useRef(problema)
   const resumenRef = useRef(resumen)
   const recomendacionesRef = useRef(recomendaciones)
-  problemaRef.current = problema
-  resumenRef.current = resumen
-  recomendacionesRef.current = recomendaciones
+  useEffect(() => {
+    problemaRef.current = problema
+    resumenRef.current = resumen
+    recomendacionesRef.current = recomendaciones
+  })
 
   const saveNow = useCallback(async () => {
     if (!canEdit) return
@@ -103,37 +105,37 @@ export function DeliverableEditor({
       return
     }
     isSavingRef.current = true
-    setSaveStatus('saving')
 
-    try {
-      const res = await fetch('/api/therapy/deliverables', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: session.id,
-          problema_recordatorio: problemaRef.current,
-          resumen_audio: resumenRef.current,
-          recomendaciones_incomodas: recomendacionesRef.current,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
+    do {
+      pendingRef.current = false
+      setSaveStatus('saving')
+
+      try {
+        const res = await fetch('/api/therapy/deliverables', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: session.id,
+            problema_recordatorio: problemaRef.current,
+            resumen_audio: resumenRef.current,
+            recomendaciones_incomodas: recomendacionesRef.current,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setSaveStatus('error')
+          setActionError(data.error ?? 'Error al guardar')
+        } else {
+          setSaveStatus('saved')
+          if (data.content_html) setContentHtml(data.content_html)
+          setActionError(null)
+        }
+      } catch {
         setSaveStatus('error')
-        setActionError(data.error ?? 'Error al guardar')
-      } else {
-        setSaveStatus('saved')
-        if (data.content_html) setContentHtml(data.content_html)
-        setActionError(null)
       }
-    } catch {
-      setSaveStatus('error')
-    }
+    } while (pendingRef.current)
 
     isSavingRef.current = false
-    if (pendingRef.current) {
-      pendingRef.current = false
-      void saveNow()
-    }
   }, [canEdit, session.id])
 
   useEffect(() => {

@@ -136,16 +136,18 @@ export function SessionDetailForm({
   const fraseTextoRef = useRef(fraseTexto)
   const fraseAutorRef = useRef(fraseAutor)
 
-  retoRef.current = retoProblema
-  recomendacionesRef.current = recomendacionesIncomodas
-  fotoRef.current = fotoSesionUrl
-  cofoundersRef.current = cofounders
-  empresaNombreRef.current = empresaNombre
-  empresaDescripcionRef.current = empresaDescripcion
-  empresaRedSocialRef.current = empresaRedSocial
-  empresaPaginaWebRef.current = empresaPaginaWeb
-  fraseTextoRef.current = fraseTexto
-  fraseAutorRef.current = fraseAutor
+  useEffect(() => {
+    retoRef.current = retoProblema
+    recomendacionesRef.current = recomendacionesIncomodas
+    fotoRef.current = fotoSesionUrl
+    cofoundersRef.current = cofounders
+    empresaNombreRef.current = empresaNombre
+    empresaDescripcionRef.current = empresaDescripcion
+    empresaRedSocialRef.current = empresaRedSocial
+    empresaPaginaWebRef.current = empresaPaginaWeb
+    fraseTextoRef.current = fraseTexto
+    fraseAutorRef.current = fraseAutor
+  })
 
   const isSavingRef = useRef(false)
   const pendingRef = useRef(false)
@@ -181,55 +183,54 @@ export function SessionDetailForm({
     }
 
     isSavingRef.current = true
-    setSaveStatus('saving')
-    setSaveErrorMessage(null)
 
-    try {
-      const payload = buildPayload()
-      const requests = [
-        fetch('/api/therapy/inputs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }),
-      ]
+    do {
+      pendingRef.current = false
+      setSaveStatus('saving')
+      setSaveErrorMessage(null)
 
-      if (invitado) {
-        requests.push(
-          fetch(`/api/therapy/invitados/${invitado.id}`, {
-            method: 'PATCH',
+      try {
+        const payload = buildPayload()
+        const requests = [
+          fetch('/api/therapy/inputs', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              nombre: empresaNombreRef.current,
-              descripcion: empresaDescripcionRef.current || undefined,
-              red_social: empresaRedSocialRef.current || undefined,
-              pagina_web: empresaPaginaWebRef.current || undefined,
-            }),
-          })
-        )
-      }
+            body: JSON.stringify(payload),
+          }),
+        ]
 
-      const results = await Promise.all(requests)
-      const failed = results.find((r) => !r.ok)
+        if (invitado) {
+          requests.push(
+            fetch(`/api/therapy/invitados/${invitado.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                nombre: empresaNombreRef.current,
+                descripcion: empresaDescripcionRef.current || undefined,
+                red_social: empresaRedSocialRef.current || undefined,
+                pagina_web: empresaPaginaWebRef.current || undefined,
+              }),
+            })
+          )
+        }
 
-      if (failed) {
-        const data = await failed.json().catch(() => ({}))
+        const results = await Promise.all(requests)
+        const failed = results.find((r) => !r.ok)
+
+        if (failed) {
+          const data = await failed.json().catch(() => ({}))
+          setSaveStatus('error')
+          setSaveErrorMessage(data.error ?? null)
+        } else {
+          setSaveStatus('saved')
+        }
+      } catch {
         setSaveStatus('error')
-        setSaveErrorMessage(data.error ?? null)
-      } else {
-        setSaveStatus('saved')
+        setSaveErrorMessage('Error de red al guardar')
       }
-    } catch {
-      setSaveStatus('error')
-      setSaveErrorMessage('Error de red al guardar')
-    }
+    } while (pendingRef.current)
 
     isSavingRef.current = false
-
-    if (pendingRef.current) {
-      pendingRef.current = false
-      saveNow()
-    }
   }, [buildPayload, isReadOnly, invitado])
 
   // Debounced autosave on text/cofounders changes
