@@ -10,7 +10,7 @@ import {
   uploadDeliverablePdf,
 } from '@/lib/therapy/deliverable-render'
 
-export const maxDuration = 800
+export const maxDuration = 300
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
