@@ -1,7 +1,8 @@
 'use client'
 
 import { Suspense, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useAppRouter } from '@/hooks/use-app-router'
 import { getSupabaseBrowser } from '@/lib/supabase/browser'
 import { AUTH_FIELDS, AUTH_LOGIN_COPY } from '@/lib/data/auth-copy'
 import { BrandCard } from '@/components/brand/brand-card'
@@ -17,7 +18,7 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const router = useRouter()
+  const router = useAppRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = useState(searchParams.get('email') ?? '')
   const [password, setPassword] = useState('')

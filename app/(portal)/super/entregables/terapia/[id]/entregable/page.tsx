@@ -3,12 +3,13 @@ import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { DeliverableEditor } from '@/components/portal/deliverable-editor'
 
-export default async function AdminEntregableEditorPage({
+export default async function SuperEntregableEditorPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const user = await requirePermission('therapy:create')
+  if (user.role !== 'super_admin') notFound()
   const { id } = await params
   const supabase = getSupabaseServer()
 
@@ -27,13 +28,9 @@ export default async function AdminEntregableEditorPage({
 
   if (!data) notFound()
 
-  const isCreator = data.created_by === user.id
-  const isModerator = data.moderator_id === user.id
-  if (!isCreator && !isModerator && user.role !== 'super_admin') notFound()
-
   // supabase-js tipa las relaciones embebidas como arrays, pero en runtime
-  // las to-one (deliverable/inputs, con session_id UNIQUE) vuelven como
-  // objeto|null. El cliente ya es <any>, así que desestructuramos desde any.
+  // las to-one (deliverable/inputs, con session_id UNIQUE) vuelven objeto|null.
+  // El cliente ya es <any>, así que desestructuramos desde any.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row: any = data
   const {
@@ -55,7 +52,7 @@ export default async function AdminEntregableEditorPage({
       fotoSesionUrl={inputs?.foto_sesion_url ?? null}
       audioUrl={audios?.[0]?.audio_url ?? null}
       canEdit={canEdit}
-      basePath="/admin/entregables"
+      basePath="/super/entregables/terapia"
     />
   )
 }

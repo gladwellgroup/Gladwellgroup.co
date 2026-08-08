@@ -2,9 +2,11 @@
 
 import { getSupabaseBrowser } from '@/lib/supabase/browser'
 
-const BUCKET = 'therapy-media'
-
 export const MAX_MEDIA_SIZE = 50 * 1024 * 1024 // 50 MB
+
+/** Cada programa de entregables tiene su propio bucket con sus policies. */
+export type MediaBucket = 'therapy-media' | 'education-media'
+export type MediaType = 'audio' | 'foto' | 'ponente'
 
 export function normalizeMime(type: string): string {
   return type.split(';')[0]?.trim().toLowerCase() ?? ''
@@ -12,9 +14,10 @@ export function normalizeMime(type: string): string {
 
 interface UploadTherapyMediaParams {
   sessionId: string
-  type: 'audio' | 'foto'
+  type: MediaType
   file: File
   contentType?: string
+  bucket?: MediaBucket
 }
 
 interface UploadTherapyMediaResult {
@@ -27,6 +30,7 @@ export async function uploadTherapyMedia({
   type,
   file,
   contentType,
+  bucket = 'therapy-media',
 }: UploadTherapyMediaParams): Promise<UploadTherapyMediaResult> {
   if (file.size > MAX_MEDIA_SIZE) {
     const limitMB = MAX_MEDIA_SIZE / (1024 * 1024)
@@ -39,7 +43,7 @@ export async function uploadTherapyMedia({
   const timestamp = Date.now()
   const path = `${sessionId}/${type}/${timestamp}.${ext}`
 
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+  const { error } = await supabase.storage.from(bucket).upload(path, file, {
     contentType: mimeType || file.type || 'application/octet-stream',
     upsert: false,
   })
@@ -49,7 +53,7 @@ export async function uploadTherapyMedia({
     throw new Error('Error al subir el archivo')
   }
 
-  const { data: publicUrl } = supabase.storage.from(BUCKET).getPublicUrl(path)
+  const { data: publicUrl } = supabase.storage.from(bucket).getPublicUrl(path)
 
   return { url: publicUrl.publicUrl, path }
 }

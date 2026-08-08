@@ -2,13 +2,21 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
+import { useAppRouter } from '@/hooks/use-app-router'
 import { BrandField, BrandTextarea } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
 import { CofounderFields } from '@/components/portal/cofounder-fields'
 import { AudioRecorder } from '@/components/portal/audio-recorder'
 import { PhotoUpload } from '@/components/portal/photo-upload'
+import {
+  AttendanceQrSection,
+  type AttendanceLinkData,
+} from '@/components/portal/attendance-qr-section'
+import {
+  TherapyAttendees,
+  type TherapyAttendeeData,
+} from '@/components/portal/therapy-attendees'
 import {
   Accordion,
   AccordionContent,
@@ -66,6 +74,8 @@ interface SessionDetailFormProps {
   invitado: InvitadoSummary | null
   cofounders: CofounderData[]
   audios: AudioData[]
+  attendanceLink: AttendanceLinkData | null
+  attendees: TherapyAttendeeData[]
   currentUserId: string
   currentUserRole: Role
   basePath: string
@@ -90,12 +100,20 @@ export function SessionDetailForm({
   invitado,
   cofounders: initialCofounders,
   audios: initialAudios,
+  attendanceLink: initialAttendanceLink,
+  attendees,
   currentUserId,
   currentUserRole,
   basePath,
   hasDeliverable = false,
 }: SessionDetailFormProps) {
-  const router = useRouter()
+  const router = useAppRouter()
+  // Vive aquí (no dentro de AttendanceQrSection) porque el acordeón que lo
+  // contiene desmonta su contenido al cerrarse; un link recién generado no
+  // debe perderse solo por colapsar y volver a abrir la sección.
+  const [attendanceLink, setAttendanceLink] = useState<AttendanceLinkData | null>(
+    initialAttendanceLink
+  )
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -345,7 +363,7 @@ export function SessionDetailForm({
       </div>
 
       {/* Accordion Form */}
-      <Accordion type="single" collapsible defaultValue="cofundadores">
+      <Accordion type="single" collapsible>
         <AccordionItem value="cofundadores">
           <AccordionTrigger className="text-base font-semibold">
             Fundadores
@@ -492,7 +510,7 @@ export function SessionDetailForm({
 
         <AccordionItem value="frase">
           <AccordionTrigger className="text-base font-semibold">
-            Frase inspiradora
+            Frase de la sesión
           </AccordionTrigger>
           <AccordionContent className="space-y-4">
             <BrandTextarea
@@ -510,6 +528,34 @@ export function SessionDetailForm({
               placeholder="Nombre del autor"
               value={fraseAutor}
               onChange={(e) => setFraseAutor(e.target.value)}
+              disabled={isReadOnly}
+            />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="asistencia">
+          <AccordionTrigger className="text-base font-semibold">
+            <span className="flex items-center gap-2">
+              Asistencia (QR)
+              {attendees.length > 0 && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({attendees.length})
+                </span>
+              )}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4">
+            <AttendanceQrSection
+              sessionId={session.id}
+              program="therapy"
+              link={attendanceLink}
+              onLinkChange={setAttendanceLink}
+              disabled={isReadOnly}
+            />
+            <TherapyAttendees
+              sessionId={session.id}
+              attendees={attendees}
+              deliverySent={session.status === 'entregado'}
               disabled={isReadOnly}
             />
           </AccordionContent>

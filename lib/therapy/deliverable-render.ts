@@ -30,7 +30,8 @@ export async function uploadDeliverablePdf(params: {
   return data.publicUrl
 }
 
-export function toDeliverableContent(params: {
+export interface DeliverableContentSource {
+  sessionId: string
   sessionTitle: string
   sessionDate: string
   problemaRecordatorio: string
@@ -41,8 +42,15 @@ export function toDeliverableContent(params: {
   invitadoNombre?: string | null
   fraseTexto?: string | null
   fraseAutor?: string | null
-}): DeliverableContent {
+  pdfUrl?: string | null
+  attendeeNombre?: string | null
+}
+
+export function toDeliverableContent(
+  params: DeliverableContentSource
+): DeliverableContent {
   return {
+    sessionId: params.sessionId,
     sessionTitle: params.sessionTitle,
     sessionDate: formatSessionDate(params.sessionDate),
     problemaRecordatorio: params.problemaRecordatorio,
@@ -53,20 +61,11 @@ export function toDeliverableContent(params: {
     invitadoNombre: params.invitadoNombre,
     fraseTexto: params.fraseTexto,
     fraseAutor: params.fraseAutor,
+    pdfUrl: params.pdfUrl,
+    attendeeNombre: params.attendeeNombre,
   }
 }
 
-export function rebuildHtmlFromFields(params: {
-  sessionTitle: string
-  sessionDate: string
-  problemaRecordatorio: string
-  resumenAudio: string
-  recomendacionesIncomodas: string
-  fotoSesionUrl?: string | null
-  audioUrl?: string | null
-  invitadoNombre?: string | null
-  fraseTexto?: string | null
-  fraseAutor?: string | null
-}): string {
+export function rebuildHtmlFromFields(params: DeliverableContentSource): string {
   return buildDeliverableHtml(toDeliverableContent(params))
 }

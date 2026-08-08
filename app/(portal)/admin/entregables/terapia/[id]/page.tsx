@@ -3,13 +3,12 @@ import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { SessionDetailForm } from '@/components/portal/session-detail-form'
 
-export default async function SuperEntregableDetailPage({
+export default async function AdminEntregableDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const user = await requirePermission('therapy:create')
-  if (user.role !== 'super_admin') notFound()
   const { id } = await params
   const supabase = getSupabaseServer()
 
@@ -21,14 +20,21 @@ export default async function SuperEntregableDetailPage({
       therapy_session_cofounders ( id, nombre, whatsapp, correo, orden ),
       therapy_session_audios ( id, audio_url, autor_nombre, duracion_segundos, created_at ),
       therapy_deliverables ( id ),
-      invitados ( id, nombre, descripcion, red_social, pagina_web )
+      invitados ( id, nombre, descripcion, red_social, pagina_web ),
+      therapy_session_attendees ( id, nombre, correo, email_status, email_error, source, created_at ),
+      session_attendance_links ( token, expires_at )
     `)
     .eq('id', id)
     .order('orden', { referencedTable: 'therapy_session_cofounders' })
     .order('created_at', { referencedTable: 'therapy_session_audios' })
+    .order('created_at', { referencedTable: 'therapy_session_attendees' })
     .single()
 
   if (!data) notFound()
+
+  const isCreator = data.created_by === user.id
+  const isModerator = data.moderator_id === user.id
+  if (!isCreator && !isModerator) notFound()
 
   // supabase-js tipa las relaciones embebidas como arrays, pero en runtime
   // las to-one (inputs/deliverable/invitado, con FK o session_id UNIQUE)
@@ -42,6 +48,8 @@ export default async function SuperEntregableDetailPage({
     therapy_session_audios: audios,
     therapy_deliverables: deliverable,
     invitados: invitado,
+    therapy_session_attendees: attendees,
+    session_attendance_links: attendanceLinks,
     ...session
   } = row
 
@@ -52,9 +60,11 @@ export default async function SuperEntregableDetailPage({
       invitado={invitado ?? null}
       cofounders={cofounders ?? []}
       audios={audios ?? []}
+      attendees={attendees ?? []}
+      attendanceLink={attendanceLinks?.[0] ?? null}
       currentUserId={user.id}
       currentUserRole={user.role}
-      basePath="/super/entregables"
+      basePath="/admin/entregables/terapia"
       hasDeliverable={Boolean(deliverable)}
     />
   )

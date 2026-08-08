@@ -2,7 +2,11 @@
 
 import { useState, useRef } from 'react'
 import { ImagePlus, X } from 'lucide-react'
-import { uploadTherapyMedia } from '@/lib/therapy/upload-media'
+import {
+  uploadTherapyMedia,
+  type MediaBucket,
+  type MediaType,
+} from '@/lib/therapy/upload-media'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
 
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif'
@@ -32,6 +36,11 @@ interface PhotoUploadProps {
   currentUrl: string
   onUploaded: (url: string) => void
   disabled?: boolean
+  bucket?: MediaBucket
+  type?: MediaType
+  label?: string
+  /** Recorte circular para retratos (ponente). */
+  shape?: 'wide' | 'circle'
 }
 
 export function PhotoUpload({
@@ -39,6 +48,10 @@ export function PhotoUpload({
   currentUrl,
   onUploaded,
   disabled,
+  bucket,
+  type = 'foto',
+  label = 'Subir foto de la sesión',
+  shape = 'wide',
 }: PhotoUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [converting, setConverting] = useState(false)
@@ -70,8 +83,9 @@ export function PhotoUpload({
     try {
       const { url } = await uploadTherapyMedia({
         sessionId,
-        type: 'foto',
+        type,
         file: uploadFile,
+        bucket,
       })
 
       URL.revokeObjectURL(localPreview)
@@ -107,16 +121,21 @@ export function PhotoUpload({
   }
 
   const busy = uploading || converting
+  const isCircle = shape === 'circle'
 
   return (
     <div className="space-y-3">
       {preview ? (
-        <div className="relative">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-muted/30">
+        <div className={`relative ${isCircle ? 'w-32' : ''}`}>
+          <div
+            className={`relative w-full overflow-hidden border border-border bg-muted/30 ${
+              isCircle ? 'aspect-square rounded-full' : 'aspect-[4/3] rounded-xl'
+            }`}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
-              alt="Foto de la sesión"
+              alt={label}
               className="h-full w-full object-cover"
             />
             {busy && (
@@ -145,12 +164,14 @@ export function PhotoUpload({
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           disabled={disabled || busy}
-          className="flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-muted/20 px-6 py-12 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
+          className={`flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-muted/20 px-6 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50 ${
+            isCircle ? 'py-8' : 'py-12'
+          }`}
         >
           <ImagePlus className="h-8 w-8" />
           <div className="text-center">
             <p className="text-sm font-medium">
-              {converting ? 'Convirtiendo...' : uploading ? 'Subiendo...' : 'Subir foto de la sesión'}
+              {converting ? 'Convirtiendo...' : uploading ? 'Subiendo...' : label}
             </p>
             <p className="text-xs mt-1">JPG, PNG, WebP o HEIC (se convierte a JPEG)</p>
           </div>

@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
   const processingStatus = hadHardFailure ? 'error' : 'listo'
 
   const content = toDeliverableContent({
+    sessionId: session_id,
     sessionTitle: access.session.title,
     sessionDate: access.session.session_date,
     problemaRecordatorio: synthesis.problema_recordatorio,
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
   })
 
   const contentHtml = rebuildHtmlFromFields({
+    sessionId: session_id,
     sessionTitle: access.session.title,
     sessionDate: access.session.session_date,
     problemaRecordatorio: synthesis.problema_recordatorio,

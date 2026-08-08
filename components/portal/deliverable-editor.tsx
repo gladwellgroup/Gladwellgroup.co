@@ -78,6 +78,10 @@ export function DeliverableEditor({
   )
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
+  /** Envío parcial a asistentes QR: no es un error del entregable (los
+   *  cofundadores ya lo recibieron), pero callarlo dejaría al moderador
+   *  creyendo que llegó a todos. */
+  const [actionWarning, setActionWarning] = useState<string | null>(null)
   const [approving, setApproving] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -258,6 +262,7 @@ export function DeliverableEditor({
   async function handleApprove() {
     setConfirmOpen(false)
     setActionError(null)
+    setActionWarning(null)
     setApproving(true)
     try {
       if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -273,6 +278,11 @@ export function DeliverableEditor({
         setActionError(data.error ?? 'No se pudo enviar el entregable')
         setApproving(false)
         return
+      }
+      if (data.qr_failed > 0) {
+        setActionWarning(
+          `El entregable se envió, pero ${data.qr_failed} asistente(s) de la lista de asistencia no lo recibieron. Reintenta desde "Asistencia (QR)" en la sesión.`
+        )
       }
       if (data.pdf_url) setPdfUrl(data.pdf_url)
       router.refresh()
@@ -422,17 +432,19 @@ export function DeliverableEditor({
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p
-          role={actionError ? 'alert' : undefined}
+          role={actionError || actionWarning ? 'alert' : undefined}
           aria-live="polite"
           className={`text-xs ${
             actionError || saveStatus === 'error'
               ? 'text-red-500'
-              : saveStatus === 'saved'
-                ? 'text-green-500'
-                : 'text-muted-foreground'
+              : actionWarning
+                ? 'text-amber-500'
+                : saveStatus === 'saved'
+                  ? 'text-green-500'
+                  : 'text-muted-foreground'
           }`}
         >
-          {actionError ?? SAVE_COPY[saveStatus]}
+          {actionError ?? actionWarning ?? SAVE_COPY[saveStatus]}
         </p>
         <div className="flex flex-wrap items-center gap-2 justify-end">
           <BrandButton

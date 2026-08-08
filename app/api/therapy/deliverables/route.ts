@@ -86,6 +86,7 @@ export async function PATCH(request: NextRequest) {
   ])
 
   const contentHtml = rebuildHtmlFromFields({
+    sessionId: session_id,
     sessionTitle: access.session.title,
     sessionDate: access.session.session_date,
     problemaRecordatorio: nextProblema,

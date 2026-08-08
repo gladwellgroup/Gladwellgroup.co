@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Info } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
 
@@ -97,6 +98,7 @@ export function CrmLeadsTable({
   admins,
   canDelegate,
 }: CrmLeadsTableProps) {
+  const router = useRouter()
   const [delegating, setDelegating] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -114,7 +116,7 @@ export function CrmLeadsTable({
         setError(data.error ?? 'No se pudo delegar el lead')
         return
       }
-      window.location.reload()
+      router.refresh()
     } catch {
       setError('Error de red al delegar el lead')
     } finally {

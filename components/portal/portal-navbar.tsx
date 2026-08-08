@@ -1,7 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { LogOut, Menu } from 'lucide-react'
+import { useAppRouter } from '@/hooks/use-app-router'
 import { BrandLogo } from '@/components/brand/brand-logo'
 import { ThemeToggle } from '@/components/brand/theme-toggle'
 import { getSupabaseBrowser } from '@/lib/supabase/browser'
@@ -28,7 +28,7 @@ function CollapseTrigger() {
 }
 
 export function PortalNavbar({ userName, roleLabel }: PortalNavbarProps) {
-  const router = useRouter()
+  const router = useAppRouter()
 
   async function handleSignOut() {
     const supabase = getSupabaseBrowser()

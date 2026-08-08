@@ -265,13 +265,13 @@ export default async function DashboardPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold gladwell-gradient-text">
-              Entregables recientes
+              Terapia Organizacional reciente
             </h2>
             <Link
               href={
                 can(role, 'leads:read_all')
-                  ? '/super/entregables'
-                  : '/admin/entregables'
+                  ? '/super/entregables/terapia'
+                  : '/admin/entregables/terapia'
               }
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >

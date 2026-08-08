@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { ChevronRight, Search } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, ChevronRight, Search } from 'lucide-react'
+import { useAppRouter } from '@/hooks/use-app-router'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandField } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
@@ -55,14 +56,16 @@ export function TherapyDashboard({
   invitados,
   currentUserId,
   basePath,
+  hubPath,
 }: {
   sessions: Session[]
   moderators: Moderator[]
   invitados: Invitado[]
   currentUserId: string
   basePath: string
+  hubPath: string
 }) {
-  const router = useRouter()
+  const router = useAppRouter()
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -153,14 +156,16 @@ export function TherapyDashboard({
         }),
       })
 
+      const data = await res.json().catch(() => ({}))
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
         setError(data.error ?? 'No se pudo crear la sesión')
         setCreating(false)
         return
       }
 
-      window.location.reload()
+      setShowCreate(false)
+      router.push(`${basePath}/${data.id}`)
     } catch {
       setError('Error de red al crear la sesión')
       setCreating(false)
@@ -169,10 +174,17 @@ export function TherapyDashboard({
 
   return (
     <div className="space-y-6">
+      <Link
+        href={hubPath}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Entregables
+      </Link>
       <div className="flex flex-col items-center gap-4 text-center">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold gladwell-gradient-text">
-            Entregables
+            Terapia Organizacional
           </h1>
           <p className="text-muted-foreground">
             Sesiones de terapia organizacional y entregables para invitados.

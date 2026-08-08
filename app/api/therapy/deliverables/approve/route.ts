@@ -9,8 +9,14 @@ import {
   toDeliverableContent,
   uploadDeliverablePdf,
 } from '@/lib/therapy/deliverable-render'
+import { buildDeliverableHtmlFor } from '@/lib/therapy/deliverable-template'
+import { sendPersonalizedBatch, type BatchRecipient } from '@/lib/deliverables/send-batch'
 
-export const maxDuration = 60
+// 300s (máximo del plan Hobby, ver commit 3beb363) y no 60: además del PDF y
+// del correo grupal, esta ruta ahora envía un correo personalizado por cada
+// asistente QR en lotes de 100 con pausas entre lotes, igual que la ruta
+// equivalente de Education.
+export const maxDuration = 300
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
@@ -144,6 +150,7 @@ export async function POST(request: NextRequest) {
   const fraseAutor = inputsRes.data?.frase_autor
 
   const contentHtml = rebuildHtmlFromFields({
+    sessionId: session_id,
     sessionTitle: access.session.title,
     sessionDate: access.session.session_date,
     problemaRecordatorio: problema,
@@ -157,6 +164,7 @@ export async function POST(request: NextRequest) {
   })
 
   const content = toDeliverableContent({
+    sessionId: session_id,
     sessionTitle: access.session.title,
     sessionDate: access.session.session_date,
     problemaRecordatorio: problema,
@@ -214,9 +222,40 @@ export async function POST(request: NextRequest) {
     .update({ status: 'entregado' })
     .eq('id', session_id)
 
+  // Envío adicional, personalizado por persona, a quienes se registraron por
+  // QR — separado del correo grupal de arriba, que no cambia. Es best-effort:
+  // un fallo puntual queda reflejado en email_status/email_error de esa fila
+  // sin bloquear ni revertir el correo grupal, que ya se envió.
+  const { data: qrAttendees } = await supabase
+    .from('therapy_session_attendees')
+    .select('id, nombre, correo')
+    .eq('session_id', session_id)
+    .neq('email_status', 'enviado')
+    .order('created_at', { ascending: true })
+
+  let qrSent = 0
+  let qrFailed = 0
+
+  if (qrAttendees && qrAttendees.length > 0) {
+    const attendeeContent = { ...content, pdfUrl }
+    const result = await sendPersonalizedBatch({
+      supabase,
+      tableName: 'therapy_session_attendees',
+      resend,
+      fromEmail,
+      subject: `Entregable Gladwell — ${access.session.title}`,
+      recipients: qrAttendees as BatchRecipient[],
+      buildHtml: (attendee) => buildDeliverableHtmlFor(attendeeContent, attendee.nombre),
+    })
+    qrSent = result.sent
+    qrFailed = result.failed.length
+  }
+
   return NextResponse.json({
     ok: true,
     pdf_url: pdfUrl,
     recipients: emails.length,
+    qr_sent: qrSent,
+    qr_failed: qrFailed,
   })
 }

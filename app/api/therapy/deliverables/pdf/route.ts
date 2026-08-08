@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
   ])
 
   const content = toDeliverableContent({
+    sessionId: session_id,
     sessionTitle: access.session.title,
     sessionDate: access.session.session_date,
     problemaRecordatorio: deliverable.problema_recordatorio ?? '',

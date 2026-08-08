@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import ffmpegPath from 'ffmpeg-static'
+import { chatJson, toLines } from '@/lib/ai/openai-json'
 
 const execFileAsync = promisify(execFile)
 
@@ -112,7 +113,7 @@ async function splitAudioIntoChunks(
     .map((f) => path.join(outputDir, f))
 }
 
-async function transcribeAudio(
+export async function transcribeAudio(
   audioUrl: string,
   contextPrompt?: string
 ): Promise<string> {
@@ -232,54 +233,20 @@ async function synthesizeNarrative(params: {
   problema_recordatorio: string
   resumen_audio: string
 }> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) throw new Error('OPENAI_API_KEY no configurada')
-
-  const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      temperature: 0.5,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildContextPrompt(params) },
-      ],
-      response_format: { type: 'json_object' },
-      max_tokens: 2000,
-    }),
-  })
-
-  const aiData = await aiRes.json()
-  if (!aiRes.ok) {
-    throw new Error(aiData.error?.message ?? 'Error al sintetizar con IA')
-  }
-
-  const raw = aiData.choices?.[0]?.message?.content ?? '{}'
-  const parsed = JSON.parse(raw) as {
+  const parsed = await chatJson<{
     problema_recordatorio?: string
     resumen_audio?: string[] | string
-  }
-
-  // El modelo debe devolver resumen_audio como array de puntos. Se une con
-  // saltos de línea (cada línea = una viñeta en el renderizado). Fallback
-  // defensivo si viniera como string.
-  const resumenLines = Array.isArray(parsed.resumen_audio)
-    ? parsed.resumen_audio
-        .map((p) => String(p).trim())
-        .filter(Boolean)
-    : String(parsed.resumen_audio ?? '')
-        .split(/\n+/)
-        .map((l) => l.trim())
-        .filter(Boolean)
+  }>({
+    system: SYSTEM_PROMPT,
+    user: buildContextPrompt(params),
+  })
 
   return {
     problema_recordatorio:
       parsed.problema_recordatorio?.trim() || params.retoProblema,
-    resumen_audio: resumenLines.join('\n'),
+    // El modelo debe devolver resumen_audio como array de puntos; cada línea
+    // se renderiza como una viñeta.
+    resumen_audio: toLines(parsed.resumen_audio),
   }
 }
 

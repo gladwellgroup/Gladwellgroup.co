@@ -246,6 +246,111 @@
     @apply w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-all focus:border-[#7C3AED]/60 focus:outline-none focus:ring-1 focus:ring-[#7C3AED]/40;
   }
 
+  /* Textarea que crece con su contenido hasta un tope cómodo. El alto lo fija
+     JS (scrollHeight); aquí solo vive el techo. */
+  .modal-textarea {
+    max-height: 280px;
+    /* Anula el `resize: vertical` del preflight de Tailwind: el ajuste manual
+       lo reemplaza el grabber, para no tener dos afordancias compitiendo. */
+    resize: none;
+  }
+
+  /* En escritorio el campo es ~2x más ancho, así que el mismo texto ocupa
+     menos alto: 240px ≈ 10 líneas, medido con una descripción de sesión real
+     (título + intro + bio del ponente). Es deliberadamente menor que el tope
+     móvil. */
+  @media (width >= 40rem) {
+    .modal-textarea {
+      max-height: 240px;
+    }
+  }
+
+  /* Techo de seguridad al expandir: un texto enorme no debe volver
+     inmanejable el resto del formulario. */
+  .modal-textarea[data-expanded='true'] {
+    max-height: 70vh;
+  }
+
+  /* Aire bajo la última línea para que el grabber no se le encime cuando el
+     campo está desplazado hasta el final. */
+  .modal-textarea[data-overflow='true'] {
+    padding-bottom: 1.75rem;
+  }
+
+  /* El texto se disuelve en el borde inferior para señalar que continúa.
+     Se usa máscara y no un degradado de color porque el campo es
+     semitransparente (bg-muted/50) y un degradado tendría que falsear el
+     fondo, fallando en claro/oscuro.
+
+     Tres paradas y no dos: con un degradado corto la píldora del grabber cae
+     sobre texto a medio desvanecer y se vuelve ilegible. Este deja limpia la
+     franja inferior.
+
+     Se retira al enfocar (no estorbar el cursor) y al llegar al final del
+     scroll (ahí la última línea es contenido real, no debe atenuarse). */
+  .modal-textarea[data-overflow='true']:not([data-at-end='true']):not(:focus) {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - 3.25rem),
+      rgb(0 0 0 / 0.35) calc(100% - 1.75rem),
+      transparent calc(100% - 0.35rem)
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - 3.25rem),
+      rgb(0 0 0 / 0.35) calc(100% - 1.75rem),
+      transparent calc(100% - 0.35rem)
+    );
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* Se listan las propiedades en vez de heredar el `transition-all` de
+       .modal-field: el alto necesita una curva más lenta (la de las hojas de
+       iOS) que el resalte de foco. */
+    .modal-textarea {
+      transition:
+        max-height 320ms cubic-bezier(0.32, 0.72, 0, 1),
+        border-color 150ms ease,
+        box-shadow 150ms ease;
+    }
+  }
+
+  /* Skeleton de carga: base neutra + barrido de marca muy sutil. Reemplaza el
+     pulso genérico de Tailwind — con bg-accent (pensado para hover, no para
+     esto) el bloque saturado parpadeando se leía como un error visual. */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--muted);
+  }
+
+  .skeleton-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklch, var(--gladwell-purple) 70%, transparent) 45%,
+      color-mix(in oklch, var(--gladwell-cyan) 70%, transparent) 55%,
+      transparent
+    );
+    opacity: 0.15;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .skeleton-shimmer::after {
+      animation: skeleton-shimmer 1.8s ease-in-out infinite;
+    }
+  }
+
+  @keyframes skeleton-shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
   .country-phone-trigger {
     @apply appearance-none text-left;
   }

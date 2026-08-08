@@ -17,6 +17,9 @@ export const PERMISSIONS = {
   'therapy:deliver': 'therapy:deliver',
   'therapy:read_own': 'therapy:read_own',
 
+  'education:create': 'education:create',
+  'education:deliver': 'education:deliver',
+
   'content:publish': 'content:publish',
   'content:read': 'content:read',
 
@@ -39,6 +42,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'therapy:create',
     'therapy:deliver',
     'therapy:read_own',
+    'education:create',
+    'education:deliver',
     'content:publish',
     'content:read',
   ],

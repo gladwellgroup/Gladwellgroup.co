@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono, Playfair_Display } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import NextTopLoader from 'nextjs-toploader'
 import { ThemeProvider } from '@/components/providers/theme-provider'
 import { SITE_URL, SITE_NAME, SITE_LOCALE, SITE_DESCRIPTION } from '@/lib/site'
 import './globals.css'
@@ -67,6 +68,12 @@ export default function RootLayout({
       className={`${geist.variable} ${geistMono.variable} ${playfair.variable}`}
     >
       <body className="font-sans antialiased bg-background">
+        <NextTopLoader
+          color="linear-gradient(90deg, #7C3AED, #06B6D4)"
+          height={3}
+          showSpinner={false}
+          shadow={false}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
