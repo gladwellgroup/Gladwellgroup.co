@@ -2,12 +2,18 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { ArrowLeft, ChevronRight, Search } from 'lucide-react'
 import { useAppRouter } from '@/hooks/use-app-router'
+import {
+  PipelineFilter,
+  type BucketFilter,
+} from '@/components/portal/pipeline-filter'
+import { bucketSession, isPipelineBucket } from '@/lib/deliverables/pipeline'
+import { PipelineBadge } from '@/components/portal/pipeline-badge'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandField } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
-import { THERAPY_STATUS_COLORS, THERAPY_STATUS_LABELS } from '@/lib/therapy/status'
 import { parseDateOnly } from '@/lib/date'
 
 interface Session {
@@ -18,18 +24,6 @@ interface Session {
   created_at: string
   invitado: { nombre: string } | null
   therapy_session_cofounders?: { nombre: string; orden: number }[] | null
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-        THERAPY_STATUS_COLORS[status] ?? 'bg-muted'
-      }`}
-    >
-      {THERAPY_STATUS_LABELS[status] ?? status}
-    </span>
-  )
 }
 
 function fundadoresNombres(session: Session): string {
@@ -82,13 +76,22 @@ export function TherapyDashboard({
 
   const [searchQuery, setSearchQuery] = useState('')
 
+  // El dashboard enlaza aquí con ?estado=<casilla>; a partir de ahí el filtro
+  // es local, sin recargar la ruta en cada clic.
+  const searchParams = useSearchParams()
+  const estadoParam = searchParams.get('estado')
+  const [bucket, setBucket] = useState<BucketFilter>(
+    estadoParam && isPipelineBucket(estadoParam) ? estadoParam : 'todas'
+  )
+
   const filteredSessions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    if (!q) return sessions
-    return sessions.filter((session) =>
-      (session.invitado?.nombre ?? session.title).toLowerCase().includes(q)
-    )
-  }, [sessions, searchQuery])
+    return sessions.filter((session) => {
+      if (bucket !== 'todas' && bucketSession(session) !== bucket) return false
+      if (!q) return true
+      return (session.invitado?.nombre ?? session.title).toLowerCase().includes(q)
+    })
+  }, [sessions, searchQuery, bucket])
 
   const filteredInvitados = useMemo(() => {
     const q = invitadoQuery.trim().toLowerCase()
@@ -294,14 +297,21 @@ export function TherapyDashboard({
       )}
 
       {sessions.length > 0 && (
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por nombre de empresa..."
-            className="modal-field w-full pl-9"
+        <div className="mx-auto flex w-full max-w-xl flex-col gap-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por nombre de empresa..."
+              className="modal-field w-full pl-9"
+            />
+          </div>
+          <PipelineFilter
+            sessions={sessions}
+            value={bucket}
+            onChange={setBucket}
           />
         </div>
       )}
@@ -315,7 +325,9 @@ export function TherapyDashboard({
       ) : filteredSessions.length === 0 ? (
         <BrandCard className="text-center">
           <p className="text-muted-foreground">
-            Ninguna empresa coincide con &quot;{searchQuery}&quot;.
+            {searchQuery.trim()
+              ? `Ninguna empresa coincide con "${searchQuery}".`
+              : 'No hay sesiones en este estado.'}
           </p>
         </BrandCard>
       ) : (
@@ -347,7 +359,7 @@ export function TherapyDashboard({
                     {parseDateOnly(session.session_date).toLocaleDateString('es-CO')}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
-                    <StatusBadge status={session.status} />
+                    <PipelineBadge session={session} />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <ChevronRight className="inline h-4 w-4 text-muted-foreground" />

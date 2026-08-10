@@ -29,9 +29,11 @@ export const PORTAL_NAV_ITEMS: PortalNavItem[] = [
   },
   {
     label: 'CRM',
-    href: '/super/crm',
+    href: (role) => (role === 'super_admin' ? '/super/crm' : '/admin/leads'),
     icon: 'BarChart3',
-    permission: 'leads:read_all',
+    // community_admin lo tiene explícito; super_admin lo hereda igual que
+    // el resto de permisos — un solo ítem de menú para ambos roles.
+    permission: 'leads:read_delegated',
   },
   { label: 'Perfil', href: '/perfil', icon: 'User' },
 ]

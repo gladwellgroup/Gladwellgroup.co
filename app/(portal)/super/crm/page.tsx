@@ -1,4 +1,5 @@
 import { requirePermission } from '@/lib/auth/session'
+import { hasPermission } from '@/lib/permissions'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { CrmLeadsTable } from '@/components/portal/crm-leads-table'
 
@@ -18,9 +19,9 @@ export default async function CrmPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-col items-center gap-1 text-center">
         <h1 className="text-xl sm:text-2xl font-bold gladwell-gradient-text">
-          CRM — Walking List
+          CRM | Walking List
         </h1>
         <p className="text-muted-foreground text-sm">
           Todos los leads registrados. Delega a un administrador de comunidad.
@@ -31,6 +32,7 @@ export default async function CrmPage() {
         admins={admins ?? []}
         currentUserId={user.id}
         canDelegate
+        canUpdateStatus={hasPermission(user.role, 'leads:update_status')}
       />
     </div>
   )

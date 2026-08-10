@@ -2,15 +2,18 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { ArrowLeft, ChevronRight, Search } from 'lucide-react'
 import { useAppRouter } from '@/hooks/use-app-router'
+import {
+  PipelineFilter,
+  type BucketFilter,
+} from '@/components/portal/pipeline-filter'
+import { bucketSession, isPipelineBucket } from '@/lib/deliverables/pipeline'
+import { PipelineBadge } from '@/components/portal/pipeline-badge'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandField } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
-import {
-  EDUCATION_STATUS_COLORS,
-  EDUCATION_STATUS_LABELS,
-} from '@/lib/education/status'
 import { parseDateOnly } from '@/lib/date'
 
 interface Session {
@@ -26,18 +29,6 @@ interface Admin {
   id: string
   nombre: string
   correo: string
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-        EDUCATION_STATUS_COLORS[status] ?? 'bg-muted'
-      }`}
-    >
-      {EDUCATION_STATUS_LABELS[status] ?? status}
-    </span>
-  )
 }
 
 export function EducationDashboard({
@@ -67,15 +58,24 @@ export function EducationDashboard({
   const [adminId, setAdminId] = useState(currentUserId)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // El dashboard enlaza aquí con ?estado=<casilla>; a partir de ahí el filtro
+  // es local, sin recargar la ruta en cada clic.
+  const searchParams = useSearchParams()
+  const estadoParam = searchParams.get('estado')
+  const [bucket, setBucket] = useState<BucketFilter>(
+    estadoParam && isPipelineBucket(estadoParam) ? estadoParam : 'todas'
+  )
+
   const filteredSessions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    if (!q) return sessions
-    return sessions.filter((session) =>
-      `${session.title} ${session.education_session_inputs?.ponente_nombre ?? ''}`
+    return sessions.filter((session) => {
+      if (bucket !== 'todas' && bucketSession(session) !== bucket) return false
+      if (!q) return true
+      return `${session.title} ${session.education_session_inputs?.ponente_nombre ?? ''}`
         .toLowerCase()
         .includes(q)
-    )
-  }, [sessions, searchQuery])
+    })
+  }, [sessions, searchQuery, bucket])
 
   async function handleCreateSession(e: React.FormEvent) {
     e.preventDefault()
@@ -187,15 +187,24 @@ export function EducationDashboard({
         </BrandCard>
       )}
 
+      {/* Buscador y filtros como un solo bloque centrado, sobre el mismo eje
+          que el encabezado de la página. */}
       {sessions.length > 0 && (
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por título o ponente..."
-            className="modal-field w-full pl-9"
+        <div className="mx-auto flex w-full max-w-xl flex-col gap-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por título o ponente..."
+              className="modal-field w-full pl-9"
+            />
+          </div>
+          <PipelineFilter
+            sessions={sessions}
+            value={bucket}
+            onChange={setBucket}
           />
         </div>
       )}
@@ -209,7 +218,9 @@ export function EducationDashboard({
       ) : filteredSessions.length === 0 ? (
         <BrandCard className="text-center">
           <p className="text-muted-foreground">
-            Ninguna sesión coincide con &quot;{searchQuery}&quot;.
+            {searchQuery.trim()
+              ? `Ninguna sesión coincide con "${searchQuery}".`
+              : 'No hay sesiones en este estado.'}
           </p>
         </BrandCard>
       ) : (
@@ -249,7 +260,7 @@ export function EducationDashboard({
                     {parseDateOnly(session.session_date).toLocaleDateString('es-CO')}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
-                    <StatusBadge status={session.status} />
+                    <PipelineBadge session={session} />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <ChevronRight className="inline h-4 w-4 text-muted-foreground" />

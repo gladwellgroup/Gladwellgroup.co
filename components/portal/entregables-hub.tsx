@@ -1,6 +1,9 @@
 import Link from 'next/link'
 import { ChevronRight, GraduationCap, Users } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
+import { SectionDivider } from '@/components/shared'
+import { SessionsCalendar } from '@/components/portal/sessions-calendar'
+import type { CalendarSession } from '@/lib/deliverables/sessions'
 
 interface Program {
   href: string
@@ -9,7 +12,13 @@ interface Program {
   icon: typeof Users
 }
 
-export function EntregablesHub({ basePath }: { basePath: string }) {
+export function EntregablesHub({
+  basePath,
+  sessions,
+}: {
+  basePath: string
+  sessions: CalendarSession[]
+}) {
   const programs: Program[] = [
     {
       href: `${basePath}/terapia`,
@@ -28,8 +37,8 @@ export function EntregablesHub({ basePath }: { basePath: string }) {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col items-center gap-1 text-center">
+    <div className="space-y-8">
+      <div className="flex flex-col items-center gap-1 pt-6 text-center sm:pt-8">
         <h1 className="text-xl sm:text-2xl font-bold gladwell-gradient-text">
           Entregables
         </h1>
@@ -41,7 +50,9 @@ export function EntregablesHub({ basePath }: { basePath: string }) {
       <div className="grid gap-4 sm:grid-cols-2">
         {programs.map((program) => (
           <Link key={program.href} href={program.href} className="group block">
-            <BrandCard className="flex h-full flex-col gap-3 transition-colors hover:bg-muted/30">
+            {/* Centrado en mobile; desde sm vuelve al layout original
+                (alineado a la izquierda), sin tocar nada ahí. */}
+            <BrandCard className="flex h-full flex-col items-center gap-3 text-center transition-colors hover:bg-muted/30 sm:items-start sm:text-left">
               <program.icon className="h-7 w-7 text-[#A78BFA]" />
               <h2 className="flex items-center gap-1.5 text-base font-semibold">
                 {program.title}
@@ -54,6 +65,13 @@ export function EntregablesHub({ basePath }: { basePath: string }) {
           </Link>
         ))}
       </div>
+
+      {/* Misma línea de marca que separa secciones en la landing — marca el
+          quiebre entre "elegir programa" y "ver todo junto" sin un borde
+          duro. */}
+      <SectionDivider position="inline" />
+
+      <SessionsCalendar sessions={sessions} basePath={basePath} />
     </div>
   )
 }

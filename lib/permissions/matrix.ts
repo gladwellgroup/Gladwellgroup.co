@@ -12,6 +12,7 @@ export const PERMISSIONS = {
   'leads:read_all': 'leads:read_all',
   'leads:read_delegated': 'leads:read_delegated',
   'leads:delegate': 'leads:delegate',
+  'leads:update_status': 'leads:update_status',
 
   'therapy:create': 'therapy:create',
   'therapy:deliver': 'therapy:deliver',
@@ -39,6 +40,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'profile:edit_own',
     'profile:view_members',
     'leads:read_delegated',
+    'leads:update_status',
     'therapy:create',
     'therapy:deliver',
     'therapy:read_own',
