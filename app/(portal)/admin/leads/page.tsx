@@ -1,5 +1,4 @@
 import { requirePermission } from '@/lib/auth/session'
-import { hasPermission } from '@/lib/permissions'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { CrmLeadsTable } from '@/components/portal/crm-leads-table'
 
@@ -28,7 +27,7 @@ export default async function AdminLeadsPage() {
         admins={[]}
         currentUserId={user.id}
         canDelegate={false}
-        canUpdateStatus={hasPermission(user.role, 'leads:update_status')}
+        canUpdateStatus={user.permissions.includes('leads:update_status')}
       />
     </div>
   )

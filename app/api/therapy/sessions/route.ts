@@ -1,26 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiPermission } from '@/lib/auth/api'
 import { therapySessionSchema } from '@/lib/validations/therapy'
-import { hasPermission } from '@/lib/permissions'
+import { resolvePermissionsFromGrants, type Role } from '@/lib/permissions'
 
 export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+  const auth = await requireApiPermission('therapy:create')
+  if (!auth.ok) return auth.response
+  const { user, role } = auth
 
   const supabase = getSupabaseServer()
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !hasPermission(profile.role, 'therapy:create')) {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
 
   let body: unknown
   try {
@@ -37,15 +26,22 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // No basta con "es community_admin": si además no tiene el módulo de
+  // Entregables · Terapia otorgado, quedaría con una sesión asignada que
+  // jamás puede abrir (resolveDeliverableAccess la bloquearía igual).
   const { data: moderator } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
     .eq('id', result.data.moderator_id)
     .single()
 
-  if (!moderator || !['super_admin', 'community_admin'].includes(moderator.role)) {
+  const moderatorPermissions = moderator
+    ? resolvePermissionsFromGrants(moderator.role as Role, moderator.profile_module_grants)
+    : []
+
+  if (!moderator || !moderatorPermissions.includes('therapy:create')) {
     return NextResponse.json(
-      { error: 'El moderador debe ser un administrador.' },
+      { error: 'El moderador debe tener el módulo Entregables · Terapia.' },
       { status: 400 }
     )
   }
@@ -60,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invitado no encontrado' }, { status: 400 })
   }
 
-  if (profile.role !== 'super_admin' && invitado.created_by !== user.id) {
+  if (role !== 'super_admin' && invitado.created_by !== user.id) {
     return NextResponse.json(
       { error: 'No tienes acceso a este invitado' },
       { status: 403 }

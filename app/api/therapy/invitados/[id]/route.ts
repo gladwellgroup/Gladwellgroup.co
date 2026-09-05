@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
-import { hasPermission } from '@/lib/permissions'
+import { requireApiPermission } from '@/lib/auth/api'
 import { patchInvitadoSchema } from '@/lib/validations/therapy'
 
 export async function PATCH(
@@ -9,22 +8,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+  const auth = await requireApiPermission('therapy:create')
+  if (!auth.ok) return auth.response
+  const { user, role } = auth
 
   const supabase = getSupabaseServer()
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !hasPermission(profile.role, 'therapy:create')) {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
 
   const { data: invitado } = await supabase
     .from('invitados')
@@ -36,7 +24,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invitado no encontrado' }, { status: 404 })
   }
 
-  if (profile.role !== 'super_admin' && invitado.created_by !== user.id) {
+  if (role !== 'super_admin' && invitado.created_by !== user.id) {
     return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   }
 

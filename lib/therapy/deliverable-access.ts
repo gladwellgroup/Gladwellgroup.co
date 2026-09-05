@@ -1,6 +1,8 @@
 import type { User } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseDateOnly } from '@/lib/date'
+import { resolvePermissionsFromGrants } from '@/lib/permissions/resolve'
+import type { Role } from '@/lib/permissions/roles'
 
 export type DeliverableAccess = {
   allowed: boolean
@@ -27,14 +29,18 @@ export async function resolveDeliverableAccess(
 ): Promise<DeliverableAccess> {
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
     .eq('id', user.id)
     .single()
 
-  if (
-    !profile ||
-    !['super_admin', 'community_admin'].includes(profile.role)
-  ) {
+  const permissions = profile
+    ? resolvePermissionsFromGrants(profile.role as Role, profile.profile_module_grants)
+    : []
+
+  // 'therapy:create' es el permiso que otorga el módulo Entregables ·
+  // Terapia — revocarlo debe cortar el acceso real a estas rutas, no solo
+  // el ítem del menú (antes esto solo miraba el rol a secas).
+  if (!profile || !permissions.includes('therapy:create')) {
     return {
       allowed: false,
       isModeratorOrSuper: false,

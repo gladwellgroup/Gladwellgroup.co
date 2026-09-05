@@ -22,7 +22,7 @@ export default async function PortalLayout({
           roleLabel={ROLE_LABELS[role]}
         />
         <div className="flex flex-1 w-full min-h-0">
-          <PortalSidebar role={role} />
+          <PortalSidebar role={role} permissions={user.permissions} />
           <div className="flex-1 flex flex-col min-w-0">
             <BrandPageBackground orbOpacity={0.7}>
               <main className="flex-1 px-4 py-6 pb-24 sm:px-6 sm:py-8 md:pb-8 lg:px-8">
@@ -31,7 +31,7 @@ export default async function PortalLayout({
             </BrandPageBackground>
           </div>
         </div>
-        <PortalBottomNav role={role} />
+        <PortalBottomNav role={role} permissions={user.permissions} />
       </div>
     </SidebarProvider>
   )

@@ -9,9 +9,10 @@ import {
   BarChart3,
   Users,
   Briefcase,
+  Calendar,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { type Role, hasPermission } from '@/lib/permissions'
+import { type Role, type Permission } from '@/lib/permissions'
 import {
   PORTAL_NAV_ITEMS,
   resolveNavHref,
@@ -33,10 +34,12 @@ const ICON_MAP: Record<string, LucideIcon> = {
   BarChart3,
   Users,
   Briefcase,
+  Calendar,
 }
 
 interface PortalSidebarProps {
   role: Role
+  permissions: Permission[]
 }
 
 function NavIcon({ icon: IconName, active }: { icon: string; active: boolean }) {
@@ -83,12 +86,12 @@ function HoverableSidebarShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function PortalSidebar({ role }: PortalSidebarProps) {
+export function PortalSidebar({ role, permissions }: PortalSidebarProps) {
   const pathname = usePathname()
 
   const visibleItems = PORTAL_NAV_ITEMS.filter((item) => {
     if (!item.permission) return true
-    return hasPermission(role, item.permission)
+    return permissions.includes(item.permission)
   })
 
   return (

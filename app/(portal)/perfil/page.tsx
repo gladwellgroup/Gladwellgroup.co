@@ -1,6 +1,7 @@
 import { requireAuth } from '@/lib/auth/session'
 import { ROLE_LABELS, type Role } from '@/lib/permissions'
 import { BrandCard } from '@/components/brand/brand-card'
+import { ChangePasswordForm } from '@/components/portal/change-password-form'
 
 export default async function PerfilPage() {
   const user = await requireAuth()
@@ -20,6 +21,7 @@ export default async function PerfilPage() {
           {ROLE_LABELS[user.role as Role]}
         </p>
       </BrandCard>
+      <ChangePasswordForm />
     </div>
   )
 }

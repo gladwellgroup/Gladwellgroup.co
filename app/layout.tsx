@@ -1,8 +1,9 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono, Playfair_Display } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import NextTopLoader from 'nextjs-toploader'
 import { ThemeProvider } from '@/components/providers/theme-provider'
+import { ServiceWorkerRegistration } from '@/components/providers/service-worker-registration'
 import { SITE_URL, SITE_NAME, SITE_LOCALE, SITE_DESCRIPTION } from '@/lib/site'
 import './globals.css'
 
@@ -14,10 +15,27 @@ const playfair = Playfair_Display({
   weight: ['400', '600'],
 })
 
+// viewport-fit: 'cover' es lo que activa de verdad el env(safe-area-inset-*)
+// que portal-bottom-nav.tsx y portal-navbar.tsx ya usan — sin esto, esas
+// variables resuelven siempre a 0 y el contenido queda tapado por el
+// notch/home indicator en iOS al abrir el portal como app instalada.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#0a0a14',
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: `${SITE_NAME} | Apasionados por la Estrategia`,
   description: SITE_DESCRIPTION,
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: SITE_NAME,
+  },
   other: {
     'geo.region': 'CO-DC',
     'geo.placename': 'Bogotá',
@@ -82,6 +100,7 @@ export default function RootLayout({
         >
           {children}
           {process.env.NODE_ENV === 'production' && <Analytics />}
+          {process.env.NODE_ENV === 'production' && <ServiceWorkerRegistration />}
         </ThemeProvider>
       </body>
     </html>

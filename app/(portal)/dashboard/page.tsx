@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { requireAuth } from '@/lib/auth/session'
-import { hasPermission, type Permission } from '@/lib/permissions'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { BrandCard } from '@/components/brand/brand-card'
 import {
@@ -24,10 +23,6 @@ import {
   type CalendarSession,
 } from '@/lib/deliverables/sessions'
 import { parseDateOnly } from '@/lib/date'
-
-function can(role: string, perm: Permission) {
-  return hasPermission(role as Parameters<typeof hasPermission>[0], perm)
-}
 
 function emptyCounts(): PipelineCounts {
   return Object.fromEntries(
@@ -211,7 +206,9 @@ export default async function DashboardPage() {
   const supabase = getSupabaseServer()
   const role = user.role
 
-  const verEntregables = can(role, 'therapy:create') || can(role, 'education:create')
+  const verEntregables =
+    user.permissions.includes('therapy:create') ||
+    user.permissions.includes('education:create')
   const basePath = role === 'super_admin' ? '/super/entregables' : '/admin/entregables'
 
   const sessions = verEntregables ? await loadPipelineSessions(supabase, user) : []

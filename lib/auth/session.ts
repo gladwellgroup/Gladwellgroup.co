@@ -3,7 +3,8 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { type Role } from '@/lib/permissions/roles'
-import { hasPermission, type Permission } from '@/lib/permissions/matrix'
+import { type Permission } from '@/lib/permissions/matrix'
+import { resolvePermissionsFromGrants } from '@/lib/permissions/resolve'
 
 async function getSupabaseServerSession() {
   const cookieStore = await cookies()
@@ -34,6 +35,8 @@ export interface SessionUser {
   email: string
   role: Role
   nombre: string
+  /** Base fija del rol ∪ módulos otorgados por persona (profile_module_grants). */
+  permissions: Permission[]
 }
 
 export const getSession = cache(async function getSession(): Promise<SessionUser | null> {
@@ -54,9 +57,12 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
 
   if (!userId) return null
 
+  // El embed trae los módulos otorgados en la misma consulta (sigue siendo
+  // un solo round-trip) — profile_module_grants tiene su propia RLS que
+  // permite leer solo las filas propias.
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, nombre, correo')
+    .select('role, nombre, correo, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
     .eq('id', userId)
     .single()
 
@@ -67,6 +73,7 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
     email: profile.correo,
     role: profile.role as Role,
     nombre: profile.nombre,
+    permissions: resolvePermissionsFromGrants(profile.role as Role, profile.profile_module_grants),
   }
 })
 
@@ -80,7 +87,7 @@ export async function requirePermission(
   permission: Permission
 ): Promise<SessionUser> {
   const session = await requireAuth()
-  if (!hasPermission(session.role, permission)) {
+  if (!session.permissions.includes(permission)) {
     redirect('/dashboard')
   }
   return session

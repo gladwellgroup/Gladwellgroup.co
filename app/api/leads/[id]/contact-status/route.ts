@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
-import { hasPermission } from '@/lib/permissions'
+import { requireApiPermission } from '@/lib/auth/api'
 
 const contactStatusSchema = z.object({
   contact_status: z.enum([
@@ -19,23 +18,11 @@ export async function PATCH(
 ) {
   const { id: leadId } = await params
 
-  const user = await getAuthUser()
-
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+  const auth = await requireApiPermission('leads:update_status')
+  if (!auth.ok) return auth.response
+  const { user, role } = auth
 
   const supabase = getSupabaseServer()
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !hasPermission(profile.role, 'leads:update_status')) {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
 
   let body: unknown
   try {
@@ -64,7 +51,7 @@ export async function PATCH(
 
   // Delegar es exclusivo de super_admin; marcar el avance de contacto lo
   // hace quien tiene el lead asignado — así que aquí sí importa de quién es.
-  if (profile.role !== 'super_admin' && lead.assigned_to !== user.id) {
+  if (role !== 'super_admin' && lead.assigned_to !== user.id) {
     return NextResponse.json(
       { error: 'Este lead no está delegado a ti' },
       { status: 403 }

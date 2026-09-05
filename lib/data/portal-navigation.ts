@@ -35,5 +35,11 @@ export const PORTAL_NAV_ITEMS: PortalNavItem[] = [
     // el resto de permisos — un solo ítem de menú para ambos roles.
     permission: 'leads:read_delegated',
   },
+  {
+    label: 'Parrilla',
+    href: (role) => (role === 'super_admin' ? '/super/parrilla' : '/admin/parrilla'),
+    icon: 'Calendar',
+    permission: 'parrilla:manage',
+  },
   { label: 'Perfil', href: '/perfil', icon: 'User' },
 ]

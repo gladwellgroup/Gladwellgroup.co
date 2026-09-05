@@ -38,7 +38,10 @@ export function PortalNavbar({ userName, roleLabel }: PortalNavbarProps) {
   }
 
   return (
-    <header className="sticky top-0 z-50 portal-header">
+    <header
+      className="sticky top-0 z-50 portal-header"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
       <div className="flex h-16 md:h-20 items-center gap-2 md:gap-3">
         {/* Misma columna que el riel colapsado del sidebar (--sidebar-width-icon)
             para que el hamburguesa quede centrado exactamente sobre los iconos

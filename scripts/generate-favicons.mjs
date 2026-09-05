@@ -37,18 +37,47 @@ async function squareIcon(size) {
     .toBuffer()
 }
 
+// Los íconos "maskable" los recorta el sistema operativo con formas propias
+// (círculo, squircle, etc.) — si el contenido llega hasta el borde, esas
+// formas se lo comen. Por eso este necesita más margen que squareIcon
+// (que sí puede llenar el lienzo completo cuando la fuente ya es cuadrada) y
+// SIEMPRE pinta el fondo, nunca transparente: un ícono maskable transparente
+// deja huecos donde el launcher espera ver el background_color del manifest.
+async function maskableIcon(size) {
+  const paddingRatio = 0.2
+  const inner = Math.round(size * (1 - paddingRatio * 2))
+
+  const resized = await sharp(source)
+    .resize(inner, inner, { fit: "inside" })
+    .toBuffer()
+
+  return sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background,
+    },
+  })
+    .composite([{ input: resized, gravity: "center" }])
+    .png()
+    .toBuffer()
+}
+
 mkdirSync(join(root, "public"), { recursive: true })
 mkdirSync(join(root, "app"), { recursive: true })
 
 const outputs = [
-  { path: join(root, "public/icon-dark-32x32.png"), size: 32 },
-  { path: join(root, "public/icon-light-32x32.png"), size: 32 },
-  { path: join(root, "public/apple-icon.png"), size: 180 },
-  { path: join(root, "app/icon.png"), size: 512 },
+  { path: join(root, "public/icon-dark-32x32.png"), size: 32, generator: squareIcon },
+  { path: join(root, "public/icon-light-32x32.png"), size: 32, generator: squareIcon },
+  { path: join(root, "public/apple-icon.png"), size: 180, generator: squareIcon },
+  { path: join(root, "app/icon.png"), size: 512, generator: squareIcon },
+  { path: join(root, "public/icon-192.png"), size: 192, generator: squareIcon },
+  { path: join(root, "public/icon-512-maskable.png"), size: 512, generator: maskableIcon },
 ]
 
-for (const { path, size } of outputs) {
-  const buffer = await squareIcon(size)
+for (const { path, size, generator } of outputs) {
+  const buffer = await generator(size)
   await sharp(buffer).toFile(path)
   console.log(`Wrote ${path.replace(root + "/", "")}`)
 }

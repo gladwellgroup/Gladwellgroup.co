@@ -1,6 +1,6 @@
 import { requirePermission } from '@/lib/auth/session'
-import { hasPermission } from '@/lib/permissions'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { resolvePermissionsFromGrants, type Role } from '@/lib/permissions'
 import { CrmLeadsTable } from '@/components/portal/crm-leads-table'
 
 export default async function CrmPage() {
@@ -12,10 +12,20 @@ export default async function CrmPage() {
     .select('*')
     .order('created_at', { ascending: false })
 
-  const { data: admins } = await supabase
+  // Sin el módulo CRM otorgado, un community_admin no puede abrir /admin/leads
+  // — delegarle un lead lo dejaría asignado a alguien que no lo puede ver.
+  const { data: adminRows } = await supabase
     .from('profiles')
-    .select('id, nombre, correo')
+    .select('id, nombre, correo, role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
     .eq('role', 'community_admin')
+
+  const admins = (adminRows ?? [])
+    .filter((a) =>
+      resolvePermissionsFromGrants(a.role as Role, a.profile_module_grants).includes(
+        'leads:read_delegated'
+      )
+    )
+    .map((a) => ({ id: a.id, nombre: a.nombre, correo: a.correo }))
 
   return (
     <div className="space-y-6">
@@ -29,10 +39,10 @@ export default async function CrmPage() {
       </div>
       <CrmLeadsTable
         leads={leads ?? []}
-        admins={admins ?? []}
+        admins={admins}
         currentUserId={user.id}
         canDelegate
-        canUpdateStatus={hasPermission(user.role, 'leads:update_status')}
+        canUpdateStatus={user.permissions.includes('leads:update_status')}
       />
     </div>
   )

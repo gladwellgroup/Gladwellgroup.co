@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
-import { hasPermission } from '@/lib/permissions'
+import { requireApiPermission } from '@/lib/auth/api'
 import { invitadoSchema } from '@/lib/validations/therapy'
 
 export async function GET(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+  const auth = await requireApiPermission('therapy:create')
+  if (!auth.ok) return auth.response
+  const { user, role } = auth
 
   const supabase = getSupabaseServer()
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !hasPermission(profile.role, 'therapy:create')) {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
 
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q')?.trim()
@@ -30,7 +18,7 @@ export async function GET(request: NextRequest) {
     .select('id, nombre, descripcion, red_social, pagina_web, created_at')
     .order('nombre')
 
-  if (profile.role !== 'super_admin') {
+  if (role !== 'super_admin') {
     query = query.eq('created_by', user.id)
   }
   if (q) {
@@ -48,22 +36,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+  const auth = await requireApiPermission('therapy:create')
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   const supabase = getSupabaseServer()
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !hasPermission(profile.role, 'therapy:create')) {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
 
   let body: unknown
   try {

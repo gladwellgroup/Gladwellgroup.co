@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
-import { hasPermission } from '@/lib/permissions'
+import { requireApiPermission } from '@/lib/auth/api'
+import { resolvePermissionsFromGrants, type Role } from '@/lib/permissions'
 
 const delegateSchema = z.object({
   assigned_to: z.string().uuid('ID de administrador inválido'),
@@ -14,23 +14,11 @@ export async function PATCH(
 ) {
   const { id: leadId } = await params
 
-  const user = await getAuthUser()
-
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+  const auth = await requireApiPermission('leads:delegate')
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   const supabase = getSupabaseServer()
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !hasPermission(profile.role, 'leads:delegate')) {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
 
   let body: unknown
   try {
@@ -49,15 +37,25 @@ export async function PATCH(
 
   const { assigned_to } = result.data
 
+  // Rol correcto no basta: sin el módulo CRM otorgado, quedaría delegado a
+  // alguien que no puede ver el lead en /admin/leads.
   const { data: targetAdmin } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
     .eq('id', assigned_to)
     .single()
 
-  if (!targetAdmin || targetAdmin.role !== 'community_admin') {
+  const targetPermissions = targetAdmin
+    ? resolvePermissionsFromGrants(targetAdmin.role as Role, targetAdmin.profile_module_grants)
+    : []
+
+  if (
+    !targetAdmin ||
+    targetAdmin.role !== 'community_admin' ||
+    !targetPermissions.includes('leads:read_delegated')
+  ) {
     return NextResponse.json(
-      { error: 'El usuario destino no es administrador de comunidad' },
+      { error: 'El usuario destino no tiene el módulo CRM otorgado' },
       { status: 400 }
     )
   }
