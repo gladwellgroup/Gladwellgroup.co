@@ -32,6 +32,17 @@ export const PERMISSIONS = {
   'config:global': 'config:global',
 
   'parrilla:manage': 'parrilla:manage',
+
+  // Ver el calendario de TODAS las sesiones de la comunidad (no solo las
+  // propias) y abrir el detalle de cualquiera en modo lectura — se otorga
+  // vía módulo (ver modules.ts), nunca fijo en ROLE_PERMISSIONS.
+  'sessions:read_community': 'sessions:read_community',
+  // Habilita designar coadministrador(es) de una sesión puntual — quien
+  // queda en co_admin_ids gana acceso total (edición + ver contacto), igual
+  // que el moderador/admin original. Solo el super_admin lo tiene (vía el
+  // atajo de getEffectivePermissions para ese rol) — se ejerce por sesión,
+  // no por checkbox en /super/usuarios.
+  'sessions:delegate_admin': 'sessions:delegate_admin',
 } as const
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]

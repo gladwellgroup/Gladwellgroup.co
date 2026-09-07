@@ -13,6 +13,9 @@ interface CofounderFieldsProps {
   cofounders: CofounderData[]
   onChange: (cofounders: CofounderData[]) => void
   disabled?: boolean
+  /** El dato ya llega redactado (null) desde el servidor cuando corresponde
+   *  — esto solo decide si se muestra un input vacío o el aviso "Oculto". */
+  hideContact?: boolean
 }
 
 function digitsFromStored(whatsapp: string | null, pais: string): string {
@@ -27,6 +30,7 @@ export function CofounderFields({
   cofounders,
   onChange,
   disabled,
+  hideContact,
 }: CofounderFieldsProps) {
   const [confirmIndex, setConfirmIndex] = useState<number | null>(null)
   const [paisPorIndice, setPaisPorIndice] = useState<Record<number, string>>({})
@@ -98,43 +102,61 @@ export function CofounderFields({
                 onChange={(e) => updateField(index, 'nombre', e.target.value)}
                 disabled={disabled}
               />
-              <BrandField
-                id={`cofounder-correo-${index}`}
-                label="Correo"
-                type="email"
-                placeholder="correo@empresa.com"
-                value={cofounder.correo ?? ''}
-                onChange={(e) => updateField(index, 'correo', e.target.value)}
-                disabled={disabled}
-              />
+              {hideContact ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="modal-label">Correo</span>
+                  <p className="modal-field flex items-center text-muted-foreground italic">
+                    Oculto
+                  </p>
+                </div>
+              ) : (
+                <BrandField
+                  id={`cofounder-correo-${index}`}
+                  label="Correo"
+                  type="email"
+                  placeholder="correo@empresa.com"
+                  value={cofounder.correo ?? ''}
+                  onChange={(e) => updateField(index, 'correo', e.target.value)}
+                  disabled={disabled}
+                />
+              )}
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={`cofounder-whatsapp-${index}`} className="modal-label">
-                WhatsApp
-              </label>
-              <div className="grid grid-cols-[8rem_1fr] gap-2">
-                <CountryPhoneSelect
-                  id={`cofounder-whatsapp-pais-${index}`}
-                  value={paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY}
-                  onChange={(iso) => updateWhatsappPais(index, iso)}
-                  disabled={disabled}
-                />
-                <input
-                  id={`cofounder-whatsapp-${index}`}
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  placeholder="300 123 4567"
-                  value={digitsFromStored(cofounder.whatsapp, paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY)}
-                  onChange={(e) =>
-                    updateWhatsappNumero(index, paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY, e.target.value)
-                  }
-                  disabled={disabled}
-                  className="modal-field"
-                />
+            {hideContact ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="modal-label">WhatsApp</span>
+                <p className="modal-field flex items-center text-muted-foreground italic">
+                  Oculto
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor={`cofounder-whatsapp-${index}`} className="modal-label">
+                  WhatsApp
+                </label>
+                <div className="grid grid-cols-[8rem_1fr] gap-2">
+                  <CountryPhoneSelect
+                    id={`cofounder-whatsapp-pais-${index}`}
+                    value={paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY}
+                    onChange={(iso) => updateWhatsappPais(index, iso)}
+                    disabled={disabled}
+                  />
+                  <input
+                    id={`cofounder-whatsapp-${index}`}
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    placeholder="300 123 4567"
+                    value={digitsFromStored(cofounder.whatsapp, paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY)}
+                    onChange={(e) =>
+                      updateWhatsappNumero(index, paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY, e.target.value)
+                    }
+                    disabled={disabled}
+                    className="modal-field"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ))}

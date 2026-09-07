@@ -7,6 +7,8 @@ import { useAppRouter } from '@/hooks/use-app-router'
 import { BrandField, BrandTextarea } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
 import { PhotoUpload } from '@/components/portal/photo-upload'
+import { uploadTherapyMedia } from '@/lib/therapy/upload-media'
+import { TeamPicker, type TeamPickerOption } from '@/components/portal/team-picker'
 import {
   EducationToolFields,
   type ToolData,
@@ -61,6 +63,27 @@ interface EducationSessionFormProps {
   attendanceLink: AttendanceLinkData | null
   basePath: string
   hasDeliverable?: boolean
+  /** Solo se reciben desde la página de super_admin — su sola presencia es
+   *  lo que decide si se muestra el selector de coadministrador(es). */
+  communityAdmins?: TeamPickerOption[]
+  /** Coadministradores actuales de la sesión — acceso total de edición
+   *  (incluye ver contacto), igual que el admin responsable original. Solo
+   *  se editan desde la vista de super_admin (mismo gate que communityAdmins). */
+  coAdminIds?: string[]
+  /** false para un community_admin que ve una sesión ajena (con el módulo
+   *  de solo lectura, o delegado) — bloquea todo el formulario y oculta las
+   *  acciones de administrar, sin ocultar la información en sí. */
+  canEdit?: boolean
+  /** true cuando el visor no puede ver el correo de los asistentes — el
+   *  dato real ya llega redactado desde el servidor, esto solo decide si
+   *  se muestra "Oculto" en su lugar. */
+  hideContact?: boolean
+  /** Controla ver/editar "Notas del moderador" y "Transcripción de la
+   *  videollamada" (incluye el audio) — más restrictivo que canEdit a
+   *  propósito, mismo criterio que canEditRecomendaciones en Terapia.
+   *  Default true: en la vista de super_admin, que no manda este prop,
+   *  siempre puede verlas. */
+  canSeeNotas?: boolean
 }
 
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -101,8 +124,48 @@ export function EducationSessionForm({
   attendanceLink: initialAttendanceLink,
   basePath,
   hasDeliverable = false,
+  communityAdmins,
+  coAdminIds: initialCoAdminIds = [],
+  canEdit = true,
+  hideContact = false,
+  canSeeNotas = true,
 }: EducationSessionFormProps) {
   const router = useAppRouter()
+  const [coAdminIds, setCoAdminIds] = useState<string[]>(initialCoAdminIds)
+  const [coAdminSaving, setCoAdminSaving] = useState(false)
+  const [coAdminError, setCoAdminError] = useState<string | null>(null)
+
+  async function handleToggleCoAdmin(id: string) {
+    // Sin esto, dos clics rápidos disparan dos PATCH en paralelo — si el de
+    // la selección anterior responde después del más reciente, pisa el
+    // estado nuevo con uno viejo. Un guard simple evita la carrera del
+    // todo: nunca hay dos solicitudes en vuelo a la vez.
+    if (coAdminSaving) return
+    const previous = coAdminIds
+    const next = coAdminIds.includes(id)
+      ? coAdminIds.filter((existing) => existing !== id)
+      : [...coAdminIds, id]
+    setCoAdminIds(next)
+    setCoAdminSaving(true)
+    setCoAdminError(null)
+    try {
+      const res = await fetch(`/api/education/sessions/${session.id}/co-admins`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ co_admin_ids: next }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setCoAdminIds(previous)
+        setCoAdminError(data.error ?? 'No se pudo actualizar los coadministradores')
+      }
+    } catch {
+      setCoAdminIds(previous)
+      setCoAdminError('Error de red al actualizar')
+    } finally {
+      setCoAdminSaving(false)
+    }
+  }
   // Vive aquí (no dentro de AttendanceQrSection) porque el acordeón que lo
   // contiene desmonta su contenido al cerrarse; un link recién generado no
   // debe perderse solo por colapsar y volver a abrir la sección.
@@ -133,7 +196,7 @@ export function EducationSessionForm({
       : [{ nombre: '', descripcion: null, url: null, orden: 0 }]
   )
 
-  const isReadOnly = session.status !== 'borrador'
+  const isReadOnly = !canEdit || session.status !== 'borrador'
 
   // Refs para la cola single-flight: leer el estado más reciente sin closures
   // obsoletos.
@@ -359,6 +422,44 @@ export function EducationSessionForm({
         </p>
       </div>
 
+      {communityAdmins && (
+        <Accordion type="single" collapsible className="mx-auto w-full max-w-sm">
+          <AccordionItem value="coadministradores">
+            <AccordionTrigger className="text-base font-semibold">
+              <span className="flex items-center gap-2">
+                Integrar coadministrador de la sesión
+                {coAdminIds.length > 0 && (
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({coAdminIds.length})
+                  </span>
+                )}
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col items-center gap-2 text-center">
+              <TeamPicker
+                options={communityAdmins}
+                selected={coAdminIds}
+                onToggle={handleToggleCoAdmin}
+                size="lg"
+              />
+              {coAdminSaving && (
+                <p className="text-xs text-muted-foreground">Guardando…</p>
+              )}
+              {coAdminError && (
+                <p role="alert" className="text-xs text-red-500">
+                  {coAdminError}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Le da acceso total a esta sesión, igual que el admin
+                responsable original: puede editar todo, gestionar asistentes
+                y generar el entregable con IA.
+              </p>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      )}
+
       <Accordion type="single" collapsible>
         <AccordionItem value="ponente">
           <AccordionTrigger className="text-base font-semibold">
@@ -401,16 +502,16 @@ export function EducationSessionForm({
             <div className="flex flex-col gap-1.5">
               <span className="modal-label">Foto del ponente</span>
               <PhotoUpload
-                sessionId={session.id}
                 currentUrl={ponenteFotoUrl}
+                onUpload={(file) =>
+                  uploadTherapyMedia({ sessionId: session.id, type: 'ponente', file, bucket: 'education-media' })
+                }
                 onUploaded={(url) => {
                   setPonenteFotoUrl(url)
                   stateRef.current.ponenteFotoUrl = url
                   saveImmediately()
                 }}
                 disabled={isReadOnly}
-                bucket="education-media"
-                type="ponente"
                 label="Subir foto del ponente"
                 shape="circle"
               />
@@ -438,22 +539,24 @@ export function EducationSessionForm({
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="notas">
-          <AccordionTrigger className="text-base font-semibold">
-            Notas del moderador
-          </AccordionTrigger>
-          <AccordionContent>
-            <BrandTextarea
-              id="notas_moderador"
-              label="Lo que importó de verdad en la sesión"
-              placeholder="Sirven de lente para filtrar la transcripción. No se copian literal en el entregable."
-              value={notasModerador}
-              onChange={(e) => setNotasModerador(e.target.value)}
-              rows={5}
-              disabled={isReadOnly}
-            />
-          </AccordionContent>
-        </AccordionItem>
+        {canSeeNotas && (
+          <AccordionItem value="notas">
+            <AccordionTrigger className="text-base font-semibold">
+              Notas del moderador
+            </AccordionTrigger>
+            <AccordionContent>
+              <BrandTextarea
+                id="notas_moderador"
+                label="Lo que importó de verdad en la sesión"
+                placeholder="Sirven de lente para filtrar la transcripción. No se copian literal en el entregable."
+                value={notasModerador}
+                onChange={(e) => setNotasModerador(e.target.value)}
+                rows={5}
+                disabled={isReadOnly}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        )}
 
         <AccordionItem value="herramientas">
           <AccordionTrigger className="text-base font-semibold">
@@ -516,15 +619,16 @@ export function EducationSessionForm({
           </AccordionTrigger>
           <AccordionContent>
             <PhotoUpload
-              sessionId={session.id}
               currentUrl={fotoSesionUrl}
+              onUpload={(file) =>
+                uploadTherapyMedia({ sessionId: session.id, type: 'foto', file, bucket: 'education-media' })
+              }
               onUploaded={(url) => {
                 setFotoSesionUrl(url)
                 stateRef.current.fotoSesionUrl = url
                 saveImmediately()
               }}
               disabled={isReadOnly}
-              bucket="education-media"
               label="Subir foto de los asistentes"
             />
           </AccordionContent>
@@ -558,32 +662,35 @@ export function EducationSessionForm({
               attendees={attendees}
               deliverySent={session.status === 'entregado'}
               disabled={isReadOnly}
+              hideContact={hideContact}
             />
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="transcripcion">
-          <AccordionTrigger className="text-base font-semibold">
-            <span className="flex items-center gap-2">
-              Transcripción de la videollamada
-              <RequiredDot filled={tieneFuente} />
-            </span>
-          </AccordionTrigger>
-          <AccordionContent>
-            <EducationTranscriptInput
-              sessionId={session.id}
-              texto={transcripcion}
-              audioUrl={audioUrl}
-              onTextoChange={setTranscripcion}
-              onAudioChange={(url) => {
-                setAudioUrl(url)
-                stateRef.current.audioUrl = url
-                saveImmediately()
-              }}
-              disabled={isReadOnly}
-            />
-          </AccordionContent>
-        </AccordionItem>
+        {canSeeNotas && (
+          <AccordionItem value="transcripcion">
+            <AccordionTrigger className="text-base font-semibold">
+              <span className="flex items-center gap-2">
+                Transcripción de la videollamada
+                <RequiredDot filled={tieneFuente} />
+              </span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <EducationTranscriptInput
+                sessionId={session.id}
+                texto={transcripcion}
+                audioUrl={audioUrl}
+                onTextoChange={setTranscripcion}
+                onAudioChange={(url) => {
+                  setAudioUrl(url)
+                  stateRef.current.audioUrl = url
+                  saveImmediately()
+                }}
+                disabled={isReadOnly}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        )}
       </Accordion>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -604,7 +711,7 @@ export function EducationSessionForm({
               : SAVE_STATUS_COPY[saveStatus])}
         </p>
         <div className="flex flex-wrap items-center gap-2 justify-end">
-          {hasDeliverable && (
+          {canEdit && hasDeliverable && (
             <BrandButton
               type="button"
               variant="secondary"
@@ -615,7 +722,7 @@ export function EducationSessionForm({
               Ver / editar entregable
             </BrandButton>
           )}
-          {session.status !== 'entregado' && (
+          {canEdit && session.status !== 'entregado' && (
             <BrandButton
               onClick={handleCreateDeliverable}
               disabled={(!isReadOnly && saveStatus === 'saving') || generating}

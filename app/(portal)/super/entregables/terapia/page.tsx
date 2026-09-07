@@ -4,7 +4,7 @@ import { getSupabaseServer } from '@/lib/supabase/server'
 import { TherapyDashboard } from '@/components/portal/therapy-dashboard'
 
 export default async function SuperEntregablesPage() {
-  const user = await requirePermission('therapy:create')
+  const user = await requirePermission('sessions:read_community')
   if (user.role !== 'super_admin') redirect('/admin/entregables/terapia')
   const supabase = getSupabaseServer()
 
@@ -31,6 +31,7 @@ export default async function SuperEntregablesPage() {
       moderators={moderators ?? []}
       invitados={invitados ?? []}
       currentUserId={user.id}
+      canCreate={user.permissions.includes('therapy:create')}
       basePath="/super/entregables/terapia"
       hubPath="/super/entregables"
     />

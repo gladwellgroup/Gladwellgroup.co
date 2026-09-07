@@ -10,6 +10,7 @@ export const MODULES = {
   entregables_terapia: 'entregables_terapia',
   entregables_educacion: 'entregables_educacion',
   parrilla: 'parrilla',
+  calendario_sesiones: 'calendario_sesiones',
 } as const
 
 export type ModuleKey = (typeof MODULES)[keyof typeof MODULES]
@@ -19,13 +20,21 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   entregables_terapia: 'Entregables · Terapia',
   entregables_educacion: 'Entregables · Educación',
   parrilla: 'Parrilla de contenido',
+  calendario_sesiones: 'Calendario de sesiones',
 }
 
 export const MODULE_PERMISSIONS: Record<ModuleKey, readonly Permission[]> = {
   crm: ['leads:read_delegated', 'leads:update_status'],
-  entregables_terapia: ['therapy:create', 'therapy:deliver'],
-  entregables_educacion: ['education:create', 'education:deliver'],
+  // Quien administra un programa también puede ver el calendario completo
+  // de la comunidad (no solo sus propias sesiones) — no debería necesitar
+  // un segundo módulo aparte solo para eso.
+  entregables_terapia: ['therapy:create', 'therapy:deliver', 'sessions:read_community'],
+  entregables_educacion: ['education:create', 'education:deliver', 'sessions:read_community'],
   parrilla: ['parrilla:manage'],
+  // Módulo de solo lectura: ver el calendario de todas las sesiones de la
+  // comunidad y abrir el detalle de cualquiera (sin datos de contacto salvo
+  // que el super_admin delegue esa sesión puntual), sin poder administrar.
+  calendario_sesiones: ['sessions:read_community'],
 }
 
 export function isModuleKey(value: string): value is ModuleKey {

@@ -27,6 +27,24 @@ function CollapseTrigger() {
   )
 }
 
+/** Móvil/tablet (<1024px): abre el panel completo de módulos desde la
+ *  derecha, en el mismo lugar donde antes vivía "Salir" (que se movió a
+ *  Perfil para liberar esta esquina). */
+function MobileMenuTrigger() {
+  const { toggleSidebar } = useSidebar()
+
+  return (
+    <button
+      type="button"
+      onClick={toggleSidebar}
+      className="flex lg:hidden items-center justify-center size-9 rounded-full border border-border text-muted-foreground transition-colors hover:border-[#7C3AED]/40 hover:text-foreground"
+      aria-label="Abrir menú"
+    >
+      <Menu className="size-4" />
+    </button>
+  )
+}
+
 export function PortalNavbar({ userName, roleLabel }: PortalNavbarProps) {
   const router = useAppRouter()
 
@@ -46,11 +64,11 @@ export function PortalNavbar({ userName, roleLabel }: PortalNavbarProps) {
         {/* Misma columna que el riel colapsado del sidebar (--sidebar-width-icon)
             para que el hamburguesa quede centrado exactamente sobre los iconos
             de navegación cuando el sidebar está colapsado. */}
-        <div className="hidden md:flex w-(--sidebar-width-icon) shrink-0 items-center justify-center">
+        <div className="hidden lg:flex w-(--sidebar-width-icon) shrink-0 items-center justify-center">
           <CollapseTrigger />
         </div>
 
-        <div className="flex flex-1 items-center justify-between gap-4 min-w-0 pl-4 sm:pl-6 md:pl-0 pr-4 sm:pr-6 lg:pr-8">
+        <div className="flex flex-1 items-center justify-between gap-4 min-w-0 pl-4 sm:pl-6 lg:pl-0 pr-4 sm:pr-6 lg:pr-8">
           <BrandLogo href="/dashboard" className="text-xl md:text-2xl" />
 
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
@@ -61,14 +79,18 @@ export function PortalNavbar({ userName, roleLabel }: PortalNavbarProps) {
               </p>
             </div>
             <ThemeToggle />
+            {/* Escritorio (≥1024px): "Salir" se queda donde siempre.
+                Móvil/tablet: ese espacio lo ocupa el hamburguesa; cerrar
+                sesión se hace desde Perfil. */}
             <button
               type="button"
               onClick={handleSignOut}
-              className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:border-[#7C3AED]/40 hover:text-foreground"
+              className="hidden lg:flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:border-[#7C3AED]/40 hover:text-foreground"
             >
               <LogOut className="size-4" />
-              <span className="hidden sm:inline">Salir</span>
+              <span>Salir</span>
             </button>
+            <MobileMenuTrigger />
           </div>
         </div>
       </div>

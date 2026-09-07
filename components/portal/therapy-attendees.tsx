@@ -29,6 +29,10 @@ interface TherapyAttendeesProps {
    *  correo grupal a cofundadores, con el botón "Dar visto bueno". */
   deliverySent: boolean
   disabled?: boolean
+  /** El correo ya llega redactado (vacío) desde el servidor cuando
+   *  corresponde — esto solo decide si la columna muestra el valor o el
+   *  aviso "Oculto". */
+  hideContact?: boolean
 }
 
 export function TherapyAttendees({
@@ -36,6 +40,7 @@ export function TherapyAttendees({
   attendees,
   deliverySent,
   disabled,
+  hideContact,
 }: TherapyAttendeesProps) {
   const router = useRouter()
   const [isRefreshing, startRefresh] = useTransition()
@@ -281,7 +286,7 @@ export function TherapyAttendees({
                 <tr key={attendee.id} className="border-b border-border last:border-0">
                   <td className="whitespace-nowrap px-3 py-2">{attendee.nombre}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                    {attendee.correo}
+                    {hideContact ? <span className="italic">Oculto</span> : attendee.correo}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                     {new Date(attendee.created_at).toLocaleTimeString('es-CO', {
@@ -330,7 +335,7 @@ export function TherapyAttendees({
         </div>
       )}
 
-      {deliverySent && pending.length > 0 && (
+      {!disabled && deliverySent && pending.length > 0 && (
         <BrandButton
           type="button"
           variant="secondary"

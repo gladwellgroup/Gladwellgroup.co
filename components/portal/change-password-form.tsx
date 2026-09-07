@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { getSupabaseBrowser } from '@/lib/supabase/browser'
-import { BrandCard } from '@/components/brand/brand-card'
 import { BrandButton } from '@/components/brand/brand-button'
 import { PasswordGeneratorField } from '@/components/portal/password-generator-field'
 
@@ -46,9 +45,12 @@ export function ChangePasswordForm() {
   }
 
   return (
-    <BrandCard className="max-w-md space-y-4">
+    <div className="space-y-4">
       <h2 className="text-lg font-semibold">Cambiar contraseña</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* text-left anula el text-center heredado de la tarjeta contenedora
+       *  — centrar el texto que se escribe dentro de un <input> sería un
+       *  problema de usabilidad, no solo estético. */}
+      <form onSubmit={handleSubmit} className="space-y-4 text-left">
         <PasswordGeneratorField
           id="perfil-password"
           label="Nueva contraseña"
@@ -66,10 +68,12 @@ export function ChangePasswordForm() {
         />
         {error && <p className="text-sm text-red-500">{error}</p>}
         {success && <p className="text-sm text-green-500">Contraseña actualizada.</p>}
-        <BrandButton type="submit" size="sm" className="w-auto" disabled={submitting}>
-          {submitting ? 'Guardando…' : 'Actualizar contraseña'}
-        </BrandButton>
+        <div className="text-center">
+          <BrandButton type="submit" size="sm" className="w-auto" disabled={submitting}>
+            {submitting ? 'Guardando…' : 'Actualizar contraseña'}
+          </BrandButton>
+        </div>
       </form>
-    </BrandCard>
+    </div>
   )
 }

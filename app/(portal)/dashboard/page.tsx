@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { requireAuth } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { BrandCard } from '@/components/brand/brand-card'
+import { BrandButton } from '@/components/brand/brand-button'
 import {
   AttentionList,
   type AttentionItem,
@@ -12,6 +13,9 @@ import {
   type BucketCount,
   type PipelineCounts,
 } from '@/components/portal/deliverables-pipeline'
+import { CrmCard, type DashboardLead } from '@/components/portal/dashboard/crm-card'
+import { ParrillaCard } from '@/components/portal/dashboard/parrilla-card'
+import { CommunityCalendarCard } from '@/components/portal/dashboard/community-calendar-card'
 import {
   PIPELINE_BUCKETS,
   STALE_AFTER_DAYS,
@@ -22,6 +26,7 @@ import {
   loadPipelineSessions,
   type CalendarSession,
 } from '@/lib/deliverables/sessions'
+import { loadParrillaPosts } from '@/lib/parrilla/posts'
 import { parseDateOnly } from '@/lib/date'
 
 function emptyCounts(): PipelineCounts {
@@ -206,13 +211,53 @@ export default async function DashboardPage() {
   const supabase = getSupabaseServer()
   const role = user.role
 
-  const verEntregables =
-    user.permissions.includes('therapy:create') ||
-    user.permissions.includes('education:create')
-  const basePath = role === 'super_admin' ? '/super/entregables' : '/admin/entregables'
+  // Cada sección del dashboard depende de su propio módulo, sin relación
+  // entre sí — un admin con CRM y Parrilla pero sin Entregables no debería
+  // ver nada de sesiones, y viceversa. `sessions:read_community` sin ningún
+  // módulo de administrar es el caso "solo puede ver el calendario, no
+  // administra nada" (el módulo nuevo de solo lectura).
+  const canTherapy = user.permissions.includes('therapy:create')
+  const canEducation = user.permissions.includes('education:create')
+  const hasEntregables = canTherapy || canEducation
+  const hasCalendarOnly = !hasEntregables && user.permissions.includes('sessions:read_community')
+  const hasCrm = user.permissions.includes('leads:read_delegated')
+  const hasParrilla = user.permissions.includes('parrilla:manage')
 
-  const sessions = verEntregables ? await loadPipelineSessions(supabase, user) : []
+  const basePath = role === 'super_admin' ? '/super/entregables' : '/admin/entregables'
+  const crmHref = role === 'super_admin' ? '/super/crm' : '/admin/leads'
+  const parrillaHref = role === 'super_admin' ? '/super/parrilla' : '/admin/parrilla'
+  // Si solo administra uno de los dos programas, "crear tu primera sesión"
+  // apunta directo ahí en vez de al hub (un paso menos).
+  const entregablesEmptyHref =
+    canTherapy && canEducation
+      ? basePath
+      : canEducation
+        ? `${basePath}/education`
+        : `${basePath}/terapia`
+
+  const [sessions, communitySessions, crmLeadsResult, allParrillaPosts] = await Promise.all([
+    hasEntregables ? loadPipelineSessions(supabase, user, 'own') : Promise.resolve([]),
+    hasCalendarOnly ? loadPipelineSessions(supabase, user, 'all') : Promise.resolve([]),
+    hasCrm
+      ? supabase
+          .from('walking_list_leads')
+          .select('id, nombre, apellidos, contact_status, created_at')
+          .eq('assigned_to', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: null }),
+    hasParrilla ? loadParrillaPosts(supabase) : Promise.resolve([]),
+  ])
+
   const counts = buildCounts(sessions)
+  const crmLeads = (crmLeadsResult.data ?? []) as DashboardLead[]
+  const parrillaPending = allParrillaPosts
+    .filter(
+      (p) =>
+        (p.filmmaker_ids.includes(user.id) || p.editor_ids.includes(user.id)) &&
+        (p.status === 'idea' || p.status === 'en_produccion')
+    )
+    .slice(0, 5)
 
   // Un solo cálculo de "qué sesiones puede ver este usuario", reutilizado por
   // Requiere atención y por Comunidad — evita que cada una acote distinto.
@@ -220,10 +265,10 @@ export default async function DashboardPage() {
   for (const s of sessions) ids[s.programa].push(s.id)
 
   const [attention, community] = await Promise.all([
-    verEntregables
+    hasEntregables
       ? loadAttention(supabase, sessions, basePath, role, ids)
       : Promise.resolve([] as AttentionItem[]),
-    verEntregables
+    hasEntregables
       ? loadCommunity(supabase, ids)
       : Promise.resolve({ personas: 0, recurrentes: 0, porQr: null as number | null }),
   ])
@@ -232,6 +277,13 @@ export default async function DashboardPage() {
     .filter((s) => bucketSession(s) === 'programada')
     .sort((a, b) => a.session_date.localeCompare(b.session_date))
     .slice(0, 5)
+
+  const proximasComunidad = communitySessions
+    .filter((s) => bucketSession(s) === 'programada')
+    .sort((a, b) => a.session_date.localeCompare(b.session_date))
+    .slice(0, 5)
+
+  const sinModulos = !hasEntregables && !hasCalendarOnly && !hasCrm && !hasParrilla
 
   return (
     <div className="space-y-8">
@@ -244,15 +296,42 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {verEntregables && (
-        <DeliverablesPipeline
-          counts={counts}
-          links={{
-            terapia: `${basePath}/terapia`,
-            education: `${basePath}/education`,
-          }}
-        />
+      {sinModulos && (
+        <BrandCard className="text-center">
+          <p className="text-muted-foreground">
+            Aún no tienes módulos asignados. Pídele al super administrador que
+            te otorgue acceso a las secciones que vas a necesitar.
+          </p>
+        </BrandCard>
       )}
+
+      {hasEntregables &&
+        (sessions.length === 0 ? (
+          <BrandCard className="flex flex-col items-center gap-3 text-center">
+            <p className="text-muted-foreground">
+              Aún no tienes sesiones de Entregables asignadas.
+            </p>
+            <BrandButton asChild size="sm" className="w-auto">
+              <Link href={entregablesEmptyHref}>Crear tu primera sesión</Link>
+            </BrandButton>
+          </BrandCard>
+        ) : (
+          <DeliverablesPipeline
+            counts={counts}
+            links={{
+              terapia: `${basePath}/terapia`,
+              education: `${basePath}/education`,
+            }}
+          />
+        ))}
+
+      {hasCalendarOnly && (
+        <CommunityCalendarCard sessions={proximasComunidad} href={basePath} />
+      )}
+
+      {hasCrm && <CrmCard leads={crmLeads} href={crmHref} />}
+
+      {hasParrilla && <ParrillaCard posts={parrillaPending} href={parrillaHref} />}
 
       <AttentionList items={attention} />
 
@@ -291,7 +370,7 @@ export default async function DashboardPage() {
       {/* Mismo peso visual que "Próximas sesiones": esta es la métrica de si
           la comunidad realmente vuelve, y antes vivía como una línea de
           texto plano al fondo de la página. */}
-      {verEntregables && community.personas > 0 && (
+      {hasEntregables && community.personas > 0 && (
         <div className="space-y-3">
           <h2 className="text-lg font-semibold gladwell-gradient-text">
             Comunidad

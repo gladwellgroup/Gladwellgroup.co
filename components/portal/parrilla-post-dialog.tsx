@@ -7,6 +7,7 @@ import { BrandButton } from '@/components/brand/brand-button'
 import { BrandField, BrandTextarea } from '@/components/brand/brand-field'
 import { ParrillaMediaUpload } from '@/components/portal/parrilla-media-upload'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
+import { TeamPicker } from '@/components/portal/team-picker'
 import {
   Dialog,
   DialogContent,
@@ -37,57 +38,6 @@ interface ParrillaPostDialogProps {
   post: ParrillaPost | null
   defaultDate?: string
   editors: ParrillaEditor[]
-}
-
-/** Multi-select de community_admin, reutilizado para Filmmaker(es) y
- *  Editor/Diseñador(es) — mismas dos etapas del mismo pipeline, distinta
- *  gente asignada a cada una. */
-function TeamPicker({
-  label,
-  editors,
-  selected,
-  onToggle,
-}: {
-  label: string
-  editors: ParrillaEditor[]
-  selected: string[]
-  onToggle: (id: string) => void
-}) {
-  return (
-    <div className="space-y-1.5 text-center">
-      <span className="modal-label">{label}</span>
-      {editors.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No hay administradores de comunidad registrados aún.{' '}
-          <a href="/super/usuarios" className="underline underline-offset-2 hover:text-foreground">
-            Créalos desde Usuarios
-          </a>
-          .
-        </p>
-      ) : (
-        <div className="flex flex-wrap justify-center gap-2">
-          {editors.map((editor) => {
-            const active = selected.includes(editor.id)
-            return (
-              <button
-                key={editor.id}
-                type="button"
-                onClick={() => onToggle(editor.id)}
-                aria-pressed={active}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
-                    : 'border-border text-muted-foreground hover:bg-muted/40'
-                }`}
-              >
-                {editor.nombre}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
 }
 
 function todayIso(): string {
@@ -383,7 +333,7 @@ export function ParrillaPostDialog({
           {showFilmmaker && (
             <TeamPicker
               label="Filmmaker(es)"
-              editors={editors}
+              options={editors}
               selected={filmmakerIds}
               onToggle={toggleFilmmaker}
             />
@@ -391,7 +341,7 @@ export function ParrillaPostDialog({
 
           <TeamPicker
             label="Editor/Diseñador(es)"
-            editors={editors}
+            options={editors}
             selected={editorIds}
             onToggle={toggleEditor}
           />
@@ -441,12 +391,15 @@ export function ParrillaPostDialog({
 
           {error && <p className="text-center text-sm text-red-500">{error}</p>}
 
-          <DialogFooter className="items-center sm:justify-between">
+          <DialogFooter className="items-center gap-3 sm:justify-between">
             {post ? (
+              // Separado del botón principal por un borde + espacio propio, y con
+              // un área de toque de 44px (mínimo recomendado por Apple HIG) — para
+              // que no se preste a un toque accidental justo debajo de "Guardar".
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-red-500 transition-colors hover:text-red-400"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 border-t border-border/60 pt-3 text-xs font-medium text-red-500 transition-colors hover:text-red-400 sm:w-auto sm:min-h-0 sm:border-t-0 sm:pt-0"
               >
                 <Trash2 className="size-3.5" />
                 Eliminar publicación

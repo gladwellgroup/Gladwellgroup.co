@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { KeyRound, Pencil, UserPlus } from 'lucide-react'
+import { Briefcase, KeyRound, Mail, Pencil, UserPlus } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandButton } from '@/components/brand/brand-button'
 import { BrandField } from '@/components/brand/brand-field'
@@ -23,6 +23,7 @@ export interface UsuarioRow {
   nombre: string
   correo: string
   role: Role
+  cargo: string | null
   granted_modules: ModuleKey[]
   created_at: string
 }
@@ -38,16 +39,27 @@ const MODULE_KEYS = Object.keys(MODULE_LABELS) as ModuleKey[]
  *  se crea desde acá. */
 type CreatableRole = Extract<Role, 'community_admin' | 'community_member'>
 
-function ModuleChips({ modules }: { modules: ModuleKey[] }) {
+export function ModuleChips({
+  modules,
+  align = 'start',
+}: {
+  modules: ModuleKey[]
+  /** 'start' (default) para donde conviven con columnas/contenido alineado
+   *  a la izquierda (la tabla y la tarjeta mobile de /super/usuarios).
+   *  'center' solo donde toda la tarjeta ya está centrada (Mi perfil) —
+   *  centrar acá y dejar el resto a la izquierda desalinea el encabezado
+   *  de la columna con su propio contenido. */
+  align?: 'start' | 'center'
+}) {
   if (modules.length === 0) {
     return <span className="text-xs text-muted-foreground">Sin módulos</span>
   }
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className={`flex flex-wrap gap-1 ${align === 'center' ? 'justify-center' : ''}`}>
       {modules.map((key) => (
         <span
           key={key}
-          className="inline-flex items-center rounded-full bg-[#7C3AED]/15 px-2 py-0.5 text-[11px] font-medium text-[#A78BFA]"
+          className="inline-flex items-center rounded-full bg-gradient-to-r from-[#7C3AED]/15 to-[#06B6D4]/15 px-2 py-0.5 text-[11px] font-medium text-foreground"
         >
           {MODULE_LABELS[key]}
         </span>
@@ -92,6 +104,7 @@ function CreateUserDialog({
   const [nombre, setNombre] = useState('')
   const [correo, setCorreo] = useState('')
   const [password, setPassword] = useState('')
+  const [cargo, setCargo] = useState('')
   const [grantedModules, setGrantedModules] = useState<ModuleKey[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -102,6 +115,7 @@ function CreateUserDialog({
     setNombre('')
     setCorreo('')
     setPassword('')
+    setCargo('')
     setGrantedModules([])
     setError(null)
   }, [open])
@@ -117,10 +131,18 @@ function CreateUserDialog({
     setSubmitting(true)
     setError(null)
     try {
+      const cargoTrimmed = cargo.trim()
       const payload =
         role === 'community_admin'
-          ? { role, nombre, correo, password, granted_modules: grantedModules }
-          : { role, nombre, correo, password }
+          ? {
+              role,
+              nombre,
+              correo,
+              password,
+              cargo: cargoTrimmed || undefined,
+              granted_modules: grantedModules,
+            }
+          : { role, nombre, correo, password, cargo: cargoTrimmed || undefined }
 
       const res = await fetch('/api/admin/usuarios', {
         method: 'POST',
@@ -195,6 +217,13 @@ function CreateUserDialog({
             onChange={setPassword}
             required
           />
+          <BrandField
+            id="usuario-cargo"
+            label="Cargo (opcional)"
+            placeholder="Ej. COO, CTO, Operation Lead, Strategy & Marketing Lead"
+            value={cargo}
+            onChange={(e) => setCargo(e.target.value)}
+          />
 
           {role === 'community_admin' && (
             <div className="space-y-1.5">
@@ -216,7 +245,7 @@ function CreateUserDialog({
   )
 }
 
-function EditModulesDialog({
+function EditUserDialog({
   user,
   onOpenChange,
 }: {
@@ -224,12 +253,14 @@ function EditModulesDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const router = useRouter()
+  const [cargo, setCargo] = useState('')
   const [grantedModules, setGrantedModules] = useState<ModuleKey[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (user) {
+      setCargo(user.cargo ?? '')
       setGrantedModules(user.granted_modules)
       setError(null)
     }
@@ -247,20 +278,26 @@ function EditModulesDialog({
     setSubmitting(true)
     setError(null)
     try {
+      const payload: { cargo: string | null; granted_modules?: ModuleKey[] } = {
+        cargo: cargo.trim() || null,
+      }
+      if (user.role === 'community_admin') {
+        payload.granted_modules = grantedModules
+      }
       const res = await fetch(`/api/admin/usuarios/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ granted_modules: grantedModules }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(data.error ?? 'No se pudieron actualizar los módulos')
+        setError(data.error ?? 'No se pudo actualizar')
         return
       }
       onOpenChange(false)
       router.refresh()
     } catch {
-      setError('Error de red al actualizar los módulos')
+      setError('Error de red al guardar los cambios')
     } finally {
       setSubmitting(false)
     }
@@ -270,14 +307,26 @@ function EditModulesDialog({
     <Dialog open={user !== null} onOpenChange={onOpenChange}>
       <DialogContent className="portal-header sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Módulos de {user?.nombre}</DialogTitle>
+          <DialogTitle>Editar a {user?.nombre}</DialogTitle>
           <DialogDescription>
             Los cambios aplican la próxima vez que esta persona cargue el portal.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <ModuleCheckboxList selected={grantedModules} onToggle={toggleModule} />
+          <BrandField
+            id="editar-cargo"
+            label="Cargo (opcional)"
+            placeholder="Ej. COO, CTO, Operation Lead, Strategy & Marketing Lead"
+            value={cargo}
+            onChange={(e) => setCargo(e.target.value)}
+          />
+          {user?.role === 'community_admin' && (
+            <div className="space-y-1.5">
+              <span className="modal-label">Módulos habilitados</span>
+              <ModuleCheckboxList selected={grantedModules} onToggle={toggleModule} />
+            </div>
+          )}
           {error && <p className="text-sm text-red-500">{error}</p>}
           <DialogFooter>
             <BrandButton type="submit" size="sm" className="w-auto" disabled={submitting}>
@@ -396,13 +445,14 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
       ) : (
         <>
           {/* Tabla desktop/tablet */}
-          <BrandCard padding="sm" className="hidden md:block overflow-x-auto">
+          <BrandCard border="solid" padding="sm" className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nombre</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Correo</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Rol</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Cargo</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Módulos</th>
                   {canManage && (
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">
@@ -417,6 +467,7 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
                     <td className="px-4 py-3">{u.nombre}</td>
                     <td className="px-4 py-3 text-muted-foreground">{u.correo}</td>
                     <td className="px-4 py-3 text-muted-foreground">{ROLE_LABELS[u.role]}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{u.cargo ?? '—'}</td>
                     <td className="px-4 py-3">
                       {u.role === 'community_admin' ? (
                         <ModuleChips modules={u.granted_modules} />
@@ -428,16 +479,14 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
                       <td className="px-4 py-3">
                         {u.role !== 'super_admin' && (
                           <div className="flex items-center gap-1">
-                            {u.role === 'community_admin' && (
-                              <button
-                                type="button"
-                                onClick={() => setEditingUser(u)}
-                                aria-label="Editar módulos"
-                                className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                              >
-                                <Pencil className="size-4" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setEditingUser(u)}
+                              aria-label="Editar usuario"
+                              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            >
+                              <Pencil className="size-4" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => setResettingUser(u)}
@@ -459,31 +508,38 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
           {/* Cards móvil */}
           <div className="flex flex-col gap-3 md:hidden">
             {users.map((u) => (
-              <BrandCard key={u.id} padding="sm" className="space-y-2">
+              <BrandCard key={u.id} border="solid" padding="sm" className="space-y-2.5 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">{u.nombre}</p>
-                    <p className="text-xs text-muted-foreground">{u.correo}</p>
-                  </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <p className="text-sm font-medium">{u.nombre}</p>
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                     {ROLE_LABELS[u.role]}
                   </span>
                 </div>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p className="flex items-center gap-1.5">
+                    <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{u.correo}</span>
+                  </p>
+                  {u.cargo && (
+                    <p className="flex items-center gap-1.5">
+                      <Briefcase className="size-3.5 shrink-0" aria-hidden="true" />
+                      {u.cargo}
+                    </p>
+                  )}
+                </div>
                 {u.role === 'community_admin' && <ModuleChips modules={u.granted_modules} />}
                 {canManage && u.role !== 'super_admin' && (
-                  <div className="flex items-center gap-2 pt-1">
-                    {u.role === 'community_admin' && (
-                      <BrandButton
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        className="w-auto"
-                        onClick={() => setEditingUser(u)}
-                      >
-                        <Pencil className="size-3.5" />
-                        Módulos
-                      </BrandButton>
-                    )}
+                  <div className="flex items-center gap-2 border-t border-border/40 pt-2.5">
+                    <BrandButton
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-auto"
+                      onClick={() => setEditingUser(u)}
+                    >
+                      <Pencil className="size-3.5" />
+                      Editar
+                    </BrandButton>
                     <BrandButton
                       type="button"
                       variant="secondary"
@@ -503,7 +559,7 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
       )}
 
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <EditModulesDialog
+      <EditUserDialog
         user={editingUser}
         onOpenChange={(open) => !open && setEditingUser(null)}
       />

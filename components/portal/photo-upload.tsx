@@ -2,11 +2,6 @@
 
 import { useState, useRef } from 'react'
 import { ImagePlus, X } from 'lucide-react'
-import {
-  uploadTherapyMedia,
-  type MediaBucket,
-  type MediaType,
-} from '@/lib/therapy/upload-media'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
 
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif'
@@ -32,26 +27,31 @@ async function convertHeicToJpeg(file: File): Promise<File> {
 }
 
 interface PhotoUploadProps {
-  sessionId: string
   currentUrl: string
+  /** Sube el archivo a donde corresponda (bucket/path propios de quien use
+   *  este componente) y devuelve la URL pública — terapia/educación usan
+   *  `uploadTherapyMedia`, el avatar de perfil usa `uploadAvatar`. Todo lo
+   *  demás (HEIC, drag&drop, preview, confirmar antes de quitar) es
+   *  genérico y vive acá. */
+  onUpload: (file: File) => Promise<{ url: string }>
   onUploaded: (url: string) => void
   disabled?: boolean
-  bucket?: MediaBucket
-  type?: MediaType
   label?: string
-  /** Recorte circular para retratos (ponente). */
+  /** Recorte circular para retratos (ponente, avatar de perfil). */
   shape?: 'wide' | 'circle'
+  confirmTitle?: string
+  confirmMessage?: string
 }
 
 export function PhotoUpload({
-  sessionId,
   currentUrl,
+  onUpload,
   onUploaded,
   disabled,
-  bucket,
-  type = 'foto',
   label = 'Subir foto de la sesión',
   shape = 'wide',
+  confirmTitle = '¿Quitar la foto de la sesión?',
+  confirmMessage = 'Podrás subir otra en cualquier momento mientras la sesión siga en borrador.',
 }: PhotoUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [converting, setConverting] = useState(false)
@@ -59,6 +59,10 @@ export function PhotoUpload({
   const [preview, setPreview] = useState<string>(currentUrl)
   const [confirmClear, setConfirmClear] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Última URL efectivamente guardada — no el prop `currentUrl`, que queda
+  // fijo en lo que había al montar. Si una segunda subida falla, hay que
+  // volver a lo último que sí se guardó, no a la foto original de la sesión.
+  const lastSavedUrlRef = useRef(currentUrl)
 
   async function handleFile(file: File) {
     setError(null)
@@ -81,19 +85,15 @@ export function PhotoUpload({
     setPreview(localPreview)
 
     try {
-      const { url } = await uploadTherapyMedia({
-        sessionId,
-        type,
-        file: uploadFile,
-        bucket,
-      })
+      const { url } = await onUpload(uploadFile)
 
       URL.revokeObjectURL(localPreview)
+      lastSavedUrlRef.current = url
       setPreview(url)
       onUploaded(url)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al subir la foto')
-      setPreview(currentUrl)
+      setPreview(lastSavedUrlRef.current)
     }
 
     setUploading(false)
@@ -116,6 +116,7 @@ export function PhotoUpload({
 
   function clearPhoto() {
     setConfirmClear(false)
+    lastSavedUrlRef.current = ''
     setPreview('')
     onUploaded('')
   }
@@ -125,13 +126,65 @@ export function PhotoUpload({
 
   return (
     <div className="space-y-3">
-      {preview ? (
-        <div className={`relative ${isCircle ? 'w-32' : ''}`}>
-          <div
-            className={`relative w-full overflow-hidden border border-border bg-muted/30 ${
-              isCircle ? 'aspect-square rounded-full' : 'aspect-[4/3] rounded-xl'
-            }`}
-          >
+      {isCircle ? (
+        <div className="flex flex-col items-center gap-2">
+          {preview ? (
+            <div className="relative w-32">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled || busy}
+                className="block aspect-square w-full overflow-hidden rounded-full border border-border bg-muted/30 disabled:pointer-events-none"
+                aria-label="Cambiar foto"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt={label} className="h-full w-full object-cover" />
+                {busy && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <p className="text-xs font-medium text-white">
+                      {converting ? 'Convirtiendo...' : 'Subiendo...'}
+                    </p>
+                  </div>
+                )}
+              </button>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClear(true)}
+                  className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70"
+                  aria-label="Eliminar foto"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              disabled={disabled || busy}
+              className="flex aspect-square w-32 items-center justify-center rounded-full border-2 border-dashed border-border bg-muted/20 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
+            >
+              <ImagePlus className="h-8 w-8" />
+            </button>
+          )}
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || busy}
+              className="text-sm font-medium text-[#A78BFA] transition-colors hover:text-[#7C3AED] disabled:pointer-events-none disabled:text-muted-foreground disabled:hover:text-muted-foreground"
+            >
+              {converting ? 'Convirtiendo...' : uploading ? 'Subiendo...' : preview ? 'Cambiar foto' : label}
+            </button>
+            {!preview && <p className="mt-0.5 text-xs text-muted-foreground/70">JPG, PNG, WebP o HEIC</p>}
+          </div>
+        </div>
+      ) : preview ? (
+        <div className="relative">
+          <div className="relative w-full overflow-hidden rounded-xl border border-border bg-muted/30 aspect-[4/3]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
@@ -164,9 +217,7 @@ export function PhotoUpload({
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           disabled={disabled || busy}
-          className={`flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-muted/20 px-6 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50 ${
-            isCircle ? 'py-8' : 'py-12'
-          }`}
+          className="flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-muted/20 px-6 py-12 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
         >
           <ImagePlus className="h-8 w-8" />
           <div className="text-center">
@@ -192,8 +243,8 @@ export function PhotoUpload({
 
       <ConfirmDialog
         open={confirmClear}
-        title="¿Quitar la foto de la sesión?"
-        message="Podrás subir otra en cualquier momento mientras la sesión siga en borrador."
+        title={confirmTitle}
+        message={confirmMessage}
         confirmLabel="Quitar"
         onConfirm={clearPhoto}
         onCancel={() => setConfirmClear(false)}

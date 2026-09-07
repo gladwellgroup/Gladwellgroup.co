@@ -35,14 +35,18 @@ interface PortalBottomNavProps {
 export function PortalBottomNav({ role, permissions }: PortalBottomNavProps) {
   const pathname = usePathname()
 
+  // Set fijo y curado a mano (ver pinnedMobile en portal-navigation.ts):
+  // todo lo que no está fijado acá vive únicamente en el menú hamburguesa,
+  // así que esta barra nunca vuelve a desbordarse al agregar un módulo.
   const visibleItems = PORTAL_NAV_ITEMS.filter((item) => {
+    if (!item.pinnedMobile) return false
     if (!item.permission) return true
     return permissions.includes(item.permission)
   })
 
   return (
     <nav
-      className="fixed bottom-4 inset-x-4 z-50 md:hidden"
+      className="fixed bottom-4 inset-x-4 z-50 lg:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="glass flex items-center justify-around gap-0.5 rounded-full border border-white/10 px-2 py-1.5 shadow-lg">

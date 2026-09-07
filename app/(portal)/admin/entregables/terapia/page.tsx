@@ -3,9 +3,14 @@ import { getSupabaseServer } from '@/lib/supabase/server'
 import { TherapyDashboard } from '@/components/portal/therapy-dashboard'
 
 export default async function AdminEntregablesPage() {
-  const user = await requirePermission('therapy:create')
+  const user = await requirePermission('sessions:read_community')
   const supabase = getSupabaseServer()
+  const canCreate = user.permissions.includes('therapy:create')
 
+  // El listado de moderadores (nombre + correo de cada super_admin/
+  // community_admin) solo lo usa el selector del formulario "Nueva sesión"
+  // — pedirlo para quien no puede crear filtraría el correo de todo el
+  // equipo a un payload que nunca lo va a mostrar.
   const [{ data: sessions }, { data: moderators }, { data: invitados }] =
     await Promise.all([
       supabase
@@ -13,14 +18,15 @@ export default async function AdminEntregablesPage() {
         .select(
           '*, invitado:invitados(nombre), therapy_session_cofounders(nombre, orden)'
         )
-        .or(`created_by.eq.${user.id},moderator_id.eq.${user.id}`)
         .order('created_at', { ascending: false })
         .order('orden', { referencedTable: 'therapy_session_cofounders' }),
-      supabase
-        .from('profiles')
-        .select('id, nombre, correo')
-        .in('role', ['super_admin', 'community_admin'])
-        .order('nombre'),
+      canCreate
+        ? supabase
+            .from('profiles')
+            .select('id, nombre, correo')
+            .in('role', ['super_admin', 'community_admin'])
+            .order('nombre')
+        : Promise.resolve({ data: [] }),
       supabase
         .from('invitados')
         .select('id, nombre')
@@ -34,6 +40,7 @@ export default async function AdminEntregablesPage() {
       moderators={moderators ?? []}
       invitados={invitados ?? []}
       currentUserId={user.id}
+      canCreate={canCreate}
       basePath="/admin/entregables/terapia"
       hubPath="/admin/entregables"
     />

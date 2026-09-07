@@ -9,7 +9,7 @@ export default async function UsuariosPage() {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, nombre, correo, role, created_at, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
+    .select('id, nombre, correo, role, cargo, created_at, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
     .order('created_at', { ascending: false })
 
   const users: UsuarioRow[] = (profiles ?? []).map((p) => ({
@@ -17,6 +17,7 @@ export default async function UsuariosPage() {
     nombre: p.nombre,
     correo: p.correo,
     role: p.role,
+    cargo: p.cargo,
     created_at: p.created_at,
     granted_modules: (p.profile_module_grants ?? []).map(
       (g: { module_key: string }) => g.module_key as ModuleKey

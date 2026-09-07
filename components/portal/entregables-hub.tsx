@@ -15,17 +15,25 @@ interface Program {
 export function EntregablesHub({
   basePath,
   sessions,
+  canManageTherapy,
+  canManageEducation,
 }: {
   basePath: string
   sessions: CalendarSession[]
+  /** Sin el módulo de administrar el programa, solo se ve el calendario —
+   *  no tiene sentido mostrar la tarjeta que lleva a crear/gestionar
+   *  sesiones si la página de destino lo va a rechazar de todos modos. */
+  canManageTherapy: boolean
+  canManageEducation: boolean
 }) {
-  const programs: Program[] = [
+  const programs: (Program & { show: boolean })[] = [
     {
       href: `${basePath}/terapia`,
       title: 'Terapia Organizacional',
       description:
         'Sesiones de feedback a fundadores. Genera el entregable con las recomendaciones de la comunidad y lo envía a la empresa invitada.',
       icon: Users,
+      show: canManageTherapy,
     },
     {
       href: `${basePath}/education`,
@@ -33,8 +41,9 @@ export function EntregablesHub({
       description:
         'Sesiones formativas con ponente. Captura herramientas y cápsulas, y envía el entregable a los asistentes registrados.',
       icon: GraduationCap,
+      show: canManageEducation,
     },
-  ]
+  ].filter((program) => program.show)
 
   return (
     <div className="space-y-8">
@@ -43,33 +52,37 @@ export function EntregablesHub({
           Entregables
         </h1>
         <p className="text-muted-foreground">
-          Elige el programa con el que vas a trabajar.
+          {programs.length > 0
+            ? 'Elige el programa con el que vas a trabajar.'
+            : 'Calendario de sesiones de la comunidad.'}
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {programs.map((program) => (
-          <Link key={program.href} href={program.href} className="group block">
-            {/* Centrado en mobile; desde sm vuelve al layout original
-                (alineado a la izquierda), sin tocar nada ahí. */}
-            <BrandCard className="flex h-full flex-col items-center gap-3 text-center transition-colors hover:bg-muted/30 sm:items-start sm:text-left">
-              <program.icon className="h-7 w-7 text-[#A78BFA]" />
-              <h2 className="flex items-center gap-1.5 text-base font-semibold">
-                {program.title}
-                <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {program.description}
-              </p>
-            </BrandCard>
-          </Link>
-        ))}
-      </div>
+      {programs.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {programs.map((program) => (
+            <Link key={program.href} href={program.href} className="group block">
+              {/* Centrado en mobile; desde sm vuelve al layout original
+                  (alineado a la izquierda), sin tocar nada ahí. */}
+              <BrandCard className="flex h-full flex-col items-center gap-3 text-center transition-colors hover:bg-muted/30 sm:items-start sm:text-left">
+                <program.icon className="h-7 w-7 text-[#A78BFA]" />
+                <h2 className="flex items-center gap-1.5 text-base font-semibold">
+                  {program.title}
+                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {program.description}
+                </p>
+              </BrandCard>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Misma línea de marca que separa secciones en la landing — marca el
           quiebre entre "elegir programa" y "ver todo junto" sin un borde
           duro. */}
-      <SectionDivider position="inline" />
+      {programs.length > 0 && <SectionDivider position="inline" />}
 
       <SessionsCalendar sessions={sessions} basePath={basePath} />
     </div>

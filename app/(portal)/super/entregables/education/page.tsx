@@ -4,13 +4,10 @@ import { listEducationSessions } from '@/lib/education/queries'
 import { EducationDashboard } from '@/components/portal/education-dashboard'
 
 export default async function SuperEducationPage() {
-  const user = await requirePermission('education:create')
+  const user = await requirePermission('sessions:read_community')
   if (user.role !== 'super_admin') redirect('/admin/entregables/education')
 
-  const { sessions, admins } = await listEducationSessions({
-    userId: user.id,
-    role: user.role,
-  })
+  const { sessions, admins } = await listEducationSessions()
 
   return (
     <EducationDashboard
@@ -18,6 +15,7 @@ export default async function SuperEducationPage() {
       admins={admins}
       currentUserId={user.id}
       canAssignAdmin
+      canCreate={user.permissions.includes('education:create')}
       basePath="/super/entregables/education"
       hubPath="/super/entregables"
     />

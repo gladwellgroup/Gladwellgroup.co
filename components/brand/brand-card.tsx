@@ -3,10 +3,11 @@ import { cn } from '@/lib/utils'
 
 interface BrandCardProps extends React.ComponentProps<'div'> {
   padding?: 'sm' | 'lg'
-  /** 'gradient' (default) para tarjetas estáticas. 'solid' para tarjetas que
-   *  envuelven contenido con scroll horizontal — un marco decorativo fijo
-   *  alrededor de contenido que se desliza se lee como una línea ajena
-   *  cortando el contenido, no como el borde de la tarjeta. */
+  /** 'gradient' (default) para tarjetas estáticas o destacadas. 'solid' para
+   *  tarjetas que envuelven contenido con scroll horizontal (el marco
+   *  decorativo fijo se lee como una línea ajena cortando el contenido) o
+   *  para listas largas de tarjetas repetidas, donde el borde-degradado
+   *  morado/cian pierde su efecto de "destacado" al repetirse en cada ítem. */
   border?: 'gradient' | 'solid'
 }
 

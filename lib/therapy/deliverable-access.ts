@@ -55,7 +55,7 @@ export async function resolveDeliverableAccess(
   const { data: sessionRow } = await supabase
     .from('therapy_sessions')
     .select(
-      'id, title, session_date, moderator_id, status, created_by, invitados ( nombre )'
+      'id, title, session_date, moderator_id, status, created_by, co_admin_ids, invitados ( nombre )'
     )
     .eq('id', sessionId)
     .single()
@@ -78,8 +78,12 @@ export async function resolveDeliverableAccess(
   const { invitados, ...session } = sessionRow as any
   const invitadoNombre: string | null = invitados?.nombre ?? null
 
+  // Un coadministrador (designado por el super_admin después de creada la
+  // sesión) cuenta como si fuera el moderador — acceso total, no solo
+  // lectura de contacto.
+  const isCoAdmin: boolean = (session.co_admin_ids ?? []).includes(user.id)
   const isModeratorOrSuper =
-    profile.role === 'super_admin' || user.id === session.moderator_id
+    profile.role === 'super_admin' || user.id === session.moderator_id || isCoAdmin
   const isCreatorModeratorOrSuper =
     isModeratorOrSuper || user.id === session.created_by
 

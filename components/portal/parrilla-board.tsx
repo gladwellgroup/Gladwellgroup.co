@@ -90,12 +90,15 @@ function PlatformFilter({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
+    // "Todas" + las 3 plataformas son siempre 4 chips — en grilla 2x2 en
+    // móvil (en vez de flex-wrap, que los desbalancea 3+1) y en fila en
+    // pantallas más anchas, donde sí caben los 4 sin desorden.
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center">
       <button
         type="button"
         onClick={onClear}
         aria-pressed={selected.length === 0}
-        className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+        className={`flex w-full items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors sm:w-auto ${
           selected.length === 0
             ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
             : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -113,7 +116,7 @@ function PlatformFilter({
             type="button"
             onClick={() => onToggle(platform)}
             aria-pressed={active}
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+            className={`flex w-full items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors sm:w-auto ${
               active
                 ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
                 : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'

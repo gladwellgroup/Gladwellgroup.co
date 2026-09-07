@@ -6,6 +6,11 @@ export type EducationAccess = {
   allowed: boolean
   /** Super admin, o el administrador de comunidad asignado / creador. */
   isAdminOrSuper: boolean
+  /** Más restrictivo que isAdminOrSuper a propósito: excluye al creador
+   *  puro. Gatea contenido sensible (notas del moderador, transcripción,
+   *  audio) — mismo criterio que isModeratorOrSuper en Terapia para
+   *  recomendaciones_incomodas. */
+  isAdminOrCoAdminOrSuper: boolean
   role: string | null
   session: {
     id: string
@@ -43,6 +48,7 @@ export async function resolveEducationAccess(
     return {
       allowed: false,
       isAdminOrSuper: false,
+      isAdminOrCoAdminOrSuper: false,
       role: profile?.role ?? null,
       session: null,
       error: 'Sin permisos',
@@ -52,7 +58,7 @@ export async function resolveEducationAccess(
 
   const { data: session } = await supabase
     .from('education_sessions')
-    .select('id, title, session_date, admin_id, status, created_by')
+    .select('id, title, session_date, admin_id, status, created_by, co_admin_ids')
     .eq('id', sessionId)
     .single()
 
@@ -60,6 +66,7 @@ export async function resolveEducationAccess(
     return {
       allowed: false,
       isAdminOrSuper: false,
+      isAdminOrCoAdminOrSuper: false,
       role: profile.role,
       session: null,
       error: 'Sesión no encontrada',
@@ -67,15 +74,23 @@ export async function resolveEducationAccess(
     }
   }
 
+  const isCoAdmin = (session.co_admin_ids ?? []).includes(user.id)
+  // Un coadministrador (designado por el super_admin después de creada la
+  // sesión) cuenta como si fuera el admin responsable — acceso total.
   const isAdminOrSuper =
     profile.role === 'super_admin' ||
     user.id === session.admin_id ||
-    user.id === session.created_by
+    user.id === session.created_by ||
+    isCoAdmin
+  // Excluye al creador puro a propósito — ver comentario en el tipo.
+  const isAdminOrCoAdminOrSuper =
+    profile.role === 'super_admin' || user.id === session.admin_id || isCoAdmin
 
   if (!isAdminOrSuper) {
     return {
       allowed: false,
       isAdminOrSuper: false,
+      isAdminOrCoAdminOrSuper: false,
       role: profile.role,
       session: null,
       error: 'Sin permisos sobre esta sesión',
@@ -83,5 +98,11 @@ export async function resolveEducationAccess(
     }
   }
 
-  return { allowed: true, isAdminOrSuper, role: profile.role, session }
+  return {
+    allowed: true,
+    isAdminOrSuper,
+    isAdminOrCoAdminOrSuper,
+    role: profile.role,
+    session,
+  }
 }

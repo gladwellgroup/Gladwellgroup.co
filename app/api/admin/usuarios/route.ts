@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { role, nombre, correo, password } = result.data
+  const { role, nombre, correo, password, cargo } = result.data
   const supabase = getSupabaseServer()
 
   // El alta es directa (correo + contraseña que fija el super_admin, sin
@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     role,
     nombre,
     correo,
+    cargo: cargo || null,
   })
 
   if (profileError) {

@@ -36,6 +36,7 @@ export function EducationDashboard({
   admins,
   currentUserId,
   canAssignAdmin,
+  canCreate,
   basePath,
   hubPath,
 }: {
@@ -44,6 +45,10 @@ export function EducationDashboard({
   currentUserId: string
   /** Solo el super admin delega la sesión a otro administrador. */
   canAssignAdmin: boolean
+  /** Sin el módulo de administrar Entregables · Educación (solo con el de
+   *  solo lectura), se puede ver la lista completa de la comunidad pero no
+   *  crear sesiones nuevas. */
+  canCreate: boolean
   basePath: string
   hubPath: string
 }) {
@@ -126,16 +131,18 @@ export function EducationDashboard({
             Sesiones formativas y entregables para los asistentes.
           </p>
         </div>
-        <BrandButton
-          size="sm"
-          className="w-auto"
-          onClick={() => setShowCreate(!showCreate)}
-        >
-          Nueva sesión
-        </BrandButton>
+        {canCreate && (
+          <BrandButton
+            size="sm"
+            className="w-auto"
+            onClick={() => setShowCreate(!showCreate)}
+          >
+            Nueva sesión
+          </BrandButton>
+        )}
       </div>
 
-      {showCreate && (
+      {canCreate && showCreate && (
         <BrandCard>
           <form onSubmit={handleCreateSession} className="space-y-4">
             <BrandField

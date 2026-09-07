@@ -25,7 +25,7 @@ export default async function PortalLayout({
           <PortalSidebar role={role} permissions={user.permissions} />
           <div className="flex-1 flex flex-col min-w-0">
             <BrandPageBackground orbOpacity={0.7}>
-              <main className="flex-1 px-4 py-6 pb-24 sm:px-6 sm:py-8 md:pb-8 lg:px-8">
+              <main className="flex-1 px-4 py-6 pb-24 sm:px-6 sm:py-8 lg:pb-8 lg:px-8">
                 {children}
               </main>
             </BrandPageBackground>

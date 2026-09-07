@@ -10,8 +10,11 @@ import {
   Users,
   Briefcase,
   Calendar,
+  LogOut,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useAppRouter } from '@/hooks/use-app-router'
+import { getSupabaseBrowser } from '@/lib/supabase/browser'
 import { type Role, type Permission } from '@/lib/permissions'
 import {
   PORTAL_NAV_ITEMS,
@@ -20,11 +23,13 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar'
 
@@ -77,7 +82,9 @@ function HoverableSidebarShell({ children }: { children: React.ReactNode }) {
   return (
     <Sidebar
       collapsible="icon"
+      mobileSide="right"
       className="portal-header border-r border-border/50 !top-16 !bottom-0 md:!top-20 [&_[data-slot=sidebar-inner]]:!bg-transparent"
+      mobileOverlayClassName="!top-16 md:!top-20"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -88,11 +95,25 @@ function HoverableSidebarShell({ children }: { children: React.ReactNode }) {
 
 export function PortalSidebar({ role, permissions }: PortalSidebarProps) {
   const pathname = usePathname()
+  const router = useAppRouter()
+  const { isMobile, setOpenMobile } = useSidebar()
 
   const visibleItems = PORTAL_NAV_ITEMS.filter((item) => {
     if (!item.permission) return true
     return permissions.includes(item.permission)
   })
+
+  function handleNavigate() {
+    if (isMobile) setOpenMobile(false)
+  }
+
+  async function handleSignOut() {
+    const supabase = getSupabaseBrowser()
+    await supabase.auth.signOut()
+    setOpenMobile(false)
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
     <HoverableSidebarShell>
@@ -111,7 +132,7 @@ export function PortalSidebar({ role, permissions }: PortalSidebarProps) {
                       isActive={isActive}
                       tooltip={item.label}
                     >
-                      <Link href={href}>
+                      <Link href={href} onClick={handleNavigate}>
                         <NavIcon icon={item.icon} active={isActive} />
                         <span
                           className={
@@ -131,6 +152,22 @@ export function PortalSidebar({ role, permissions }: PortalSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      {/* Solo en el panel de móvil/tablet: en escritorio "Salir" ya vive en
+          el navbar, y este mismo componente también renderiza el riel fijo
+          de escritorio — duplicarlo ahí sería redundante. */}
+      {isMobile && (
+        <SidebarFooter className="pb-4">
+          <SidebarSeparator className="mb-2" />
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={handleSignOut}>
+                <LogOut className="size-5 text-muted-foreground" />
+                <span className="text-muted-foreground">Cerrar sesión</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      )}
     </HoverableSidebarShell>
   )
 }

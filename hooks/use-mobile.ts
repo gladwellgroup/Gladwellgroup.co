@@ -1,6 +1,9 @@
 import * as React from "react"
 
-const MOBILE_BREAKPOINT = 768
+// 1024px (no 768px) a propósito: en este portal "móvil" agrupa celulares
+// Y tablets (los integrantes de la comunidad usan mucho tablet), dejando
+// el riel de sidebar fijo solo para pantallas de laptop/monitor en adelante.
+const MOBILE_BREAKPOINT = 1024
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)

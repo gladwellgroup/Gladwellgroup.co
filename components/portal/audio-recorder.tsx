@@ -204,7 +204,13 @@ export function AudioRecorder({
                   </button>
                 )}
               </div>
-              <audio src={audio.audio_url} controls className="w-full" />
+              {audio.audio_url ? (
+                <audio src={audio.audio_url} controls className="w-full" />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Solo el moderador o coadministrador de esta sesión puede escuchar este audio.
+                </p>
+              )}
             </div>
           ))}
         </div>

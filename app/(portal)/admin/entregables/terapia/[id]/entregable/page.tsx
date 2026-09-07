@@ -15,7 +15,7 @@ export default async function AdminEntregableEditorPage({
   const { data } = await supabase
     .from('therapy_sessions')
     .select(`
-      id, title, session_date, moderator_id, status, created_by,
+      id, title, session_date, moderator_id, status, created_by, co_admin_ids,
       therapy_deliverables ( id, problema_recordatorio, resumen_audio, recomendaciones_incomodas, content_html, pdf_url, processing_status, generated_at ),
       therapy_session_inputs ( foto_sesion_url ),
       therapy_session_audios ( audio_url )
@@ -29,7 +29,8 @@ export default async function AdminEntregableEditorPage({
 
   const isCreator = data.created_by === user.id
   const isModerator = data.moderator_id === user.id
-  if (!isCreator && !isModerator && user.role !== 'super_admin') notFound()
+  const isCoAdmin = (data.co_admin_ids ?? []).includes(user.id)
+  if (!isCreator && !isModerator && !isCoAdmin && user.role !== 'super_admin') notFound()
 
   // supabase-js tipa las relaciones embebidas como arrays, pero en runtime
   // las to-one (deliverable/inputs, con session_id UNIQUE) vuelven como
@@ -46,7 +47,7 @@ export default async function AdminEntregableEditorPage({
   if (!deliverable) notFound()
 
   const canEdit =
-    user.role === 'super_admin' || user.id === session.moderator_id
+    user.role === 'super_admin' || user.id === session.moderator_id || isCoAdmin
 
   return (
     <DeliverableEditor

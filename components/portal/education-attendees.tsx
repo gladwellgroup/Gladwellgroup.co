@@ -29,6 +29,10 @@ interface EducationAttendeesProps {
    *  los pendientes si el primer intento quedó a medias. */
   deliverySent: boolean
   disabled?: boolean
+  /** El correo ya llega redactado (vacío) desde el servidor cuando
+   *  corresponde — esto solo decide si la columna muestra el valor o el
+   *  aviso "Oculto". */
+  hideContact?: boolean
 }
 
 export function EducationAttendees({
@@ -36,6 +40,7 @@ export function EducationAttendees({
   attendees,
   deliverySent,
   disabled,
+  hideContact,
 }: EducationAttendeesProps) {
   const router = useRouter()
   const [isRefreshing, startRefresh] = useTransition()
@@ -278,7 +283,7 @@ export function EducationAttendees({
                 <tr key={attendee.id} className="border-b border-border last:border-0">
                   <td className="whitespace-nowrap px-3 py-2">{attendee.nombre}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                    {attendee.correo}
+                    {hideContact ? <span className="italic">Oculto</span> : attendee.correo}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <span
@@ -321,7 +326,7 @@ export function EducationAttendees({
         </div>
       )}
 
-      {deliverySent && pending.length > 0 && (
+      {!disabled && deliverySent && pending.length > 0 && (
         <BrandButton
           type="button"
           variant="secondary"

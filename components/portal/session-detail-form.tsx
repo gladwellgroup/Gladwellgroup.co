@@ -7,8 +7,10 @@ import { useAppRouter } from '@/hooks/use-app-router'
 import { BrandField, BrandTextarea } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
 import { CofounderFields } from '@/components/portal/cofounder-fields'
+import { TeamPicker, type TeamPickerOption } from '@/components/portal/team-picker'
 import { AudioRecorder } from '@/components/portal/audio-recorder'
 import { PhotoUpload } from '@/components/portal/photo-upload'
+import { uploadTherapyMedia } from '@/lib/therapy/upload-media'
 import {
   AttendanceQrSection,
   type AttendanceLinkData,
@@ -23,7 +25,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
-import type { Role } from '@/lib/permissions/roles'
 import { parseDateOnly } from '@/lib/date'
 
 interface SessionData {
@@ -76,10 +77,31 @@ interface SessionDetailFormProps {
   audios: AudioData[]
   attendanceLink: AttendanceLinkData | null
   attendees: TherapyAttendeeData[]
-  currentUserId: string
-  currentUserRole: Role
   basePath: string
   hasDeliverable?: boolean
+  /** Solo se reciben desde la página de super_admin — su sola presencia es
+   *  lo que decide si se muestra el selector de coadministrador(es). */
+  communityAdmins?: TeamPickerOption[]
+  /** Coadministradores actuales de la sesión — acceso total de edición
+   *  (incluye ver contacto), igual que el moderador original. Solo se
+   *  editan desde la vista de super_admin (mismo gate que communityAdmins). */
+  coAdminIds?: string[]
+  /** false para un community_admin que ve una sesión ajena (con el módulo
+   *  de solo lectura, o delegado) — bloquea todo el formulario y oculta las
+   *  acciones de administrar, sin ocultar la información en sí. */
+  canEdit?: boolean
+  /** true cuando el visor no puede ver WhatsApp/correo de fundadores ni de
+   *  asistentes — el dato real ya llega redactado desde el servidor, esto
+   *  solo decide si se muestra "Oculto" en su lugar. */
+  hideContact?: boolean
+  /** Controla ver/editar "Recomendaciones incómodas" — más restrictivo que
+   *  canEdit a propósito (solo moderador/coadministrador/super_admin, ni
+   *  siquiera el creador si no es también el moderador). El valor real ya
+   *  llega en null desde el servidor cuando es false, así que este prop es
+   *  solo para decidir si se renderiza la sección, no para ocultar nada por
+   *  CSS. Default true: en la vista de super_admin, que no manda este prop,
+   *  siempre puede verla. */
+  canEditRecomendaciones?: boolean
 }
 
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -102,12 +124,50 @@ export function SessionDetailForm({
   audios: initialAudios,
   attendanceLink: initialAttendanceLink,
   attendees,
-  currentUserId,
-  currentUserRole,
   basePath,
   hasDeliverable = false,
+  communityAdmins,
+  coAdminIds: initialCoAdminIds = [],
+  canEdit = true,
+  hideContact = false,
+  canEditRecomendaciones = true,
 }: SessionDetailFormProps) {
   const router = useAppRouter()
+  const [coAdminIds, setCoAdminIds] = useState<string[]>(initialCoAdminIds)
+  const [coAdminSaving, setCoAdminSaving] = useState(false)
+  const [coAdminError, setCoAdminError] = useState<string | null>(null)
+
+  async function handleToggleCoAdmin(id: string) {
+    // Sin esto, dos clics rápidos disparan dos PATCH en paralelo — si el de
+    // la selección anterior responde después del más reciente, pisa el
+    // estado nuevo con uno viejo. Un guard simple evita la carrera del
+    // todo: nunca hay dos solicitudes en vuelo a la vez.
+    if (coAdminSaving) return
+    const previous = coAdminIds
+    const next = coAdminIds.includes(id)
+      ? coAdminIds.filter((existing) => existing !== id)
+      : [...coAdminIds, id]
+    setCoAdminIds(next)
+    setCoAdminSaving(true)
+    setCoAdminError(null)
+    try {
+      const res = await fetch(`/api/therapy/sessions/${session.id}/co-admins`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ co_admin_ids: next }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setCoAdminIds(previous)
+        setCoAdminError(data.error ?? 'No se pudo actualizar los coadministradores')
+      }
+    } catch {
+      setCoAdminIds(previous)
+      setCoAdminError('Error de red al actualizar')
+    } finally {
+      setCoAdminSaving(false)
+    }
+  }
   // Vive aquí (no dentro de AttendanceQrSection) porque el acordeón que lo
   // contiene desmonta su contenido al cerrarse; un link recién generado no
   // debe perderse solo por colapsar y volver a abrir la sección.
@@ -138,9 +198,7 @@ export function SessionDetailForm({
   )
   const [audios, setAudios] = useState<AudioData[]>(initialAudios)
 
-  const canEditRecomendaciones =
-    currentUserRole === 'super_admin' || currentUserId === session.moderator_id
-  const isReadOnly = session.status !== 'borrador'
+  const isReadOnly = !canEdit || session.status !== 'borrador'
 
   // Refs for single-flight queue — read latest state without stale closures
   const retoRef = useRef(retoProblema)
@@ -362,6 +420,44 @@ export function SessionDetailForm({
         </p>
       </div>
 
+      {communityAdmins && (
+        <Accordion type="single" collapsible className="mx-auto w-full max-w-sm">
+          <AccordionItem value="coadministradores">
+            <AccordionTrigger className="text-base font-semibold">
+              <span className="flex items-center gap-2">
+                Integrar coadministrador de la sesión
+                {coAdminIds.length > 0 && (
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({coAdminIds.length})
+                  </span>
+                )}
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col items-center gap-2 text-center">
+              <TeamPicker
+                options={communityAdmins}
+                selected={coAdminIds}
+                onToggle={handleToggleCoAdmin}
+                size="lg"
+              />
+              {coAdminSaving && (
+                <p className="text-xs text-muted-foreground">Guardando…</p>
+              )}
+              {coAdminError && (
+                <p role="alert" className="text-xs text-red-500">
+                  {coAdminError}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Le da acceso total a esta sesión, igual que el moderador
+                original: puede editar todo, gestionar asistentes y generar el
+                entregable con IA.
+              </p>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      )}
+
       {/* Accordion Form */}
       <Accordion type="single" collapsible>
         <AccordionItem value="cofundadores">
@@ -373,6 +469,7 @@ export function SessionDetailForm({
               cofounders={cofounders}
               onChange={setCofounders}
               disabled={isReadOnly}
+              hideContact={hideContact}
             />
           </AccordionContent>
         </AccordionItem>
@@ -485,8 +582,8 @@ export function SessionDetailForm({
           </AccordionTrigger>
           <AccordionContent>
             <PhotoUpload
-              sessionId={session.id}
               currentUrl={fotoSesionUrl}
+              onUpload={(file) => uploadTherapyMedia({ sessionId: session.id, type: 'foto', file })}
               onUploaded={handlePhotoUploaded}
               disabled={isReadOnly}
             />
@@ -557,6 +654,7 @@ export function SessionDetailForm({
               attendees={attendees}
               deliverySent={session.status === 'entregado'}
               disabled={isReadOnly}
+              hideContact={hideContact}
             />
           </AccordionContent>
         </AccordionItem>
@@ -578,7 +676,7 @@ export function SessionDetailForm({
           {generateError ?? (saveStatus === 'error' ? saveErrorMessage ?? SAVE_STATUS_COPY.error : SAVE_STATUS_COPY[saveStatus])}
         </p>
         <div className="flex flex-wrap items-center gap-2 justify-end">
-          {hasDeliverable && (
+          {canEdit && hasDeliverable && (
             <BrandButton
               type="button"
               variant="secondary"
@@ -589,7 +687,7 @@ export function SessionDetailForm({
               Ver / editar entregable
             </BrandButton>
           )}
-          {session.status !== 'entregado' && (
+          {canEdit && session.status !== 'entregado' && (
             <BrandButton
               onClick={handleCreateDeliverable}
               disabled={

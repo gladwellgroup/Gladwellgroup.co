@@ -44,6 +44,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   }
 
+  // Un creador que no es moderador ni coadministrador no puede ni ver
+  // "Recomendaciones incómodas" (se redacta del lado del servidor en la
+  // página) — tampoco puede escribirla, o estaría sobrescribiendo a ciegas
+  // algo que ni siquiera puede leer.
+  if (
+    result.data.recomendaciones_incomodas !== undefined &&
+    !access.isModeratorOrSuper
+  ) {
+    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  }
+
   if (access.session.status !== 'borrador') {
     return NextResponse.json(
       {

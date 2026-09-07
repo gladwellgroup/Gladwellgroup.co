@@ -153,6 +153,8 @@ function SidebarProvider({
 
 function Sidebar({
   side = "left",
+  mobileSide = side,
+  mobileOverlayClassName,
   variant = "sidebar",
   collapsible = "offcanvas",
   className,
@@ -160,6 +162,10 @@ function Sidebar({
   ...props
 }: React.ComponentProps<"div"> & {
   side?: "left" | "right"
+  /** Lado desde el que se desliza el Sheet en móvil, si difiere del riel de escritorio. */
+  mobileSide?: "left" | "right"
+  /** Clases extra para el fondo oscuro del Sheet en móvil, p. ej. para que no tape un header fijo. */
+  mobileOverlayClassName?: string
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
@@ -187,13 +193,17 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          className={cn(
+            "w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden",
+            className
+          )}
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
           }
-          side={side}
+          side={mobileSide}
+          overlayClassName={mobileOverlayClassName}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Sidebar</SheetTitle>
@@ -207,7 +217,7 @@ function Sidebar({
 
   return (
     <div
-      className="group peer hidden text-sidebar-foreground md:block"
+      className="group peer hidden text-sidebar-foreground lg:block"
       data-state={state}
       data-collapsible={state === "collapsed" ? collapsible : ""}
       data-variant={variant}
@@ -229,7 +239,7 @@ function Sidebar({
       <div
         data-slot="sidebar-container"
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear lg:flex",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",

@@ -2,8 +2,18 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, Info } from 'lucide-react'
+import { CalendarDays, ChevronDown, ExternalLink, Info, Link2, Mail, Phone, Shield } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
+import {
+  ContactStatusBadge,
+  DISPLAY_STATUS_LABELS,
+  DISPLAY_STATUS_COLORS,
+  normalizeContactStatus,
+  toDisplayStatus,
+  type ContactStatus,
+} from '@/components/portal/crm-status-badge'
 
 interface Lead {
   id: string
@@ -33,8 +43,6 @@ interface CrmLeadsTableProps {
   canUpdateStatus: boolean
 }
 
-type ContactStatus = 'sin_contactar' | 'contactado' | 'grupo_whatsapp' | 'descalificado'
-
 /** Las cuatro, para el select de cada fila — ahí sí hay que poder elegir
  *  "Descalificado". */
 const SELECTABLE_STATUSES: readonly ContactStatus[] = [
@@ -52,50 +60,6 @@ const FILTERABLE_STATUSES: readonly Exclude<ContactStatus, 'descalificado'>[] = 
   'contactado',
   'grupo_whatsapp',
 ]
-
-type DisplayStatus = 'nuevo' | ContactStatus
-
-/** Un lead recién creado no está "atrasado" todavía — solo pasadas estas
- *  horas sin que nadie lo toque se vuelve una alerta real. */
-const NEW_LEAD_GRACE_HOURS = 24
-
-function isFreshLead(createdAt: string): boolean {
-  const hoursSince = (Date.now() - new Date(createdAt).getTime()) / 3_600_000
-  return hoursSince < NEW_LEAD_GRACE_HOURS
-}
-
-/** "Nuevo" no es un valor guardado — es `sin_contactar` dentro de la
- *  ventana de gracia. Pasada esa ventana, mismo valor, otra lectura. */
-function toDisplayStatus(status: ContactStatus, createdAt: string): DisplayStatus {
-  return status === 'sin_contactar' && isFreshLead(createdAt) ? 'nuevo' : status
-}
-
-const DISPLAY_STATUS_LABELS: Record<DisplayStatus, string> = {
-  nuevo: 'Nuevo',
-  sin_contactar: 'Sin contactar',
-  contactado: 'Contactado',
-  grupo_whatsapp: 'Grupo de WhatsApp',
-  descalificado: 'Descalificado',
-}
-
-// Azul = recién llegado (mismo tono que "programada" en el pipeline de
-// entregables), rojo = ya pasó la ventana de gracia sin que nadie lo
-// toque, ámbar = en curso, verde = cerrado, gris claro = descartado — ya
-// no compite visualmente con nada, es la única que no pide acción.
-const DISPLAY_STATUS_COLORS: Record<DisplayStatus, string> = {
-  nuevo: 'bg-[#06B6D4]/15 text-[#06B6D4]',
-  sin_contactar: 'bg-red-500/15 text-red-500',
-  contactado: 'bg-yellow-500/15 text-yellow-500',
-  grupo_whatsapp: 'bg-green-500/15 text-green-500',
-  descalificado: 'bg-muted text-muted-foreground',
-}
-
-function normalizeContactStatus(value?: string): ContactStatus {
-  if (value === 'contactado' || value === 'grupo_whatsapp' || value === 'descalificado') {
-    return value
-  }
-  return 'sin_contactar'
-}
 
 // linkedin siempre llega como URL completa; instagram puede llegar como
 // @usuario o como URL — los tres formatos que ya acepta la validación del
@@ -126,24 +90,7 @@ function ProfileLink({ redSocial, perfil }: { redSocial?: string; perfil?: strin
   )
 }
 
-function ContactStatusBadge({
-  status,
-  createdAt,
-}: {
-  status: ContactStatus
-  createdAt: string
-}) {
-  const display = toDisplayStatus(status, createdAt)
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${DISPLAY_STATUS_COLORS[display]}`}
-    >
-      {DISPLAY_STATUS_LABELS[display]}
-    </span>
-  )
-}
-
-function ContactStatusSelect({
+function ContactStatusDropdown({
   leadId,
   status,
   createdAt,
@@ -156,6 +103,7 @@ function ContactStatusSelect({
   updating: boolean
   onChange: (leadId: string, status: ContactStatus) => void
 }) {
+  const [open, setOpen] = useState(false)
   const display = toDisplayStatus(status, createdAt)
   // La opción "sin_contactar" es la única cuyo texto depende del tiempo —
   // las otras dos siempre dicen lo mismo, se elija o no.
@@ -163,52 +111,157 @@ function ContactStatusSelect({
     display === 'nuevo' ? DISPLAY_STATUS_LABELS.nuevo : DISPLAY_STATUS_LABELS.sin_contactar
 
   return (
-    <select
-      value={status}
-      disabled={updating}
-      onChange={(e) => onChange(leadId, e.target.value as ContactStatus)}
-      className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium ${DISPLAY_STATUS_COLORS[display]}`}
-    >
-      {SELECTABLE_STATUSES.map((value) => (
-        <option key={value} value={value} className="bg-background text-foreground">
-          {value === 'sin_contactar' ? sinContactarLabel : DISPLAY_STATUS_LABELS[value]}
-        </option>
-      ))}
-    </select>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={updating}
+          aria-label="Cambiar estado de contacto"
+          aria-expanded={open}
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-opacity disabled:opacity-60',
+            DISPLAY_STATUS_COLORS[display]
+          )}
+        >
+          {display === 'nuevo' ? sinContactarLabel : DISPLAY_STATUS_LABELS[display]}
+          <ChevronDown className={cn('size-3 transition-transform', open && 'rotate-180')} aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="end" collisionPadding={12} className="z-[60] w-40 p-1">
+        <ul role="listbox" aria-label="Estado de contacto">
+          {SELECTABLE_STATUSES.map((value) => {
+            const isSelected = value === status
+            const label = value === 'sin_contactar' ? sinContactarLabel : DISPLAY_STATUS_LABELS[value]
+            return (
+              <li key={value} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    onChange(leadId, value)
+                    setOpen(false)
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted',
+                    isSelected && 'bg-muted font-medium'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'size-2 shrink-0 rounded-full',
+                      DISPLAY_STATUS_COLORS[value].split(' ')[1]?.replace('text-', 'bg-')
+                    )}
+                    aria-hidden="true"
+                  />
+                  {label}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
   )
 }
 
-function DelegateSelect({
+const SUPER_ADMIN_LABEL = 'Superadministrador'
+
+function AdminDelegateDropdown({
   leadId,
   admins,
+  assignedTo,
   delegating,
   onDelegate,
 }: {
   leadId: string
   admins: Admin[]
+  assignedTo?: string
   delegating: boolean
-  onDelegate: (leadId: string, adminId: string) => void
+  onDelegate: (leadId: string, adminId: string | null) => void
 }) {
+  const [open, setOpen] = useState(false)
   if (admins.length === 0) return null
 
+  const assignedAdmin = admins.find((admin) => admin.id === assignedTo)
+  // Un lead puede seguir delegado a alguien cuyo módulo de CRM ya fue
+  // revocado — esa persona ya no aparece en `admins`. Mostrarlo como
+  // "Superadministrador" mentiría: el lead sigue asignado, solo que a
+  // alguien que ya no lo puede ver en /admin/leads.
+  const isOrphaned = Boolean(assignedTo) && !assignedAdmin
+
   return (
-    <select
-      disabled={delegating}
-      defaultValue=""
-      onChange={(e) => {
-        if (e.target.value) onDelegate(leadId, e.target.value)
-      }}
-      className="rounded border border-border bg-background px-2 py-1 text-xs"
-    >
-      <option value="" disabled>
-        {delegating ? 'Delegando...' : 'Seleccionar admin'}
-      </option>
-      {admins.map((admin) => (
-        <option key={admin.id} value={admin.id}>
-          {admin.nombre}
-        </option>
-      ))}
-    </select>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={delegating}
+          aria-label="Asignar administrador"
+          aria-expanded={open}
+          className="modal-field flex w-auto max-w-[11rem] items-center justify-between gap-1.5 px-2.5 py-1.5 text-left text-xs disabled:opacity-60"
+        >
+          <span className={cn('truncate', !assignedAdmin && 'text-muted-foreground')}>
+            {delegating
+              ? 'Delegando...'
+              : isOrphaned
+                ? 'Admin sin módulo'
+                : (assignedAdmin?.nombre ?? SUPER_ADMIN_LABEL)}
+          </span>
+          <ChevronDown
+            className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="end" collisionPadding={12} className="z-[60] w-56 p-1">
+        <ul role="listbox" aria-label="Administradores de comunidad">
+          {/* Opción por defecto: sin delegar, el lead lo maneja el
+              superadministrador — antes era un placeholder mudo
+              ("Seleccionar admin") que no reflejaba este estado real. */}
+          <li role="presentation">
+            <button
+              type="button"
+              role="option"
+              aria-selected={!assignedTo}
+              onClick={() => {
+                onDelegate(leadId, null)
+                setOpen(false)
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted',
+                !assignedTo ? 'bg-[#7C3AED]/15 font-medium text-[#A78BFA]' : 'text-foreground'
+              )}
+            >
+              <Shield className="size-3.5 shrink-0" aria-hidden="true" />
+              {SUPER_ADMIN_LABEL}
+            </button>
+          </li>
+          <li role="presentation" className="my-1 border-t border-border/50" />
+          {admins.map((admin) => {
+            const isSelected = admin.id === assignedTo
+            return (
+              <li key={admin.id} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    onDelegate(leadId, admin.id)
+                    setOpen(false)
+                  }}
+                  className={cn(
+                    'flex w-full items-center rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted',
+                    isSelected ? 'bg-[#7C3AED]/15 font-medium text-[#A78BFA]' : 'text-foreground'
+                  )}
+                >
+                  {admin.nombre}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -284,7 +337,7 @@ export function CrmLeadsTable({
   const [error, setError] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<LeadFilter>('todos')
 
-  async function handleDelegate(leadId: string, adminId: string) {
+  async function handleDelegate(leadId: string, adminId: string | null) {
     setDelegating(leadId)
     setError(null)
     try {
@@ -368,7 +421,7 @@ export function CrmLeadsTable({
       )}
 
       {/* Tabla desktop/tablet */}
-      <BrandCard padding="sm" className="hidden md:block overflow-x-auto">
+      <BrandCard padding="sm" border="solid" className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
@@ -406,7 +459,7 @@ export function CrmLeadsTable({
                   </td>
                   <td className="px-4 py-3">
                     {canUpdateStatus ? (
-                      <ContactStatusSelect
+                      <ContactStatusDropdown
                         leadId={lead.id}
                         status={contactStatus}
                         createdAt={lead.created_at}
@@ -422,9 +475,10 @@ export function CrmLeadsTable({
                   </td>
                   {canDelegate && !noAdmins && (
                     <td className="px-4 py-3">
-                      <DelegateSelect
+                      <AdminDelegateDropdown
                         leadId={lead.id}
                         admins={admins}
+                        assignedTo={lead.assigned_to}
                         delegating={delegating === lead.id}
                         onDelegate={handleDelegate}
                       />
@@ -442,13 +496,13 @@ export function CrmLeadsTable({
         {visibles.map((lead) => {
           const contactStatus = normalizeContactStatus(lead.contact_status)
           return (
-            <BrandCard key={lead.id} padding="sm" className="space-y-2">
+            <BrandCard key={lead.id} padding="sm" border="solid" className="space-y-2.5 p-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium text-sm">
                   {lead.nombre} {lead.apellidos ?? ''}
                 </p>
                 {canUpdateStatus ? (
-                  <ContactStatusSelect
+                  <ContactStatusDropdown
                     leadId={lead.id}
                     status={contactStatus}
                     createdAt={lead.created_at}
@@ -459,22 +513,36 @@ export function CrmLeadsTable({
                   <ContactStatusBadge status={contactStatus} createdAt={lead.created_at} />
                 )}
               </div>
-              <div className="space-y-0.5 text-xs text-muted-foreground">
-                <p>{lead.correo}</p>
-                {lead.whatsapp_e164 && <p>{lead.whatsapp_e164}</p>}
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p className="flex items-center gap-1.5">
+                  <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{lead.correo}</span>
+                </p>
+                {lead.whatsapp_e164 && (
+                  <p className="flex items-center gap-1.5">
+                    <Phone className="size-3.5 shrink-0" aria-hidden="true" />
+                    {lead.whatsapp_e164}
+                  </p>
+                )}
                 {lead.red_social && (
-                  <p className="inline-flex items-center gap-1">
+                  <p className="flex items-center gap-1.5">
+                    <Link2 className="size-3.5 shrink-0" aria-hidden="true" />
                     {lead.red_social}
                     <ProfileLink redSocial={lead.red_social} perfil={lead.perfil} />
                   </p>
                 )}
-                <p>{new Date(lead.created_at).toLocaleDateString('es-CO')}</p>
+                <p className="flex items-center gap-1.5">
+                  <CalendarDays className="size-3.5 shrink-0" aria-hidden="true" />
+                  {new Date(lead.created_at).toLocaleDateString('es-CO')}
+                </p>
               </div>
               {canDelegate && !noAdmins && (
-                <div className="pt-1">
-                  <DelegateSelect
+                <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2.5">
+                  <span className="text-xs text-muted-foreground">Asignar a</span>
+                  <AdminDelegateDropdown
                     leadId={lead.id}
                     admins={admins}
+                    assignedTo={lead.assigned_to}
                     delegating={delegating === lead.id}
                     onDelegate={handleDelegate}
                   />

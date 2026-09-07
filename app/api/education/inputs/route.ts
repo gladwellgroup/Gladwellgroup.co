@@ -40,6 +40,19 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Un creador puro (no admin_id/coadministrador) no puede ni ver notas del
+  // moderador, transcripción ni audio (se redactan del lado del servidor en
+  // la página) — tampoco puede escribirlos, o estaría sobrescribiendo a
+  // ciegas algo que ni siquiera puede leer. Mismo criterio que
+  // recomendaciones_incomodas en Terapia.
+  const touchesNotas =
+    result.data.notas_moderador !== undefined ||
+    result.data.transcripcion_texto !== undefined ||
+    result.data.audio_url !== undefined
+  if (touchesNotas && !access.isAdminOrCoAdminOrSuper) {
+    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  }
+
   if (access.session.status !== 'borrador') {
     return NextResponse.json(
       {

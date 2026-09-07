@@ -49,6 +49,7 @@ export function TherapyDashboard({
   moderators,
   invitados,
   currentUserId,
+  canCreate,
   basePath,
   hubPath,
 }: {
@@ -56,6 +57,10 @@ export function TherapyDashboard({
   moderators: Moderator[]
   invitados: Invitado[]
   currentUserId: string
+  /** Sin el módulo de administrar Entregables · Terapia (solo con el de
+   *  solo lectura), se puede ver la lista completa de la comunidad pero no
+   *  crear sesiones nuevas. */
+  canCreate: boolean
   basePath: string
   hubPath: string
 }) {
@@ -193,16 +198,18 @@ export function TherapyDashboard({
             Sesiones de terapia organizacional y entregables para invitados.
           </p>
         </div>
-        <BrandButton
-          size="sm"
-          className="w-auto"
-          onClick={() => setShowCreate(!showCreate)}
-        >
-          Nueva sesión
-        </BrandButton>
+        {canCreate && (
+          <BrandButton
+            size="sm"
+            className="w-auto"
+            onClick={() => setShowCreate(!showCreate)}
+          >
+            Nueva sesión
+          </BrandButton>
+        )}
       </div>
 
-      {showCreate && (
+      {canCreate && showCreate && (
         <BrandCard>
           <form onSubmit={handleCreateSession} className="space-y-4">
             <div className="relative flex flex-col gap-1.5">

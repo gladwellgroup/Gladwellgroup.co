@@ -1,31 +1,31 @@
 import { getSupabaseServer } from '@/lib/supabase/server'
 import type { Role } from '@/lib/permissions/roles'
 
-/** Los árboles /admin y /super comparten estas consultas; solo cambia el
- *  alcance (propias vs todas) y el basePath que reciben los componentes. */
-
-export async function listEducationSessions(params: {
-  userId: string
-  role: Role
-}) {
+/** Los árboles /admin y /super comparten esta consulta y su basePath. Antes
+ *  acotaba a "propias" para quien no fuera super_admin, pero ambas páginas
+ *  que la llaman ya están detrás de `sessions:read_community` — quien llega
+ *  hasta acá ya puede ver toda la comunidad, así que lista siempre todo.
+ *
+ *  `includeAdmins` (default true, lo que necesita /super) — el listado de
+ *  admins (nombre + correo de cada super_admin/community_admin) solo lo usa
+ *  el selector del formulario "Nueva sesión"; /admin lo pide en false cuando
+ *  el viewer no puede crear, para no filtrar el correo de todo el equipo a
+ *  un payload que nunca lo va a mostrar. */
+export async function listEducationSessions(includeAdmins: boolean = true) {
   const supabase = getSupabaseServer()
 
-  let query = supabase
-    .from('education_sessions')
-    .select('*, education_session_inputs ( ponente_nombre )')
-    .order('created_at', { ascending: false })
-
-  if (params.role !== 'super_admin') {
-    query = query.or(`created_by.eq.${params.userId},admin_id.eq.${params.userId}`)
-  }
-
   const [{ data: sessions }, { data: admins }] = await Promise.all([
-    query,
     supabase
-      .from('profiles')
-      .select('id, nombre, correo')
-      .in('role', ['super_admin', 'community_admin'])
-      .order('nombre'),
+      .from('education_sessions')
+      .select('*, education_session_inputs ( ponente_nombre )')
+      .order('created_at', { ascending: false }),
+    includeAdmins
+      ? supabase
+          .from('profiles')
+          .select('id, nombre, correo')
+          .in('role', ['super_admin', 'community_admin'])
+          .order('nombre')
+      : Promise.resolve({ data: [] }),
   ])
 
   // supabase-js tipa las relaciones embebidas como arrays; en runtime una
@@ -43,7 +43,7 @@ export async function getEducationSession(id: string) {
     .from('education_sessions')
     .select(
       `
-      id, title, session_date, admin_id, status, created_by,
+      id, title, session_date, admin_id, status, created_by, co_admin_ids,
       education_session_inputs (
         ponente_nombre, ponente_rol, ponente_foto_url, ponente_red_social,
         descripcion_sesion, objetivo, notas_moderador,
@@ -87,14 +87,16 @@ export async function getEducationSession(id: string) {
   }
 }
 
-/** Un community_admin solo entra a las sesiones que creó o que le asignaron. */
+/** Un community_admin solo entra a las sesiones que creó, que le asignaron,
+ *  o donde el super_admin lo puso como coadministrador después de creada. */
 export function canAccessEducationSession(
-  session: { admin_id: string; created_by: string },
+  session: { admin_id: string; created_by: string; co_admin_ids?: string[] | null },
   user: { id: string; role: Role }
 ): boolean {
   return (
     user.role === 'super_admin' ||
     session.admin_id === user.id ||
-    session.created_by === user.id
+    session.created_by === user.id ||
+    (session.co_admin_ids ?? []).includes(user.id)
   )
 }
