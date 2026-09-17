@@ -83,8 +83,8 @@ function HoverableSidebarShell({ children }: { children: React.ReactNode }) {
     <Sidebar
       collapsible="icon"
       mobileSide="right"
-      className="portal-header border-r border-border/50 !top-16 !bottom-0 md:!top-20 [&_[data-slot=sidebar-inner]]:!bg-transparent"
-      mobileOverlayClassName="!top-16 md:!top-20"
+      className="portal-header border-r border-border/50 !top-[calc(4rem+env(safe-area-inset-top,0px))] !bottom-0 md:!top-[calc(5rem+env(safe-area-inset-top,0px))] [&_[data-slot=sidebar-inner]]:!bg-transparent"
+      mobileOverlayClassName="!top-[calc(4rem+env(safe-area-inset-top,0px))] md:!top-[calc(5rem+env(safe-area-inset-top,0px))]"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >

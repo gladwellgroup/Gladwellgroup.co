@@ -259,9 +259,11 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
           </div>
         </div>
 
-        {/* Cuadrícula mensual — desde sm, igual que SessionsCalendar. Cada
-            celda es zona de suelta; cada publicación es arrastrable. */}
-        <div className="hidden overflow-hidden rounded-xl border border-border sm:block">
+        {/* Cuadrícula mensual — desde lg (mismo corte mobile/tablet que el
+            resto de la app), igual que SessionsCalendar. Cada celda es zona
+            de suelta; cada publicación es arrastrable — arrastrar no
+            funciona bien por touch, por eso no aparece antes de escritorio. */}
+        <div className="hidden overflow-hidden rounded-xl border border-border lg:block">
           <div className="grid grid-cols-7 border-b border-border bg-muted/20">
             {WEEKDAYS.map((wd, i) => (
               <div key={i} className="p-2 text-center text-xs font-medium text-muted-foreground">
@@ -306,7 +308,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
                       type="button"
                       onClick={() => openCreate(key)}
                       aria-label="Nueva publicación este día"
-                      className="hidden h-4 w-4 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 sm:flex"
+                      className="hidden h-4 w-4 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 lg:flex"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
@@ -343,9 +345,9 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
           </div>
         </div>
 
-        {/* Agenda móvil — sin arrastrar (no aplica en touch); se reprograma
-            abriendo el modal y cambiando la fecha a mano. */}
-        <div className="sm:hidden">
+        {/* Agenda móvil/tablet — sin arrastrar (no aplica en touch); se
+            reprograma abriendo el modal y cambiando la fecha a mano. */}
+        <div className="lg:hidden">
           {agendaGroups.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               No hay publicaciones este mes.

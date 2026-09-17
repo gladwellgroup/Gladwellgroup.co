@@ -262,7 +262,7 @@ export function ParrillaPostDialog({
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             <div className="flex flex-col items-center gap-1.5 text-center">
               <label htmlFor="parrilla-status" className="modal-label">
                 Estado

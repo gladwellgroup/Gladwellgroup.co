@@ -421,7 +421,7 @@ export function CrmLeadsTable({
       )}
 
       {/* Tabla desktop/tablet */}
-      <BrandCard padding="sm" border="solid" className="hidden md:block overflow-x-auto">
+      <BrandCard padding="sm" border="solid" className="hidden lg:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
@@ -492,7 +492,7 @@ export function CrmLeadsTable({
       </BrandCard>
 
       {/* Cards movil */}
-      <div className="flex flex-col gap-3 md:hidden">
+      <div className="flex flex-col gap-3 lg:hidden">
         {visibles.map((lead) => {
           const contactStatus = normalizeContactStatus(lead.contact_status)
           return (

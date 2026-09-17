@@ -445,7 +445,7 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
       ) : (
         <>
           {/* Tabla desktop/tablet */}
-          <BrandCard border="solid" padding="sm" className="hidden md:block overflow-x-auto">
+          <BrandCard border="solid" padding="sm" className="hidden lg:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
@@ -506,7 +506,7 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
           </BrandCard>
 
           {/* Cards móvil */}
-          <div className="flex flex-col gap-3 md:hidden">
+          <div className="flex flex-col gap-3 lg:hidden">
             {users.map((u) => (
               <BrandCard key={u.id} border="solid" padding="sm" className="space-y-2.5 p-4">
                 <div className="flex items-start justify-between gap-2">

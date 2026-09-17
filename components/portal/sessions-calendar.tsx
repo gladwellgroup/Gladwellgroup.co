@@ -174,9 +174,11 @@ export function SessionsCalendar({
         </div>
       </div>
 
-      {/* Cuadrícula mensual — desde sm. En un teléfono 7 columnas quedan
-          ilegibles, por eso la agenda vertical de abajo la reemplaza. */}
-      <div className="hidden overflow-hidden rounded-xl border border-border sm:block">
+      {/* Cuadrícula mensual — desde lg (mismo corte mobile/tablet que el
+          resto de la app). En una pantalla chica o táctil 7 columnas quedan
+          ilegibles/difíciles de tocar, por eso la agenda vertical de abajo
+          la reemplaza. */}
+      <div className="hidden overflow-hidden rounded-xl border border-border lg:block">
         <div className="grid grid-cols-7 border-b border-border bg-muted/20">
           {WEEKDAYS.map((wd, i) => (
             <div
@@ -243,8 +245,8 @@ export function SessionsCalendar({
         </div>
       </div>
 
-      {/* Agenda móvil */}
-      <div className="sm:hidden">
+      {/* Agenda móvil/tablet */}
+      <div className="lg:hidden">
         {agendaGroups.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No hay sesiones este mes.
