@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono, Playfair_Display } from 'next/font/google'
+import localFont from 'next/font/local'
 import { Analytics } from '@vercel/analytics/next'
 import NextTopLoader from 'nextjs-toploader'
 import { ThemeProvider } from '@/components/providers/theme-provider'
@@ -7,12 +7,18 @@ import { ServiceWorkerRegistration } from '@/components/providers/service-worker
 import { SITE_URL, SITE_NAME, SITE_LOCALE, SITE_DESCRIPTION } from '@/lib/site'
 import './globals.css'
 
-const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
-const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  variable: '--font-playfair',
-  weight: ['400', '600'],
+// Fuentes servidas desde el repo (app/fonts, licencia OFL junto a cada archivo)
+// en vez de pedirlas a Google: el build ya no depende de que Google Fonts
+// responda (falló una vez por eso) y la página no hace pedidos a terceros.
+// Aquí va SOLO lo que usa toda la app: Geist, variable (100–900), subconjunto
+// latino. Playfair Display se declara en la landing (video-section.tsx), la
+// única que la usa, para que el portal no la precargue; y Geist Mono se retiró:
+// solo la usaba el cronómetro de audio, que ahora usa la mono del sistema.
+const geist = localFont({
+  src: './fonts/Geist-latin.woff2',
+  variable: '--font-geist',
+  weight: '100 900',
+  display: 'swap',
 })
 
 // viewport-fit: 'cover' es lo que activa de verdad el env(safe-area-inset-*)
@@ -83,7 +89,7 @@ export default function RootLayout({
     <html
       lang="es"
       suppressHydrationWarning
-      className={`${geist.variable} ${geistMono.variable} ${playfair.variable}`}
+      className={geist.variable}
     >
       <body className="font-sans antialiased bg-background">
         <NextTopLoader

@@ -147,8 +147,10 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  /* La variable la define next/font (layout.tsx) con el nombre real de la
+     familia: no se asume el nombre a mano. Sin --font-mono a propósito: los
+     números en monoespacio usan la fuente mono del sistema. */
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

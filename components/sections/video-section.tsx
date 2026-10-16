@@ -2,9 +2,22 @@
 
 import { useState } from "react"
 import { Play } from "lucide-react"
+import localFont from "next/font/local"
 import { SectionDivider, SectionHeader } from "@/components/shared"
 
 const VIDEO_ID = "eckoiS-sRNQ"
+
+// Playfair Display solo se usa en este párrafo de la landing: se declara aquí y
+// no en el layout raíz, para que el portal no la descargue en cada página. Un
+// solo peso (400) y sin precarga: es texto bajo el pliegue.
+const playfair = localFont({
+  src: "../../app/fonts/PlayfairDisplay-latin.woff2",
+  variable: "--font-playfair",
+  weight: "400",
+  display: "swap",
+  preload: false,
+  adjustFontFallback: "Times New Roman",
+})
 
 export function VideoSection() {
   const [isPlaying, setIsPlaying] = useState(false)
@@ -48,7 +61,7 @@ export function VideoSection() {
           )}
         </div>
 
-        <p className="mx-auto mt-8 max-w-3xl text-center font-(family-name:--font-playfair) text-xl leading-relaxed text-muted-foreground text-balance md:text-2xl lg:text-[1.75rem] lg:leading-relaxed">
+        <p className={`${playfair.variable} mx-auto mt-8 max-w-3xl text-center font-(family-name:--font-playfair) text-xl leading-relaxed text-muted-foreground text-balance md:text-2xl lg:text-[1.75rem] lg:leading-relaxed`}>
           Somos una comunidad de apasionados por la estrategia, unidos por la educación y los
           negocios.
         </p>
