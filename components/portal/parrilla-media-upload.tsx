@@ -2,9 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { ImagePlus, X } from 'lucide-react'
-import { uploadParrillaMedia } from '@/lib/parrilla/upload-media'
-
-const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
+import { IMAGE_ACCEPT, uploadImage } from '@/lib/storage/upload-image'
 
 interface ParrillaMediaUploadProps {
   coverImageUrl: string
@@ -30,7 +28,7 @@ export function ParrillaMediaUpload({
     setError(null)
     setUploading(true)
     try {
-      const { url } = await uploadParrillaMedia({ file })
+      const { url } = await uploadImage({ bucket: 'parrilla-media', file })
       onUploaded(url)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al subir el archivo')
@@ -82,7 +80,7 @@ export function ParrillaMediaUpload({
       <input
         ref={fileInputRef}
         type="file"
-        accept={ACCEPT}
+        accept={IMAGE_ACCEPT}
         onChange={handleFileChange}
         className="hidden"
       />

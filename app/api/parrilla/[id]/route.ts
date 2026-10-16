@@ -1,21 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
-import { parrillaPostSchema } from '@/lib/validations/parrilla'
+import { parrillaPostPatchSchema } from '@/lib/validations/parrilla'
+import { PARRILLA_DETAIL_COLUMNS } from '@/lib/parrilla/posts'
+import { applyPostUpdate, deletePost, describeDbError } from '@/lib/parrilla/mutations'
+import { respond } from '@/lib/parrilla/http'
+import { isUuid } from '@/lib/parrilla/rules'
 
-/** El public URL de Storage trae el bucket embebido en la ruta
- *  (.../object/public/parrilla-media/<path>) — se recorta ahí para volver a
- *  tener el `path` relativo que .remove() necesita. */
-function storagePathFromUrl(url: string): string | null {
-  const marker = '/parrilla-media/'
-  const index = url.indexOf(marker)
-  return index === -1 ? null : url.slice(index + marker.length)
+type RouteContext = { params: Promise<{ id: string }> }
+
+/** Detalle completo (con Guion, Copy y portada). Lo pide el modal al abrir una
+ *  publicación; el listado del calendario no lo trae, para que cada carga de
+ *  página no arrastre el texto de todas las publicaciones. */
+export async function GET(_request: NextRequest, { params }: RouteContext) {
+  const { id } = await params
+  const auth = await requireApiPermission('parrilla:manage')
+  if (!auth.ok) return auth.response
+
+  // Un id mal formado nunca existe: 404, no el 500 que daría Postgres al
+  // intentar convertirlo a uuid.
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'La publicación ya no existe' }, { status: 404 })
+  }
+
+  const { data, error } = await getSupabaseServer()
+    .from('parrilla_posts')
+    .select(PARRILLA_DETAIL_COLUMNS)
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[parrilla/[id]] GET error:', error)
+    return NextResponse.json(
+      { error: describeDbError(error, 'No se pudo cargar la publicación') },
+      { status: 500 }
+    )
+  }
+  if (!data) {
+    return NextResponse.json({ error: 'La publicación ya no existe' }, { status: 404 })
+  }
+
+  return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } })
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+/** Recibe solo los campos que cambiaron, más `expected_updated_at`: el token
+ *  de la versión que la persona tenía abierta. */
+export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const { id } = await params
   const auth = await requireApiPermission('parrilla:manage')
   if (!auth.ok) return auth.response
@@ -27,7 +57,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
   }
 
-  const result = parrillaPostSchema.safeParse(body)
+  const result = parrillaPostPatchSchema.safeParse(body)
   if (!result.success) {
     return NextResponse.json(
       { error: result.error.errors[0]?.message ?? 'Datos inválidos' },
@@ -35,57 +65,16 @@ export async function PATCH(
     )
   }
 
-  const supabase = getSupabaseServer()
-  const { cover_image_url, ...rest } = result.data
-  const { error } = await supabase
-    .from('parrilla_posts')
-    .update({
-      ...rest,
-      cover_image_url: cover_image_url || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-
-  if (error) {
-    console.error('[parrilla/[id]] PATCH error:', error)
-    return NextResponse.json({ error: 'No se pudo actualizar la publicación' }, { status: 500 })
-  }
-
-  return NextResponse.json({ success: true })
+  const { expected_updated_at, ...patch } = result.data
+  return respond(
+    await applyPostUpdate(getSupabaseServer(), id, patch, { expected: expected_updated_at })
+  )
 }
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(_request: NextRequest, { params }: RouteContext) {
   const { id } = await params
   const auth = await requireApiPermission('parrilla:manage')
   if (!auth.ok) return auth.response
 
-  const supabase = getSupabaseServer()
-
-  const { data: post } = await supabase
-    .from('parrilla_posts')
-    .select('cover_image_url')
-    .eq('id', id)
-    .single()
-
-  const { error } = await supabase.from('parrilla_posts').delete().eq('id', id)
-
-  if (error) {
-    console.error('[parrilla/[id]] DELETE error:', error)
-    return NextResponse.json({ error: 'No se pudo eliminar la publicación' }, { status: 500 })
-  }
-
-  const path = post?.cover_image_url ? storagePathFromUrl(post.cover_image_url) : null
-  if (path) {
-    const { error: storageError } = await supabase.storage.from('parrilla-media').remove([path])
-    // No fatal: el post ya se borró; un archivo huérfano en Storage no
-    // rompe nada y no vale la pena revertir la fila por esto.
-    if (storageError) {
-      console.error('[parrilla/[id]] Storage cleanup error:', storageError)
-    }
-  }
-
-  return NextResponse.json({ success: true })
+  return respond(await deletePost(getSupabaseServer(), id))
 }

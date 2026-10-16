@@ -8,11 +8,13 @@ import { BrandButton } from '@/components/brand/brand-button'
 import { ParrillaPostDialog } from '@/components/portal/parrilla-post-dialog'
 import { parseDateOnly } from '@/lib/date'
 import {
+  PARRILLA_CATEGORY_LABELS,
   PARRILLA_STATUS_COLORS,
   PARRILLA_STATUS_LABELS,
   type ParrillaDateField,
   type ParrillaEditor,
-  type ParrillaPost,
+  type ParrillaPostSummary,
+  type ParrillaStatus,
   type Platform,
 } from '@/lib/parrilla/posts'
 
@@ -21,7 +23,7 @@ const MAX_VISIBLE_PER_DAY = 3
 
 /** Punto de color por estado — mismo criterio visual que el pipeline de
  *  Entregables (celda compacta = punto, panel/agenda = badge completo). */
-const DOT_BG: Record<ParrillaPost['status'], string> = {
+const DOT_BG: Record<ParrillaStatus, string> = {
   idea: 'bg-muted-foreground/50',
   en_produccion: 'bg-yellow-500',
   agendado: 'bg-[#06B6D4]',
@@ -46,12 +48,29 @@ function PlatformIcons({ platforms, className }: { platforms: Platform[]; classN
   )
 }
 
-function StatusBadge({ status }: { status: ParrillaPost['status'] }) {
+function StatusBadge({ status }: { status: ParrillaStatus }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${PARRILLA_STATUS_COLORS[status]}`}
     >
       {PARRILLA_STATUS_LABELS[status]}
+    </span>
+  )
+}
+
+/** Categoría como segunda línea de la fila (agenda y panel del día). Neutra a
+ *  propósito: el mismo borde gris de los chips de filtro, sin colores nuevos
+ *  que se confundan con los del estado. La línea se reserva para TODAS las
+ *  filas cuando alguna pieza tiene categoría, para que las filas con y sin
+ *  categoría no queden de alturas dispares. */
+function CategoryLine({ category }: { category: ParrillaPostSummary['category'] }) {
+  return (
+    <span className="mt-0.5 flex h-5 items-center">
+      {category && (
+        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] leading-none text-muted-foreground">
+          {PARRILLA_CATEGORY_LABELS[category]}
+        </span>
+      )}
     </span>
   )
 }
@@ -93,7 +112,7 @@ function formatDayHeading(date: Date): string {
 }
 
 interface ParrillaCalendarProps {
-  posts: ParrillaPost[]
+  posts: ParrillaPostSummary[]
   /** Qué fecha del post posiciona esta instancia del calendario — cada
    *  vista (Producción / Publicación) pasa la suya. */
   dateField: ParrillaDateField
@@ -117,14 +136,21 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
   // quedaría vieja si el post se reprograma/edita mientras el panel sigue
   // abierto y la página se refresca por otro motivo).
   const [dayPanelDate, setDayPanelDate] = useState<Date | null>(null)
-  const [editingPost, setEditingPost] = useState<ParrillaPost | null>(null)
+  const [editingPost, setEditingPost] = useState<ParrillaPostSummary | null>(null)
   const [creatingForDate, setCreatingForDate] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
+  // Aviso en línea de lo que falló al arrastrar (mismo patrón de role="alert"
+  // que usa el resto del portal) — antes un arrastre fallido no decía nada.
+  const [notice, setNotice] = useState<string | null>(null)
+
+  // Si alguna pieza en pantalla tiene categoría, todas las filas reservan la
+  // línea de categoría (ver CategoryLine).
+  const showCategoryLine = useMemo(() => posts.some((p) => p.category !== null), [posts])
 
   const postsByDate = useMemo(() => {
-    const map = new Map<string, ParrillaPost[]>()
+    const map = new Map<string, ParrillaPostSummary[]>()
     for (const p of posts) {
       const key = p[dateField]
       const list = map.get(key)
@@ -141,7 +167,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
   const monthLabel = currentMonth.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
 
   const agendaGroups = useMemo(() => {
-    const groups: { dateKey: string; date: Date; items: ParrillaPost[] }[] = []
+    const groups: { dateKey: string; date: Date; items: ParrillaPostSummary[] }[] = []
     const sorted = [...posts]
       .filter((p) => isSameMonth(parseDateOnly(p[dateField]), currentMonth))
       .sort((a, b) => a[dateField].localeCompare(b[dateField]))
@@ -161,12 +187,14 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
   function goToMonth(offset: number) {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1))
     setDayPanelDate(null)
+    setNotice(null)
   }
 
   function goToday() {
     const now = new Date()
     setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1))
     setDayPanelDate(null)
+    setNotice(null)
   }
 
   function openCreate(dateKey?: string) {
@@ -175,7 +203,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
     setDialogOpen(true)
   }
 
-  function openEdit(post: ParrillaPost) {
+  function openEdit(post: ParrillaPostSummary) {
     setEditingPost(post)
     setCreatingForDate(null)
     setDialogOpen(true)
@@ -183,16 +211,26 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
   }
 
   async function reschedule(postId: string, dateKey: string) {
+    setNotice(null)
     try {
       const res = await fetch(`/api/parrilla/${postId}/date`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field: dateField, date: dateKey }),
       })
-      if (res.ok) router.refresh()
+      if (res.ok) {
+        router.refresh()
+        return
+      }
+
+      // Sin estado optimista que revertir: la publicación sencillamente no se
+      // movió y sigue viéndose donde estaba — pero ahora se dice por qué.
+      const data = await res.json().catch(() => ({}))
+      setNotice(data.error ?? 'No se pudo mover la publicación')
+      // Ya no existe (404): se refresca para que el calendario muestre lo real.
+      if (res.status === 404) router.refresh()
     } catch {
-      // Sin estado optimista que revertir: si falla, el post sencillamente
-      // no se movió y sigue viéndose donde estaba.
+      setNotice('Sin conexión: no se pudo mover la publicación.')
     }
   }
 
@@ -259,6 +297,12 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
           </div>
         </div>
 
+        {notice && (
+          <p role="alert" className="text-center text-sm text-red-500">
+            {notice}
+          </p>
+        )}
+
         {/* Cuadrícula mensual — desde lg (mismo corte mobile/tablet que el
             resto de la app), igual que SessionsCalendar. Cada celda es zona
             de suelta; cada publicación es arrastrable — arrastrar no
@@ -318,6 +362,13 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
                       key={p.id}
                       type="button"
                       draggable
+                      // Tooltip con el título completo y la categoría: la celda es
+                      // demasiado angosta para mostrar la categoría en línea.
+                      title={
+                        p.category
+                          ? `${p.title} · ${PARRILLA_CATEGORY_LABELS[p.category]}`
+                          : p.title
+                      }
                       onDragStart={(e) => handleDragStart(e, p.id)}
                       onDragEnd={handleDragEnd}
                       onClick={() => openEdit(p)}
@@ -368,7 +419,10 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
                         className="flex w-full items-center gap-2 rounded-lg border border-border p-2.5 text-left transition-colors hover:bg-muted/40"
                       >
                         <PlatformIcons platforms={p.platforms} className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <p className="min-w-0 flex-1 truncate text-sm font-medium">{p.title}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{p.title}</p>
+                          {showCategoryLine && <CategoryLine category={p.category} />}
+                        </div>
                         <StatusBadge status={p.status} />
                       </button>
                     ))}
@@ -406,7 +460,10 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <PlatformIcons platforms={p.platforms} className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <p className="truncate text-sm font-medium">{p.title}</p>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{p.title}</p>
+                        {showCategoryLine && <CategoryLine category={p.category} />}
+                      </div>
                     </div>
                     <StatusBadge status={p.status} />
                   </button>

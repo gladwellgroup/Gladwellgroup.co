@@ -100,6 +100,7 @@ variables de entorno en el proyecto Vercel.
 
 ```bash
 npm run lint        # 0 errores
+npm test            # pruebas (node:test + tsx) en tests/
 npm run build       # build verde
 ```
 

@@ -5,7 +5,7 @@ import {
   PARRILLA_FORMAT_LABELS,
   PARRILLA_STATUS_COLORS,
   PARRILLA_STATUS_LABELS,
-  type ParrillaPost,
+  type ParrillaPostPending,
 } from '@/lib/parrilla/posts'
 
 /** Piezas donde este community_admin es Filmmaker o Editor y siguen sin
@@ -15,7 +15,7 @@ export function ParrillaCard({
   posts,
   href,
 }: {
-  posts: ParrillaPost[]
+  posts: ParrillaPostPending[]
   href: string
 }) {
   if (posts.length === 0) return null

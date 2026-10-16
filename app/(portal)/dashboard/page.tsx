@@ -26,7 +26,7 @@ import {
   loadPipelineSessions,
   type CalendarSession,
 } from '@/lib/deliverables/sessions'
-import { loadParrillaPosts } from '@/lib/parrilla/posts'
+import { loadParrillaPending } from '@/lib/parrilla/posts'
 import { parseDateOnly } from '@/lib/date'
 
 function emptyCounts(): PipelineCounts {
@@ -235,7 +235,7 @@ export default async function DashboardPage() {
         ? `${basePath}/education`
         : `${basePath}/terapia`
 
-  const [sessions, communitySessions, crmLeadsResult, allParrillaPosts] = await Promise.all([
+  const [sessions, communitySessions, crmLeadsResult, parrillaQueue] = await Promise.all([
     hasEntregables ? loadPipelineSessions(supabase, user, 'own') : Promise.resolve([]),
     hasCalendarOnly ? loadPipelineSessions(supabase, user, 'all') : Promise.resolve([]),
     hasCrm
@@ -246,18 +246,14 @@ export default async function DashboardPage() {
           .order('created_at', { ascending: false })
           .limit(5)
       : Promise.resolve({ data: null }),
-    hasParrilla ? loadParrillaPosts(supabase) : Promise.resolve([]),
+    // La cola ya viene filtrada en SQL (solo las piezas de este usuario, sin
+    // terminar), no se carga toda la tabla para filtrar aquí.
+    hasParrilla ? loadParrillaPending(supabase, user.id) : Promise.resolve([]),
   ])
 
   const counts = buildCounts(sessions)
   const crmLeads = (crmLeadsResult.data ?? []) as DashboardLead[]
-  const parrillaPending = allParrillaPosts
-    .filter(
-      (p) =>
-        (p.filmmaker_ids.includes(user.id) || p.editor_ids.includes(user.id)) &&
-        (p.status === 'idea' || p.status === 'en_produccion')
-    )
-    .slice(0, 5)
+  const parrillaPending = parrillaQueue.slice(0, 5)
 
   // Un solo cálculo de "qué sesiones puede ver este usuario", reutilizado por
   // Requiere atención y por Comunidad — evita que cada una acote distinto.

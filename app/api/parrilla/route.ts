@@ -2,25 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { parrillaPostSchema } from '@/lib/validations/parrilla'
-import { PARRILLA_POST_COLUMNS } from '@/lib/parrilla/posts'
-
-export async function GET() {
-  const auth = await requireApiPermission('parrilla:manage')
-  if (!auth.ok) return auth.response
-
-  const supabase = getSupabaseServer()
-  const { data, error } = await supabase
-    .from('parrilla_posts')
-    .select(PARRILLA_POST_COLUMNS)
-    .order('publish_date')
-
-  if (error) {
-    console.error('[parrilla] GET error:', error)
-    return NextResponse.json({ error: 'No se pudieron cargar las publicaciones' }, { status: 500 })
-  }
-
-  return NextResponse.json(data ?? [])
-}
+import { createPost } from '@/lib/parrilla/mutations'
 
 export async function POST(request: NextRequest) {
   const auth = await requireApiPermission('parrilla:manage')
@@ -41,22 +23,10 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const supabase = getSupabaseServer()
-  const { cover_image_url, ...rest } = result.data
-  const { data, error } = await supabase
-    .from('parrilla_posts')
-    .insert({
-      ...rest,
-      cover_image_url: cover_image_url || null,
-      created_by: auth.user.id,
-    })
-    .select('id')
-    .single()
-
-  if (error) {
-    console.error('[parrilla] POST error:', error)
-    return NextResponse.json({ error: 'No se pudo crear la publicación' }, { status: 500 })
+  const created = await createPost(getSupabaseServer(), result.data, auth.user.id)
+  if (!created.ok) {
+    return NextResponse.json({ error: created.error }, { status: created.status })
   }
 
-  return NextResponse.json({ id: data.id }, { status: 201 })
+  return NextResponse.json({ id: created.id }, { status: 201 })
 }

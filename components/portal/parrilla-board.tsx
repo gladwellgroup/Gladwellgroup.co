@@ -12,7 +12,7 @@ import {
   type ParrillaCategory,
   type ParrillaDateField,
   type ParrillaEditor,
-  type ParrillaPost,
+  type ParrillaPostSummary,
   type Platform,
 } from '@/lib/parrilla/posts'
 
@@ -77,7 +77,7 @@ function PlatformFilter({
   onToggle,
   onClear,
 }: {
-  posts: ParrillaPost[]
+  posts: ParrillaPostSummary[]
   selected: Platform[]
   onToggle: (platform: Platform) => void
   onClear: () => void
@@ -139,7 +139,7 @@ function CategoryFilter({
   value,
   onChange,
 }: {
-  posts: ParrillaPost[]
+  posts: ParrillaPostSummary[]
   value: CategoryFilterValue
   onChange: (value: CategoryFilterValue) => void
 }) {
@@ -182,7 +182,7 @@ function CategoryFilter({
 }
 
 interface ParrillaBoardProps {
-  posts: ParrillaPost[]
+  posts: ParrillaPostSummary[]
   editors: ParrillaEditor[]
 }
 

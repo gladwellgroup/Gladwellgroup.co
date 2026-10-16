@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { isAssignedTo, isUuid } from '@/lib/parrilla/rules'
 
 // 'idea' = recién anotada, nada empezado. 'en_produccion' cubre guion,
 // diseño y edición como una sola etapa — el editor asignado y las dos
@@ -47,20 +48,32 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   youtube: 'YouTube',
 }
 
-export const PARRILLA_CATEGORIES = ['valor', 'prospeccion', 'viral', 'comunidad'] as const
+export const PARRILLA_CATEGORIES = [
+  'crecer',
+  'conectar',
+  'construir',
+  'aprender',
+  'roots',
+  'comunidad',
+] as const
 export type ParrillaCategory = (typeof PARRILLA_CATEGORIES)[number]
 
 export const PARRILLA_CATEGORY_LABELS: Record<ParrillaCategory, string> = {
-  valor: 'Valor',
-  prospeccion: 'Prospección',
-  viral: 'Viral',
+  crecer: 'Crecer',
+  conectar: 'Conectar',
+  construir: 'Construir',
+  aprender: 'Aprender',
+  roots: 'Roots',
   comunidad: 'Comunidad',
 }
 
-export interface ParrillaPost {
+/** Lo que dibujan el calendario, la agenda y el modal al abrirse: sin los
+ *  textos largos (Guion, Copy) ni la portada, que solo hacen falta dentro del
+ *  modal y se piden al abrirlo (GET /api/parrilla/[id]). Así cada carga del
+ *  calendario no arrastra el texto de todas las publicaciones. */
+export interface ParrillaPostSummary {
   id: string
   title: string
-  copy_text: string | null
   platforms: Platform[]
   /** Cuándo se crea/edita la pieza — distinto de cuándo sale a redes. */
   production_date: string
@@ -69,7 +82,7 @@ export interface ParrillaPost {
   /** Formato planeado — se decide antes de grabar/diseñar; el video real
    *  vive en la red social, acá solo hace falta la foto de portada. */
   format: ParrillaFormat | null
-  cover_image_url: string | null
+  category: ParrillaCategory | null
   /** Quién sale en cámara — texto libre, no siempre tiene cuenta propia. */
   talent: string | null
   /** Uno o varios community_admin a cargo de capturar lo crudo (foto/video
@@ -78,8 +91,27 @@ export interface ParrillaPost {
   /** Uno o varios community_admin a cargo de convertir lo crudo en pieza
    *  terminada (portada, carrusel, edición). */
   editor_ids: string[]
-  category: ParrillaCategory | null
+  /** Token de concurrencia: un trigger lo mueve en cada UPDATE (migración
+   *  20260914). Se reenvía tal cual en el PATCH — es un texto opaco con
+   *  microsegundos, no una fecha que haya que parsear. */
+  updated_at: string
 }
+
+export interface ParrillaPost extends ParrillaPostSummary {
+  /** Es el Guion (así se llama en el modal) — el nombre de la columna es
+   *  histórico. El copy que se publica en redes vive en `caption`. */
+  copy_text: string | null
+  /** Copy del post: el texto (caption, hashtags, CTA) que acompaña la
+   *  publicación en redes — distinto del Guion (`copy_text`). */
+  caption: string | null
+  cover_image_url: string | null
+}
+
+/** Lo mínimo que necesita la cola "pendiente para ti" del dashboard. */
+export type ParrillaPostPending = Pick<
+  ParrillaPostSummary,
+  'id' | 'title' | 'status' | 'format' | 'category' | 'filmmaker_ids' | 'editor_ids'
+>
 
 /** Cuál de las dos fechas del post posiciona el calendario — cada vista usa
  *  una. */
@@ -95,29 +127,71 @@ export interface ParrillaEditor {
   nombre: string
 }
 
-export const PARRILLA_POST_COLUMNS =
-  'id, title, copy_text, platforms, production_date, publish_date, status, format, cover_image_url, talent, filmmaker_ids, editor_ids, category'
+// Listado y detalle son consultas distintas a propósito: el listado va en
+// cada carga de página; el detalle (con Guion, Copy y portada) solo al abrir
+// una publicación en el modal.
+export const PARRILLA_LIST_COLUMNS =
+  'id, title, platforms, production_date, publish_date, status, format, category, talent, filmmaker_ids, editor_ids, updated_at'
+export const PARRILLA_DETAIL_COLUMNS = `${PARRILLA_LIST_COLUMNS}, copy_text, caption, cover_image_url`
+export const PARRILLA_PENDING_COLUMNS =
+  'id, title, status, format, category, filmmaker_ids, editor_ids'
 
 /** Sin scoping por dueño: quien tiene el módulo "parrilla" ve y edita todas
  *  las publicaciones, no solo las que creó — es la premisa del producto. */
-export async function loadParrillaPosts(supabase: SupabaseClient): Promise<ParrillaPost[]> {
-  const { data } = await supabase
+export async function loadParrillaPosts(supabase: SupabaseClient): Promise<ParrillaPostSummary[]> {
+  const { data, error } = await supabase
     .from('parrilla_posts')
-    .select(PARRILLA_POST_COLUMNS)
+    .select(PARRILLA_LIST_COLUMNS)
     .order('publish_date')
+    // Desempate: sin él, las piezas de un mismo día cambian de orden al
+    // editarlas (Postgres devuelve empates en orden físico, y un UPDATE lo mueve).
+    .order('created_at')
 
-  return (data ?? []) as ParrillaPost[]
+  // Sin este log, un select roto (p. ej. una columna nueva cuya migración aún
+  // no se aplicó) se ve como un calendario vacío, sin rastro de por qué.
+  if (error) console.error('[parrilla] No se pudieron cargar las publicaciones:', error)
+
+  return (data ?? []) as ParrillaPostSummary[]
+}
+
+/** La cola de trabajo de una persona: piezas sin terminar donde es Editor o
+ *  Filmmaker. Se filtra en SQL — la cola crece con las piezas de la persona,
+ *  no con toda la tabla — y luego con `isAssignedTo`, que ignora asignaciones
+ *  de Filmmaker en piezas donde ese campo ya no aplica. */
+export async function loadParrillaPending(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<ParrillaPostPending[]> {
+  // Viene de la sesión, pero se interpola dentro de un filtro de PostgREST:
+  // se valida antes de armarlo.
+  if (!isUuid(userId)) return []
+
+  const { data, error } = await supabase
+    .from('parrilla_posts')
+    .select(PARRILLA_PENDING_COLUMNS)
+    .in('status', ['idea', 'en_produccion'])
+    .or(`editor_ids.cs.{${userId}},filmmaker_ids.cs.{${userId}}`)
+    .order('publish_date')
+    .order('created_at')
+
+  if (error) console.error('[parrilla] No se pudo cargar la cola pendiente:', error)
+
+  return ((data ?? []) as ParrillaPostPending[]).filter((post) => isAssignedTo(post, userId))
 }
 
 /** community_admin elegibles como "Editor" de una pieza — editor_ids es un
  *  array plano (sin FK real, así que no hay embed de PostgREST posible),
  *  por eso se resuelve aparte y se cruza en el cliente por id. */
 export async function loadParrillaEditors(supabase: SupabaseClient): Promise<ParrillaEditor[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('id, nombre')
     .eq('role', 'community_admin')
     .order('nombre')
+
+  // Igual que con las publicaciones: un fallo aquí se vería como un selector
+  // de Editor vacío, sin explicación.
+  if (error) console.error('[parrilla] No se pudieron cargar los editores:', error)
 
   return (data ?? []) as ParrillaEditor[]
 }
