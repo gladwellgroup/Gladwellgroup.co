@@ -9,7 +9,6 @@ import { CollapsibleTextarea } from '@/components/portal/collapsible-textarea'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
 import { ParrillaMediaUpload } from '@/components/portal/parrilla-media-upload'
 import { TeamPicker } from '@/components/portal/team-picker'
-import { DialogFooter } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   PARRILLA_CATEGORIES,
@@ -165,7 +164,7 @@ function FieldSkeleton({ label, className }: { label: string; className?: string
   return (
     <div className="space-y-1.5 text-center" aria-busy="true">
       <span className="modal-label">{label}</span>
-      <Skeleton className={className ?? 'h-[42px] w-full rounded-lg'} />
+      <Skeleton className={className ?? 'h-[42px] w-full rounded-lg pointer-coarse:h-[46px]'} />
     </div>
   )
 }
@@ -402,237 +401,250 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <BrandField
-          id="parrilla-title"
-          label="Título"
-          value={form.title}
-          onChange={(e) => setField('title', e.target.value)}
-          wrapperClassName="text-center"
-          className="text-left"
-          required
-        />
-        <div className="space-y-1.5 text-center">
-          <span className="modal-label">Plataformas</span>
-          <div className="flex flex-wrap justify-center gap-2">
-            {PLATFORMS.map((platform) => {
-              const active = form.platforms.includes(platform)
-              return (
-                <button
-                  key={platform}
-                  type="button"
-                  onClick={() => togglePlatform(platform)}
-                  aria-pressed={active}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    active
-                      ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
-                      : 'border-border text-muted-foreground hover:bg-muted/40'
-                  }`}
-                >
-                  {PLATFORM_LABELS[platform]}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
+      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        {/* Solo esta zona hace scroll: la X, el título y el pie con Guardar
+            quedan siempre a la vista (en iPad el formulario es más largo que la
+            pantalla). */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain px-6 py-4">
           <BrandField
-            id="parrilla-production-date"
-            label="Fecha de producción"
-            type="date"
-            value={form.production_date}
-            onChange={(e) => setField('production_date', e.target.value)}
+            id="parrilla-title"
+            label="Título"
+            value={form.title}
+            onChange={(e) => setField('title', e.target.value)}
             wrapperClassName="text-center"
             className="text-left"
             required
           />
-          <BrandField
-            id="parrilla-publish-date"
-            label="Fecha de publicación"
-            type="date"
-            value={form.publish_date}
-            onChange={(e) => setField('publish_date', e.target.value)}
-            // Publicar antes de producir no tiene sentido: el navegador lo marca
-            // al instante (el servidor valida igual).
-            min={form.production_date}
-            wrapperClassName="text-center"
-            className="text-left"
-            required
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <div className="flex flex-col items-center gap-1.5 text-center">
-            <label htmlFor="parrilla-status" className="modal-label">
-              Estado
-            </label>
-            <select
-              id="parrilla-status"
-              value={form.status}
-              onChange={(e) => setField('status', e.target.value as ParrillaStatus)}
-              className="modal-field"
-            >
-              {PARRILLA_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {PARRILLA_STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col items-center gap-1.5 text-center">
-            <label htmlFor="parrilla-format" className="modal-label">
-              Formato
-            </label>
-            <select
-              id="parrilla-format"
-              value={form.format ?? ''}
-              onChange={(e) => setField('format', (e.target.value || null) as ParrillaFormat | null)}
-              className="modal-field"
-            >
-              <option value="">Sin definir</option>
-              {PARRILLA_FORMATS.map((f) => (
-                <option key={f} value={f}>
-                  {PARRILLA_FORMAT_LABELS[f]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col items-center gap-1.5 text-center">
-            <label htmlFor="parrilla-category" className="modal-label">
-              Categoría
-            </label>
-            <select
-              id="parrilla-category"
-              value={form.category ?? ''}
-              onChange={(e) =>
-                setField('category', (e.target.value || null) as ParrillaCategory | null)
-              }
-              className="modal-field"
-            >
-              <option value="">Sin categoría</option>
-              {PARRILLA_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {PARRILLA_CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {showsTalent(form.format) && (
-          <BrandField
-            id="parrilla-talent"
-            label="Responsable en cámara"
-            value={form.talent ?? ''}
-            onChange={(e) => setField('talent', e.target.value)}
-            placeholder="Nombre(s)…"
-            wrapperClassName="text-center"
-            className="text-left"
-          />
-        )}
-
-        {showsFilmmaker(form.format, form.category) && (
-          <TeamPicker
-            label="Filmmaker(es)"
-            options={editors}
-            selected={form.filmmaker_ids}
-            onToggle={(id) => toggleTeam('filmmaker_ids', id)}
-          />
-        )}
-
-        <TeamPicker
-          label="Editor/Diseñador(es)"
-          options={editors}
-          selected={form.editor_ids}
-          onToggle={(id) => toggleTeam('editor_ids', id)}
-        />
-
-        {ready ? (
-          <>
-            <CollapsibleTextarea
-              id="parrilla-guion"
-              label="Guion"
-              value={form.copy_text ?? ''}
-              onChange={(value) => setField('copy_text', value)}
-              expanded={guionExpanded}
-              onExpandedChange={setGuionExpanded}
-              placeholder="Hook, cuerpo, tiempos y dirección — todo el guion cabe acá…"
-              emptyLabel="Agregar guion…"
-            />
-
-            <CollapsibleTextarea
-              id="parrilla-caption"
-              label="Copy del post"
-              value={form.caption ?? ''}
-              onChange={(value) => setField('caption', value)}
-              expanded={captionExpanded}
-              onExpandedChange={setCaptionExpanded}
-              placeholder="Texto, hashtags y llamado a la acción que acompañan la publicación…"
-              emptyLabel="Agregar copy…"
-            />
-
-            <div className="space-y-1.5 text-center">
-              <span className="modal-label">Foto de portada</span>
-              <ParrillaMediaUpload
-                coverImageUrl={form.cover_image_url ?? ''}
-                onUploaded={(url) => setField('cover_image_url', url)}
-                onCleared={() => setField('cover_image_url', null)}
-              />
+          <div className="space-y-1.5 text-center">
+            <span className="modal-label">Plataformas</span>
+            <div className="flex flex-wrap justify-center gap-2">
+              {PLATFORMS.map((platform) => {
+                const active = form.platforms.includes(platform)
+                return (
+                  <button
+                    key={platform}
+                    type="button"
+                    onClick={() => togglePlatform(platform)}
+                    aria-pressed={active}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:flex pointer-coarse:min-h-11 pointer-coarse:items-center pointer-coarse:px-4 pointer-coarse:text-sm ${
+                      active
+                        ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
+                        : 'border-border text-muted-foreground hover:bg-muted/40'
+                    }`}
+                  >
+                    {PLATFORM_LABELS[platform]}
+                  </button>
+                )
+              })}
             </div>
-          </>
-        ) : state.detail === 'error' ? (
-          <div className="space-y-2 text-center">
-            <p role="alert" className="text-sm text-red-500">
-              {state.loadError}
-            </p>
-            <button
-              type="button"
-              onClick={retryDetail}
-              className="inline-flex min-h-11 items-center justify-center rounded-full border border-border px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-            >
-              Reintentar
-            </button>
           </div>
-        ) : (
-          <>
-            <FieldSkeleton label="Guion" />
-            <FieldSkeleton label="Copy del post" />
-            <FieldSkeleton label="Foto de portada" className="h-[120px] w-full rounded-xl" />
-          </>
-        )}
 
-        {error && (
-          <p role="alert" className="text-center text-sm text-red-500">
-            {error}
-          </p>
-        )}
-        {conflictMessage && (
-          <p role="alert" className="text-center text-sm text-yellow-500">
-            {conflictMessage}
-          </p>
-        )}
+          <div className="grid grid-cols-2 gap-3">
+            <BrandField
+              id="parrilla-production-date"
+              label="Fecha de producción"
+              type="date"
+              value={form.production_date}
+              onChange={(e) => setField('production_date', e.target.value)}
+              wrapperClassName="text-center"
+              className="text-left"
+              required
+            />
+            <BrandField
+              id="parrilla-publish-date"
+              label="Fecha de publicación"
+              type="date"
+              value={form.publish_date}
+              onChange={(e) => setField('publish_date', e.target.value)}
+              // Publicar antes de producir no tiene sentido: el navegador lo marca
+              // al instante (el servidor valida igual).
+              min={form.production_date}
+              wrapperClassName="text-center"
+              className="text-left"
+              required
+            />
+          </div>
 
-        <DialogFooter className="items-center gap-3 sm:justify-between">
-          {post ? (
-            // Separado del botón principal por un borde + espacio propio, y con
-            // un área de toque de 44px (mínimo recomendado por Apple HIG) — para
-            // que no se preste a un toque accidental justo debajo de "Guardar".
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 border-t border-border/60 pt-3 text-xs font-medium text-red-500 transition-colors hover:text-red-400 sm:w-auto sm:min-h-0 sm:border-t-0 sm:pt-0"
-            >
-              <Trash2 className="size-3.5" />
-              Eliminar publicación
-            </button>
-          ) : (
-            <span />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col items-center gap-1.5 text-center">
+              <label htmlFor="parrilla-status" className="modal-label">
+                Estado
+              </label>
+              <select
+                id="parrilla-status"
+                value={form.status}
+                onChange={(e) => setField('status', e.target.value as ParrillaStatus)}
+                className="modal-field"
+              >
+                {PARRILLA_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {PARRILLA_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 text-center">
+              <label htmlFor="parrilla-format" className="modal-label">
+                Formato
+              </label>
+              <select
+                id="parrilla-format"
+                value={form.format ?? ''}
+                onChange={(e) => setField('format', (e.target.value || null) as ParrillaFormat | null)}
+                className="modal-field"
+              >
+                <option value="">Sin definir</option>
+                {PARRILLA_FORMATS.map((f) => (
+                  <option key={f} value={f}>
+                    {PARRILLA_FORMAT_LABELS[f]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 text-center sm:col-span-2">
+              <label htmlFor="parrilla-category" className="modal-label">
+                Categoría
+              </label>
+              <select
+                id="parrilla-category"
+                value={form.category ?? ''}
+                onChange={(e) =>
+                  setField('category', (e.target.value || null) as ParrillaCategory | null)
+                }
+                className="modal-field"
+              >
+                <option value="">Sin categoría</option>
+                {PARRILLA_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {PARRILLA_CATEGORY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {showsTalent(form.format) && (
+            <BrandField
+              id="parrilla-talent"
+              label="Responsable en cámara"
+              value={form.talent ?? ''}
+              onChange={(e) => setField('talent', e.target.value)}
+              placeholder="Nombre(s)…"
+              wrapperClassName="text-center"
+              className="text-left"
+            />
           )}
-          <BrandButton type="submit" size="sm" className="w-auto" disabled={submitting || !ready}>
-            {submitting ? 'Guardando…' : post ? 'Guardar cambios' : 'Crear publicación'}
-          </BrandButton>
-        </DialogFooter>
+
+          {showsFilmmaker(form.format, form.category) && (
+            <TeamPicker
+              label="Filmmaker(es)"
+              options={editors}
+              selected={form.filmmaker_ids}
+              onToggle={(id) => toggleTeam('filmmaker_ids', id)}
+            />
+          )}
+
+          <TeamPicker
+            label="Editor/Diseñador(es)"
+            options={editors}
+            selected={form.editor_ids}
+            onToggle={(id) => toggleTeam('editor_ids', id)}
+          />
+
+          {ready ? (
+            <>
+              <CollapsibleTextarea
+                id="parrilla-guion"
+                label="Guion"
+                value={form.copy_text ?? ''}
+                onChange={(value) => setField('copy_text', value)}
+                expanded={guionExpanded}
+                onExpandedChange={setGuionExpanded}
+                placeholder="Hook, cuerpo, tiempos y dirección — todo el guion cabe acá…"
+                emptyLabel="Agregar guion…"
+              />
+
+              <CollapsibleTextarea
+                id="parrilla-caption"
+                label="Copy del post"
+                value={form.caption ?? ''}
+                onChange={(value) => setField('caption', value)}
+                expanded={captionExpanded}
+                onExpandedChange={setCaptionExpanded}
+                placeholder="Texto, hashtags y llamado a la acción que acompañan la publicación…"
+                emptyLabel="Agregar copy…"
+              />
+
+              <div className="space-y-1.5 text-center">
+                <span className="modal-label">Foto de portada</span>
+                <ParrillaMediaUpload
+                  coverImageUrl={form.cover_image_url ?? ''}
+                  onUploaded={(url) => setField('cover_image_url', url)}
+                  onCleared={() => setField('cover_image_url', null)}
+                />
+              </div>
+            </>
+          ) : state.detail === 'error' ? (
+            <div className="space-y-2 text-center">
+              <p role="alert" className="text-sm text-red-500">
+                {state.loadError}
+              </p>
+              <button
+                type="button"
+                onClick={retryDetail}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-border px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : (
+            <>
+              <FieldSkeleton label="Guion" />
+              <FieldSkeleton label="Copy del post" />
+              <FieldSkeleton label="Foto de portada" className="h-[120px] w-full rounded-xl" />
+            </>
+          )}
+        </div>
+
+        {/* Pie fijo. El error y el aviso de conflicto viven aquí, junto al botón
+            que los provoca: dentro del área con scroll quedarían fuera de vista
+            justo al pulsar Guardar. */}
+        <div className="shrink-0 space-y-2 border-t border-border/60 px-6 pb-4 pt-3">
+          {error && (
+            <p role="alert" className="text-center text-sm text-red-500">
+              {error}
+            </p>
+          )}
+          {conflictMessage && (
+            <p role="alert" className="text-center text-sm text-yellow-500">
+              {conflictMessage}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            {post && (
+              // En el extremo opuesto a "Guardar" para que no se preste a un toque
+              // accidental junto al botón principal, y con 44px de alto al tacto
+              // (mínimo recomendado por Apple HIG).
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-400 active:text-red-300 pointer-coarse:min-h-11 pointer-coarse:px-3"
+              >
+                <Trash2 className="size-3.5" />
+                Eliminar publicación
+              </button>
+            )}
+            <BrandButton
+              type="submit"
+              size="sm"
+              className="ml-auto w-auto"
+              disabled={submitting || !ready}
+            >
+              {submitting ? 'Guardando…' : post ? 'Guardar cambios' : 'Crear publicación'}
+            </BrandButton>
+          </div>
+        </div>
       </form>
 
       <ConfirmDialog

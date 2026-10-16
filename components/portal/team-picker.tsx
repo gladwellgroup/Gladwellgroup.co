@@ -51,7 +51,7 @@ export function TeamPicker({
                 className={`rounded-full border font-medium transition-colors ${
                   size === 'lg'
                     ? 'flex min-h-11 items-center justify-center px-4 text-sm'
-                    : 'px-3 py-1 text-xs'
+                    : 'px-3 py-1 text-xs pointer-coarse:flex pointer-coarse:min-h-11 pointer-coarse:items-center pointer-coarse:px-4 pointer-coarse:text-sm'
                 } ${
                   active
                     ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'

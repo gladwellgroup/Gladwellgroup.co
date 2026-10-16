@@ -53,7 +53,7 @@ export function ParrillaMediaUpload({
               type="button"
               onClick={onCleared}
               aria-label="Quitar foto de portada"
-              className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70"
+              className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70 pointer-coarse:h-11 pointer-coarse:w-11"
             >
               <X className="h-4 w-4" />
             </button>

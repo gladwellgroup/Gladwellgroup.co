@@ -244,8 +244,20 @@
     box-shadow: 0 16px 56px rgba(124, 58, 237, 0.18);
   }
 
+  /* 16px al tacto, 14px con ratón: Safari en iPad/iPhone hace zoom al enfocar
+     un campo de menos de 16px y descuadra el modal. Con 16px (line-height de
+     24px) el campo mide 46px, así que además cumple los 44px de Apple HIG. */
   .modal-field {
-    @apply w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-all focus:border-[#7C3AED]/60 focus:outline-none focus:ring-1 focus:ring-[#7C3AED]/40;
+    @apply w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-base pointer-fine:text-sm text-foreground placeholder:text-muted-foreground/70 transition-all focus:border-[#7C3AED]/60 focus:outline-none focus:ring-1 focus:ring-[#7C3AED]/40;
+  }
+
+  /* WebKit pisa el padding y el min-height de un <select> nativo (medido: queda
+     de 23–26px aunque la hoja lo indique); el `height` explícito sí se
+     respeta. 2.875rem = lo que mide un campo de texto a 16px. */
+  @media (pointer: coarse) {
+    select.modal-field {
+      height: 2.875rem;
+    }
   }
 
   /* Textarea que crece con su contenido hasta un tope cómodo. El alto lo fija
@@ -271,6 +283,8 @@
      inmanejable el resto del formulario. */
   .modal-textarea[data-expanded='true'] {
     max-height: 70vh;
+    /* dvh sigue a las barras del navegador en iPad; vh queda como respaldo. */
+    max-height: 70dvh;
   }
 
   /* Aire bajo la última línea para que el grabber no se le encime cuando el

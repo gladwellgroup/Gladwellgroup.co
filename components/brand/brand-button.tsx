@@ -15,7 +15,9 @@ const brandButtonVariants = cva(
       },
       size: {
         default: 'px-6 py-3',
-        sm: 'px-4 py-2 text-xs',
+        // 32px con ratón; 44px al tacto (mínimo de Apple HIG) sin cambiar el
+        // tamaño visual en escritorio.
+        sm: 'px-4 py-2 text-xs pointer-coarse:min-h-11',
       },
     },
     defaultVariants: {

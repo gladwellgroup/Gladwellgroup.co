@@ -53,7 +53,7 @@ function ViewTabs({
               type="button"
               onClick={() => onChange(field)}
               aria-pressed={active}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors ${
+              className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors pointer-coarse:min-h-11 pointer-coarse:px-6 ${
                 active
                   ? 'bg-[#7C3AED] text-white shadow-[0_0_20px_rgba(124,58,237,0.35)]'
                   : 'text-muted-foreground hover:text-foreground'
@@ -98,7 +98,7 @@ function PlatformFilter({
         type="button"
         onClick={onClear}
         aria-pressed={selected.length === 0}
-        className={`flex w-full items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors sm:w-auto ${
+        className={`flex w-full items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11 pointer-coarse:px-4 pointer-coarse:text-sm sm:w-auto ${
           selected.length === 0
             ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
             : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -116,7 +116,7 @@ function PlatformFilter({
             type="button"
             onClick={() => onToggle(platform)}
             aria-pressed={active}
-            className={`flex w-full items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors sm:w-auto ${
+            className={`flex w-full items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11 pointer-coarse:px-4 pointer-coarse:text-sm sm:w-auto ${
               active
                 ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
                 : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -166,7 +166,7 @@ function CategoryFilter({
             type="button"
             onClick={() => onChange(opcion.key)}
             aria-pressed={activo}
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11 pointer-coarse:px-4 pointer-coarse:text-sm ${
               activo
                 ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
                 : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'

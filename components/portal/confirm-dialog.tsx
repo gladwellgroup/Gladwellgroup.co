@@ -1,6 +1,14 @@
 'use client'
 
 import { BrandButton } from '@/components/brand/brand-button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -11,6 +19,12 @@ interface ConfirmDialogProps {
   onCancel: () => void
 }
 
+/** Sobre el Dialog de Radix y no sobre un `fixed inset-0` propio: un overlay
+ *  `fixed` queda atrapado dentro de cualquier ancestro con `transform`,
+ *  `translate` o `backdrop-filter` (el DialogContent de un modal, una
+ *  BrandCard…), así que se dibujaba del tamaño de ese ancestro y, con el modal
+ *  desplazado, quedaba fuera de pantalla. El Dialog sale a `body`, cubre toda la
+ *  pantalla, cierra con Esc, atrapa el foco y bloquea el scroll del fondo. */
 export function ConfirmDialog({
   open,
   title,
@@ -19,14 +33,19 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="portal-header max-w-md w-full rounded-xl border border-border/50 p-6 space-y-4">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <p className="text-sm text-muted-foreground">{message}</p>
-        <div className="flex justify-end gap-2">
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent
+        showCloseButton={false}
+        className="portal-header rounded-xl border-border/50 sm:max-w-md"
+      >
+        <DialogHeader className="text-left sm:text-left">
+          <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            {message}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex-row justify-end gap-2 sm:flex-row">
           <BrandButton
             type="button"
             variant="secondary"
@@ -36,16 +55,11 @@ export function ConfirmDialog({
           >
             Cancelar
           </BrandButton>
-          <BrandButton
-            type="button"
-            size="sm"
-            className="w-auto"
-            onClick={onConfirm}
-          >
+          <BrandButton type="button" size="sm" className="w-auto" onClick={onConfirm}>
             {confirmLabel}
           </BrandButton>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

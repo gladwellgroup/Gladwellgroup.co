@@ -49,7 +49,7 @@ export function CollapsibleTextarea({
             aria-expanded
             aria-controls={id}
             aria-label={`Colapsar ${label}`}
-            className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center pointer-coarse:px-4 pointer-coarse:text-sm"
           >
             Colapsar
           </button>
@@ -62,7 +62,7 @@ export function CollapsibleTextarea({
             onClick={() => onExpandedChange(true)}
             aria-expanded={false}
             aria-label={`${label}: ${value || emptyLabel}`}
-            className="w-full truncate rounded-lg border border-dashed border-border bg-muted/20 px-4 py-2.5 text-center text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40"
+            className="w-full truncate rounded-lg border border-dashed border-border bg-muted/20 px-4 py-2.5 text-center text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 pointer-coarse:min-h-11"
           >
             {value || emptyLabel}
           </button>

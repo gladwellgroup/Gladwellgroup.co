@@ -118,6 +118,32 @@ Las rutas del portal viven en `app/(portal)/`; la landing pública sigue en `app
 
 ---
 
+## Tablet y pantallas táctiles
+
+El equipo usa el portal sobre todo en iPad. La parrilla y sus modales ya siguen estas reglas;
+las demás vistas del portal deben adoptarlas al tocarlas:
+
+- **El ancho no decide si algo es táctil.** 1024 px (`lg:`) separa menú móvil de escritorio, pero un
+  iPad horizontal supera ese corte y sigue siendo un dedo. La ergonomía táctil se activa con
+  `pointer-coarse:` y la densidad de escritorio con `pointer-fine:` (`lg:pointer-fine:` para "ancho y
+  ratón"): objetivos de **44 px** (Apple HIG) y campos de **16 px** (con menos, Safari hace zoom al
+  enfocar) solo al tacto. `.modal-field` y `BrandButton size="sm"` ya lo hacen.
+- **`hover:` no existe al tacto** (Tailwind lo envuelve en `@media (hover: hover)`). Lo que solo se
+  descubre pasando el ratón (el "+" de cada día) necesita una alternativa visible, y el feedback al
+  pulsar va en `active:`. Arrastrar con el dedo no es fiable: ofrecer otra vía (selector de fecha).
+- **Modales, hojas y confirmaciones: `Dialog` de Radix, nunca un `fixed inset-0` propio.** Safari ata
+  cualquier `fixed` a un ancestro con `transform`, `translate` o `backdrop-filter` (`.glass`,
+  `.portal-header`, el propio `DialogContent`): la capa se dibuja del tamaño del ancestro y, con scroll,
+  fuera de pantalla. `ConfirmDialog` ya está sobre `Dialog`.
+- **`dvh`, no `vh`**, en alturas máximas: `vh` ignora las barras del navegador del iPad. En modales
+  largos, cabecera y pie fijos y scroll solo en el cuerpo (ver `parrilla-post-dialog.tsx`).
+- **`<select>` nativo:** WebKit ignora su `padding` y `min-height`; el alto táctil se fija con `height`.
+- **Verificar con WebKit real** (el motor de Safari; Chrome no reproduce estos fallos), con perfil de
+  iPad táctil en vertical y horizontal. Lo que ningún emulador cubre (teclado en pantalla, selector de
+  fecha nativo de iOS) se valida en un iPad.
+
+---
+
 ## Rate limiting
 
 El endpoint `/api/walking-list` no tiene rate limiting activo. Está documentado como
