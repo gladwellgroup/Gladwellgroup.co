@@ -1,33 +1,45 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isAssignedTo, isUuid } from '@/lib/parrilla/rules'
 
-// 'idea' = recién anotada, nada empezado. 'en_produccion' cubre guion,
-// diseño y edición como una sola etapa — el editor asignado y las dos
-// fechas ya dicen quién y cuándo, no hace falta subdividirla más. Sin
-// estado de aprobación: la parrilla no tiene ese flujo.
+// El flujo, en orden: 'idea' = recién anotada, nada empezado. 'agendado' = la
+// idea pasó a la etapa de creación. 'en_produccion' cubre guion, diseño y
+// edición como una sola etapa — el editor asignado y las dos fechas ya dicen
+// quién y cuándo, no hace falta subdividirla más. 'programado' = ya editada y
+// lista para salir el día de la fecha de publicación. 'archivado' = la idea no
+// se ejecuta pero no se pierde: vive en el Banco de contenido, sin fecha de
+// publicación. Sin estado de aprobación: la parrilla no tiene ese flujo.
 export const PARRILLA_STATUSES = [
   'idea',
-  'en_produccion',
   'agendado',
+  'en_produccion',
+  'programado',
   'publicado',
-  'cancelado',
+  'archivado',
 ] as const
 export type ParrillaStatus = (typeof PARRILLA_STATUSES)[number]
 
+/** Lo que vive en el calendario: todo menos lo archivado, que no tiene fecha de
+ *  publicación y se ve en el Banco de contenido. */
+export const PARRILLA_PIPELINE_STATUSES = PARRILLA_STATUSES.filter(
+  (status): status is Exclude<ParrillaStatus, 'archivado'> => status !== 'archivado'
+)
+
 export const PARRILLA_STATUS_LABELS: Record<ParrillaStatus, string> = {
   idea: 'Idea',
-  en_produccion: 'En producción',
   agendado: 'Agendado',
+  en_produccion: 'En producción',
+  programado: 'Programado',
   publicado: 'Publicado',
-  cancelado: 'Cancelado',
+  archivado: 'Archivado',
 }
 
 export const PARRILLA_STATUS_COLORS: Record<ParrillaStatus, string> = {
   idea: 'bg-muted text-muted-foreground',
+  agendado: 'bg-[#7C3AED]/15 text-[#A78BFA]',
   en_produccion: 'bg-yellow-500/15 text-yellow-500',
-  agendado: 'bg-[#06B6D4]/15 text-[#06B6D4]',
+  programado: 'bg-[#06B6D4]/15 text-[#06B6D4]',
   publicado: 'bg-green-500/15 text-green-500',
-  cancelado: 'bg-red-500/15 text-red-500',
+  archivado: 'bg-slate-500/15 text-slate-500',
 }
 
 export const PARRILLA_FORMATS = ['carrusel', 'imagen', 'video'] as const
@@ -67,6 +79,21 @@ export const PARRILLA_CATEGORY_LABELS: Record<ParrillaCategory, string> = {
   comunidad: 'Comunidad',
 }
 
+/** Las secciones del modal que se pueden ocultar con el ojo: no todas las
+ *  publicaciones llevan Inspiración, Guion, Copy del post o Foto de portada.
+ *  Ocultar solo esconde el campo en la pantalla — el contenido no se borra. Las
+ *  claves van en la columna `hidden_sections` (el CHECK de SQL lleva la misma
+ *  lista; una prueba las compara). */
+export const PARRILLA_SECTIONS = ['inspiracion', 'guion', 'copy', 'portada'] as const
+export type ParrillaSection = (typeof PARRILLA_SECTIONS)[number]
+
+export const PARRILLA_SECTION_LABELS: Record<ParrillaSection, string> = {
+  inspiracion: 'Inspiración',
+  guion: 'Guion',
+  copy: 'Copy del post',
+  portada: 'Foto de portada',
+}
+
 /** Lo que dibujan el calendario, la agenda y el modal al abrirse: sin los
  *  textos largos (Guion, Copy) ni la portada, que solo hacen falta dentro del
  *  modal y se piden al abrirlo (GET /api/parrilla/[id]). Así cada carga del
@@ -77,7 +104,8 @@ export interface ParrillaPostSummary {
   platforms: Platform[]
   /** Cuándo se crea/edita la pieza — distinto de cuándo sale a redes. */
   production_date: string
-  publish_date: string
+  /** NULL solo en las piezas archivadas: archivar borra la fecha de publicación. */
+  publish_date: string | null
   status: ParrillaStatus
   /** Formato planeado — se decide antes de grabar/diseñar; el video real
    *  vive en la red social, acá solo hace falta la foto de portada. */
@@ -85,6 +113,14 @@ export interface ParrillaPostSummary {
   category: ParrillaCategory | null
   /** Quién sale en cámara — texto libre, no siempre tiene cuenta propia. */
   talent: string | null
+  /** Inspiración: enlace (http/https) a la referencia de la que parte el video.
+   *  Solo aplica a video. Es una URL corta, por eso viaja en el listado y no en
+   *  el detalle: el modal la muestra al abrirse, junto a `talent`. */
+  inspiration_url: string | null
+  /** Secciones del modal que el equipo ocultó en esta pieza. Viaja en el
+   *  listado (no en el detalle) porque el modal las necesita al abrirse, antes
+   *  de que llegue el detalle: así una sección oculta no parpadea abierta. */
+  hidden_sections: ParrillaSection[]
   /** Uno o varios community_admin a cargo de capturar lo crudo (foto/video
    *  del evento) — etapa previa a Editor/Diseñador. */
   filmmaker_ids: string[]
@@ -131,7 +167,7 @@ export interface ParrillaEditor {
 // cada carga de página; el detalle (con Guion, Copy y portada) solo al abrir
 // una publicación en el modal.
 export const PARRILLA_LIST_COLUMNS =
-  'id, title, platforms, production_date, publish_date, status, format, category, talent, filmmaker_ids, editor_ids, updated_at'
+  'id, title, platforms, production_date, publish_date, status, format, category, talent, inspiration_url, hidden_sections, filmmaker_ids, editor_ids, updated_at'
 export const PARRILLA_DETAIL_COLUMNS = `${PARRILLA_LIST_COLUMNS}, copy_text, caption, cover_image_url`
 export const PARRILLA_PENDING_COLUMNS =
   'id, title, status, format, category, filmmaker_ids, editor_ids'
@@ -169,7 +205,7 @@ export async function loadParrillaPending(
   const { data, error } = await supabase
     .from('parrilla_posts')
     .select(PARRILLA_PENDING_COLUMNS)
-    .in('status', ['idea', 'en_produccion'])
+    .in('status', ['idea', 'agendado', 'en_produccion'])
     .or(`editor_ids.cs.{${userId}},filmmaker_ids.cs.{${userId}}`)
     .order('publish_date')
     .order('created_at')

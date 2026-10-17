@@ -55,6 +55,85 @@ describe('crear (POST)', () => {
     }
   })
 
+  test('Inspiración acepta enlaces http(s), recortados', () => {
+    for (const link of [
+      'https://www.instagram.com/reel/abc123/',
+      'http://example.com/video',
+      'HTTPS://YOUTU.BE/abc123?t=42&si=xyz',
+      'https://www.tiktok.com/@cuenta/video/7123456789012345678',
+    ]) {
+      const result = parrillaPostSchema.safeParse({ ...minimo, inspiration_url: ` ${link} ` })
+      assert.equal(result.success, true, link)
+      if (result.success) assert.equal(result.data.inspiration_url, link)
+    }
+  })
+
+  test('Inspiración vacía, en blanco u omitida se guarda como null', () => {
+    for (const inspiration_url of ['', '   ', null]) {
+      const result = parrillaPostSchema.safeParse({ ...minimo, inspiration_url })
+      assert.equal(result.success, true, String(inspiration_url))
+      if (result.success) assert.equal(result.data.inspiration_url, null)
+    }
+    assert.equal(parrillaPostSchema.safeParse(minimo).success, true)
+  })
+
+  test('Inspiración rechaza lo que no es un enlace http(s) — en especial javascript:', () => {
+    const malos = [
+      'javascript:alert(1)',
+      'JAVASCRIPT:alert(document.cookie)',
+      'data:text/html,<script>alert(1)</script>',
+      'ftp://example.com/archivo',
+      'file:///etc/passwd',
+      'instagram.com/reel/abc123', // sin esquema
+      'www.instagram.com/reel/abc123',
+      'https://',
+      'https:// con espacios',
+      'https://example.com/a b',
+      'solo texto',
+    ]
+    for (const inspiration_url of malos) {
+      const result = parrillaPostSchema.safeParse({ ...minimo, inspiration_url })
+      assert.equal(firstError(result), 'El enlace de inspiración no es válido', inspiration_url)
+    }
+  })
+
+  test('Inspiración tiene un tope de 2048 caracteres (el mismo del CHECK de SQL)', () => {
+    const base = 'https://example.com/'
+    const justo = base + 'a'.repeat(2048 - base.length)
+    assert.equal(justo.length, 2048)
+    assert.equal(parrillaPostSchema.safeParse({ ...minimo, inspiration_url: justo }).success, true)
+    assert.equal(
+      firstError(parrillaPostSchema.safeParse({ ...minimo, inspiration_url: `${justo}a` })),
+      'El enlace de inspiración no es válido'
+    )
+  })
+
+  test('secciones ocultas: acepta [] y las cuatro claves; el POST completa []', () => {
+    const sin = parrillaPostSchema.safeParse(minimo)
+    assert.equal(sin.success, true)
+    if (sin.success) assert.deepEqual(sin.data.hidden_sections, [])
+
+    const todas = parrillaPostSchema.safeParse({
+      ...minimo,
+      hidden_sections: ['inspiracion', 'guion', 'copy', 'portada'],
+    })
+    assert.equal(todas.success, true)
+    if (todas.success) assert.deepEqual(todas.data.hidden_sections, ['inspiracion', 'guion', 'copy', 'portada'])
+  })
+
+  test('secciones ocultas: una clave desconocida se rechaza, en español', () => {
+    for (const hidden_sections of [['foto'], ['guion', 'titulo'], ['Guion'], [''], ['copy_text']]) {
+      const result = parrillaPostSchema.safeParse({ ...minimo, hidden_sections })
+      assert.equal(
+        firstError(result),
+        'Sección no válida. Recarga la página e inténtalo de nuevo.',
+        JSON.stringify(hidden_sections)
+      )
+    }
+    assert.equal(parrillaPostSchema.safeParse({ ...minimo, hidden_sections: 'guion' }).success, false)
+    assert.equal(parrillaPostSchema.safeParse({ ...minimo, hidden_sections: null }).success, false)
+  })
+
   test('acepta format y category null (Sin definir / Sin categoría)', () => {
     const result = parrillaPostSchema.safeParse({ ...minimo, format: null, category: null })
     assert.equal(result.success, true)
@@ -95,6 +174,33 @@ describe('crear (POST)', () => {
       const result = parrillaPostSchema.safeParse({ ...minimo, production_date: bad })
       assert.equal(firstError(result), 'Fecha inválida', bad)
     }
+  })
+
+  test('sin fecha de publicación solo vale una pieza archivada', () => {
+    const sinFecha = { title: minimo.title, platforms: minimo.platforms, production_date: minimo.production_date }
+
+    for (const publish_date of [undefined, null, '']) {
+      const result = parrillaPostSchema.safeParse({ ...sinFecha, publish_date })
+      // '' no es una fecha: la rechaza el formato antes que la regla de la fecha faltante.
+      assert.notEqual(firstError(result), null, String(publish_date))
+    }
+    assert.equal(
+      firstError(parrillaPostSchema.safeParse({ ...sinFecha, publish_date: null })),
+      'Falta la fecha de publicación'
+    )
+
+    const archivada = parrillaPostSchema.safeParse({ ...sinFecha, status: 'archivado', publish_date: null })
+    assert.equal(archivada.success, true)
+  })
+
+  test('acepta los estados del flujo y ya no acepta cancelado', () => {
+    for (const status of ['idea', 'agendado', 'en_produccion', 'programado', 'publicado', 'archivado']) {
+      assert.equal(parrillaPostSchema.safeParse({ ...minimo, status }).success, true, status)
+    }
+    assert.match(
+      firstError(parrillaPostSchema.safeParse({ ...minimo, status: 'cancelado' }))!,
+      /^Estado no válido/
+    )
   })
 
   test('rechaza publicar antes de producir y señala el campo de publicación', () => {
@@ -176,6 +282,37 @@ describe('editar (PATCH)', () => {
       assert.equal('category' in omite.data, false)
       assert.equal('caption' in omite.data, false)
     }
+  })
+
+  test('secciones ocultas en un parche: [] las muestra todas, omitir no las toca', () => {
+    const muestra = parrillaPostPatchSchema.safeParse({ hidden_sections: [] })
+    assert.equal(muestra.success, true)
+    if (muestra.success) assert.deepEqual(muestra.data.hidden_sections, [])
+
+    const oculta = parrillaPostPatchSchema.safeParse({ hidden_sections: ['portada'] })
+    assert.equal(oculta.success, true)
+    if (oculta.success) assert.deepEqual(oculta.data.hidden_sections, ['portada'])
+
+    const omite = parrillaPostPatchSchema.safeParse({ title: 'Nuevo título' })
+    assert.equal(omite.success, true)
+    if (omite.success) assert.equal('hidden_sections' in omite.data, false, 'el parche no inventa []')
+
+    assert.equal(parrillaPostPatchSchema.safeParse({ hidden_sections: ['otra'] }).success, false)
+  })
+
+  test('Inspiración en un parche: null la limpia, omitir no la toca, javascript: se rechaza', () => {
+    const limpia = parrillaPostPatchSchema.safeParse({ inspiration_url: null })
+    assert.equal(limpia.success, true)
+    if (limpia.success) assert.equal(limpia.data.inspiration_url, null)
+
+    const omite = parrillaPostPatchSchema.safeParse({ title: 'Nuevo título' })
+    assert.equal(omite.success, true)
+    if (omite.success) assert.equal('inspiration_url' in omite.data, false)
+
+    assert.equal(
+      firstError(parrillaPostPatchSchema.safeParse({ inspiration_url: 'javascript:alert(1)' })),
+      'El enlace de inspiración no es válido'
+    )
   })
 
   test('el token de concurrencia llega tal cual, con microsegundos y +00:00', () => {

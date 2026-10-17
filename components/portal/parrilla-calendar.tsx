@@ -6,15 +6,13 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Instagram,
-  Linkedin,
   Plus,
   X,
-  Youtube,
 } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandButton } from '@/components/brand/brand-button'
 import { ParrillaPostDialog } from '@/components/portal/parrilla-post-dialog'
+import { PlatformIcons } from '@/components/portal/parrilla-shared'
 import {
   Dialog,
   DialogClose,
@@ -27,14 +25,13 @@ import { parseDateOnly } from '@/lib/date'
 import {
   DATE_FIELD_LABELS,
   PARRILLA_CATEGORY_LABELS,
-  PARRILLA_STATUSES,
+  PARRILLA_PIPELINE_STATUSES,
   PARRILLA_STATUS_COLORS,
   PARRILLA_STATUS_LABELS,
   type ParrillaDateField,
   type ParrillaEditor,
   type ParrillaPostSummary,
   type ParrillaStatus,
-  type Platform,
 } from '@/lib/parrilla/posts'
 
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -45,27 +42,11 @@ const MAX_DOTS = 6
  *  Entregables (celda compacta = punto, panel/agenda = badge completo). */
 const DOT_BG: Record<ParrillaStatus, string> = {
   idea: 'bg-muted-foreground/50',
+  agendado: 'bg-[#7C3AED]',
   en_produccion: 'bg-yellow-500',
-  agendado: 'bg-[#06B6D4]',
+  programado: 'bg-[#06B6D4]',
   publicado: 'bg-green-500',
-  cancelado: 'bg-red-500',
-}
-
-const PLATFORM_ICONS: Record<Platform, typeof Instagram> = {
-  instagram: Instagram,
-  linkedin: Linkedin,
-  youtube: Youtube,
-}
-
-function PlatformIcons({ platforms, className }: { platforms: Platform[]; className?: string }) {
-  return (
-    <span className="flex shrink-0 items-center gap-0.5">
-      {platforms.map((p) => {
-        const Icon = PLATFORM_ICONS[p]
-        return <Icon key={p} className={className} />
-      })}
-    </span>
-  )
+  archivado: 'bg-slate-500',
 }
 
 function StatusBadge({ status }: { status: ParrillaStatus }) {
@@ -136,6 +117,13 @@ function countLabel(count: number): string {
   return count === 1 ? '1 publicación' : `${count} publicaciones`
 }
 
+/** Fecha con la que la vista activa posiciona la pieza. Solo las archivadas
+ *  tienen vacía la de publicación, y esas viven en el Banco de contenido: no
+ *  llegan al calendario. El respaldo evita que un dato inesperado lo rompa. */
+function dateOf(post: ParrillaPostSummary, field: ParrillaDateField): string {
+  return post[field] ?? post.production_date
+}
+
 interface ParrillaCalendarProps {
   posts: ParrillaPostSummary[]
   /** Qué fecha del post posiciona esta instancia del calendario — cada
@@ -189,7 +177,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
   const postsByDate = useMemo(() => {
     const map = new Map<string, ParrillaPostSummary[]>()
     for (const p of posts) {
-      const key = p[dateField]
+      const key = dateOf(p, dateField)
       const list = map.get(key)
       if (list) list.push(p)
       else map.set(key, [p])
@@ -206,11 +194,11 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
   const agendaGroups = useMemo(() => {
     const groups: { dateKey: string; date: Date; items: ParrillaPostSummary[] }[] = []
     const sorted = [...posts]
-      .filter((p) => isSameMonth(parseDateOnly(p[dateField]), currentMonth))
-      .sort((a, b) => a[dateField].localeCompare(b[dateField]))
+      .filter((p) => isSameMonth(parseDateOnly(dateOf(p, dateField)), currentMonth))
+      .sort((a, b) => dateOf(a, dateField).localeCompare(dateOf(b, dateField)))
 
     for (const p of sorted) {
-      const key = p[dateField]
+      const key = dateOf(p, dateField)
       const last = groups[groups.length - 1]
       if (last && last.dateKey === key) {
         last.items.push(p)
@@ -291,7 +279,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
       return
     }
     setMovingId(post.id)
-    setMoveDate(post[dateField])
+    setMoveDate(dateOf(post, dateField))
   }
 
   /** Mueve con un botón explícito y no al cambiar el valor: Safari en iOS
@@ -299,7 +287,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
    *  publicación varias veces (y cerraría la hoja a la primera). */
   async function handleMove(e: React.FormEvent, post: ParrillaPostSummary) {
     e.preventDefault()
-    if (!moveDate || moveDate === post[dateField]) return
+    if (!moveDate || moveDate === dateOf(post, dateField)) return
     setMoveSending(true)
     const moved = await reschedule(post.id, moveDate)
     setMoveSending(false)
@@ -324,7 +312,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
     setDraggingId(null)
     if (!postId) return
     const post = posts.find((p) => p.id === postId)
-    if (!post || post[dateField] === dateKey) return
+    if (!post || dateOf(post, dateField) === dateKey) return
     reschedule(postId, dateKey)
   }
 
@@ -494,7 +482,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
           aria-label="Significado de los colores"
           className="hidden flex-wrap justify-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground sm:flex lg:hidden"
         >
-          {PARRILLA_STATUSES.map((status) => (
+          {PARRILLA_PIPELINE_STATUSES.map((status) => (
             <li key={status} className="flex items-center gap-1.5">
               <span className={`h-2 w-2 rounded-full ${DOT_BG[status]}`} aria-hidden="true" />
               {PARRILLA_STATUS_LABELS[status]}
@@ -617,7 +605,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
                         // Mismo orden que valida el servidor: publicar no puede
                         // quedar antes de producir.
                         min={dateField === 'publish_date' ? p.production_date : undefined}
-                        max={dateField === 'production_date' ? p.publish_date : undefined}
+                        max={dateField === 'production_date' ? (p.publish_date ?? undefined) : undefined}
                         required
                         className="modal-field text-left"
                       />
@@ -626,7 +614,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
                       type="submit"
                       size="sm"
                       className="w-auto"
-                      disabled={moveSending || !moveDate || moveDate === p[dateField]}
+                      disabled={moveSending || !moveDate || moveDate === dateOf(p, dateField)}
                     >
                       {moveSending ? 'Moviendo…' : 'Mover'}
                     </BrandButton>

@@ -18,12 +18,14 @@ const BUCKET_URL = 'https://abc.supabase.co/storage/v1/object/public/parrilla-me
 
 function current(overrides: Partial<GuardRow> = {}): GuardRow {
   return {
+    status: 'programado',
     format: 'video',
     category: 'crecer',
     production_date: '2026-10-16',
     publish_date: '2026-10-20',
     cover_image_url: null,
     talent: null,
+    inspiration_url: null,
     filmmaker_ids: [],
     updated_at: '2026-10-16T12:00:00.123456+00:00',
     ...overrides,
@@ -80,6 +82,100 @@ describe('planPostUpdate', () => {
     assert.equal(planPostUpdate(legacy, { title: 'Solo el título' }).ok, true)
   })
 
+  test('archivar borra la fecha de publicación guardada', () => {
+    const plan = planPostUpdate(current(), { status: 'archivado' })
+    assert.equal(plan.ok && plan.update.status, 'archivado')
+    assert.equal(plan.ok && plan.update.publish_date, null)
+  })
+
+  test('archivar con una fecha en el parche tampoco la conserva', () => {
+    const plan = planPostUpdate(current(), { status: 'archivado', publish_date: '2026-11-01' })
+    assert.equal(plan.ok && plan.update.publish_date, null)
+  })
+
+  test('una pieza ya archivada no escribe la fecha de nuevo al renombrarla', () => {
+    const archivada = current({ status: 'archivado', publish_date: null })
+    assert.deepEqual(planPostUpdate(archivada, { title: 'Otro título' }), {
+      ok: true,
+      update: { title: 'Otro título' },
+    })
+  })
+
+  test('mover la producción de una pieza archivada no choca con una fecha que no existe', () => {
+    const archivada = current({ status: 'archivado', publish_date: null })
+    assert.equal(planPostUpdate(archivada, { production_date: '2027-01-01' }).ok, true)
+  })
+
+  test('sacar una pieza del archivo sin fecha de publicación se rechaza (400)', () => {
+    const archivada = current({ status: 'archivado', publish_date: null })
+    const plan = planPostUpdate(archivada, { status: 'agendado' })
+    assert.equal(plan.ok, false)
+    if (!plan.ok) {
+      assert.equal(plan.status, 400)
+      assert.equal(plan.error, 'Pon una fecha de publicación para sacarla del archivo')
+    }
+  })
+
+  test('sacarla del archivo con fecha de publicación en el mismo parche funciona', () => {
+    const archivada = current({ status: 'archivado', publish_date: null })
+    const plan = planPostUpdate(archivada, { status: 'programado', publish_date: '2026-10-30' })
+    assert.deepEqual(plan.ok && plan.update, { status: 'programado', publish_date: '2026-10-30' })
+  })
+
+  test('cambiar de estado entre los del calendario conserva su fecha de publicación', () => {
+    const plan = planPostUpdate(current(), { status: 'publicado' })
+    assert.deepEqual(plan.ok && plan.update, { status: 'publicado' })
+  })
+
+  test('ocultar secciones pasa tal cual en el parche', () => {
+    assert.deepEqual(planPostUpdate(current(), { hidden_sections: ['guion', 'portada'] }), {
+      ok: true,
+      update: { hidden_sections: ['guion', 'portada'] },
+    })
+    // Volver a mostrarlo todo también es un cambio que se escribe.
+    assert.deepEqual(planPostUpdate(current({}), { hidden_sections: [] }), {
+      ok: true,
+      update: { hidden_sections: [] },
+    })
+  })
+
+  test('ocultar la Inspiración solo esconde el campo: no vacía el enlace guardado', () => {
+    const c = current({ inspiration_url: 'https://www.instagram.com/reel/abc123/' })
+    const plan = planPostUpdate(c, { hidden_sections: ['inspiracion'] })
+    assert.deepEqual(plan, { ok: true, update: { hidden_sections: ['inspiracion'] } })
+    assert.equal(plan.ok && 'inspiration_url' in plan.update, false)
+  })
+
+  test('cambiar de video a imagen vacía la Inspiración guardada', () => {
+    const c = current({ inspiration_url: 'https://www.instagram.com/reel/abc123/' })
+    const plan = planPostUpdate(c, { format: 'imagen' })
+    assert.equal(plan.ok && plan.update.inspiration_url, null)
+    assert.equal(plan.ok && plan.update.format, 'imagen')
+  })
+
+  test('un parche con Inspiración en un formato que no es video se vacía (usa el formato guardado)', () => {
+    const plan = planPostUpdate(current({ format: 'carrusel' }), {
+      inspiration_url: 'https://www.instagram.com/reel/abc123/',
+    })
+    assert.equal(plan.ok && plan.update.inspiration_url, null)
+  })
+
+  test('en video la Inspiración se guarda tal cual', () => {
+    const link = 'https://www.youtube.com/watch?v=abc123'
+    assert.deepEqual(planPostUpdate(current(), { inspiration_url: link }), {
+      ok: true,
+      update: { inspiration_url: link },
+    })
+  })
+
+  test('cambiar entre formatos sin Inspiración no escribe la columna de más', () => {
+    const imagen = current({ format: 'imagen' })
+    const aVideo = planPostUpdate(imagen, { format: 'video' })
+    assert.equal(aVideo.ok && 'inspiration_url' in aVideo.update, false)
+    const aCarrusel = planPostUpdate(imagen, { format: 'carrusel' })
+    assert.equal(aCarrusel.ok && 'inspiration_url' in aCarrusel.update, false)
+  })
+
   test('cambiar a imagen vacía el Responsable en cámara guardado', () => {
     const plan = planPostUpdate(current({ talent: 'Ana' }), { format: 'imagen' })
     assert.equal(plan.ok && plan.update.talent, null)
@@ -127,6 +223,17 @@ describe('describeDbError', () => {
       'No se pudo guardar'
     )
     assert.match(message, /^La categoría no es válida\. Recarga la página/)
+  })
+
+  test('conoce los CHECK de la fecha de publicación y de la Inspiración', () => {
+    const msg = (name: string) =>
+      describeDbError(
+        { code: '23514', message: `new row for relation "parrilla_posts" violates check constraint "${name}"` },
+        'No se pudo guardar'
+      )
+    assert.match(msg('parrilla_posts_publish_date_check'), /^Falta la fecha de publicación\. Recarga/)
+    assert.match(msg('parrilla_posts_inspiration_url_check'), /^El enlace de inspiración no es válido\. Recarga/)
+    assert.match(msg('parrilla_posts_hidden_sections_check'), /^Alguna sección oculta no es válida\. Recarga/)
   })
 
   test('un CHECK desconocido da un mensaje genérico pero útil', () => {
@@ -348,6 +455,7 @@ describe('createPost', () => {
     platforms: ['instagram' as const],
     production_date: '2026-10-16',
     publish_date: '2026-10-20',
+    hidden_sections: [],
     filmmaker_ids: [FM],
     editor_ids: [],
   }
@@ -371,12 +479,63 @@ describe('createPost', () => {
     assert.equal(row.category, 'crecer')
   })
 
+  test('la Inspiración se guarda (recortada) en video y se descarta en otros formatos', async () => {
+    const link = 'https://www.instagram.com/reel/abc123/'
+
+    const video = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+    await createPost(video.client, { ...input, format: 'video', inspiration_url: ` ${link} ` }, USER)
+    const rowVideo = video.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.equal(rowVideo.inspiration_url, link)
+
+    const imagen = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+    await createPost(imagen.client, { ...input, format: 'imagen', inspiration_url: link }, USER)
+    const rowImagen = imagen.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.equal(rowImagen.inspiration_url, null)
+
+    const sinFormato = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+    await createPost(sinFormato.client, { ...input, inspiration_url: link }, USER)
+    const rowSinFormato = sinFormato.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.equal(rowSinFormato.inspiration_url, null)
+  })
+
+  test('guarda las secciones ocultas que llegan y no inventa ninguna por defecto', async () => {
+    const conOcultas = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+    await createPost(conOcultas.client, { ...input, hidden_sections: ['guion', 'copy'] }, USER)
+    const row = conOcultas.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.deepEqual(row.hidden_sections, ['guion', 'copy'])
+
+    const sinOcultas = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+    await createPost(sinOcultas.client, input, USER)
+    const row2 = sinOcultas.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.deepEqual(row2.hidden_sections, [])
+  })
+
+  test('ocultar no borra: una sección oculta conserva su contenido al crear', async () => {
+    const fake = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+    await createPost(
+      fake.client,
+      { ...input, hidden_sections: ['guion'], copy_text: 'Guion que se conserva' },
+      USER
+    )
+    const row = fake.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.equal(row.copy_text, 'Guion que se conserva')
+    assert.deepEqual(row.hidden_sections, ['guion'])
+  })
+
   test('un video conserva Responsable en cámara y Filmmaker', async () => {
     const fake = fakeSupabase([{ data: { id: 'nuevo-id' } }])
     await createPost(fake.client, { ...input, format: 'video', talent: 'Ana' }, USER)
     const row = fake.callsTo('insert')[0].args[0] as Record<string, unknown>
     assert.equal(row.talent, 'Ana')
     assert.deepEqual(row.filmmaker_ids, [FM])
+  })
+
+  test('crear una pieza archivada guarda la fecha de publicación vacía', async () => {
+    const fake = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+    await createPost(fake.client, { ...input, status: 'archivado' }, USER)
+    const row = fake.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.equal(row.status, 'archivado')
+    assert.equal(row.publish_date, null)
   })
 
   test('un error de la base devuelve el fallo, no el id', async () => {

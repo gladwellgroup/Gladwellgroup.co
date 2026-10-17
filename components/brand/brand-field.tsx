@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils'
 interface BrandFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string
   wrapperClassName?: string
+  /** La etiqueta sigue ahí para lectores de pantalla, pero no se ve: para
+   *  cuando el título lo pone quien envuelve el campo (p. ej. una sección con
+   *  ojo para ocultarla), y dibujarlo dos veces lo duplicaría. */
+  hideLabel?: boolean
 }
 
 /** Solo enlaces http(s) absolutos: un handle suelto ("@usuario") no alcanza
@@ -26,12 +30,12 @@ function toAbsoluteUrl(value: unknown): string | null {
 }
 
 export const BrandField = React.forwardRef<HTMLInputElement, BrandFieldProps>(
-  ({ label, id, className, wrapperClassName, value, ...props }, ref) => {
+  ({ label, id, className, wrapperClassName, hideLabel, value, ...props }, ref) => {
     const href = toAbsoluteUrl(value)
 
     return (
       <div className={cn('flex flex-col gap-1.5', wrapperClassName)}>
-        <label htmlFor={id} className="modal-label">
+        <label htmlFor={id} className={cn('modal-label', hideLabel && 'sr-only')}>
           {label}
         </label>
         <div className="relative">
@@ -39,16 +43,20 @@ export const BrandField = React.forwardRef<HTMLInputElement, BrandFieldProps>(
             id={id}
             ref={ref}
             value={value}
-            className={cn('modal-field', href && 'pr-9', className)}
+            className={cn('modal-field', href && 'pr-9 pointer-coarse:pr-11', className)}
             {...props}
           />
+          {/* El atajo mide 36 px de ancho con ratón y 44 al tacto (Apple HIG): el
+              campo ya es así de alto, así que solo se ensancha. `active:` porque
+              `hover:` no existe en un iPad. */}
           {href && (
             <a
               href={href}
               target="_blank"
               rel="noopener noreferrer"
+              title="Abrir enlace"
               aria-label={`Abrir enlace: ${href}`}
-              className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+              className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground active:text-foreground pointer-coarse:w-11"
             >
               <ExternalLink className="h-4 w-4" />
             </a>
@@ -64,6 +72,8 @@ interface BrandTextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: string
   wrapperClassName?: string
+  /** Igual que en BrandField: la etiqueta queda solo para lectores de pantalla. */
+  hideLabel?: boolean
 }
 
 /** Next.js renderiza los client components también en el servidor, donde
@@ -75,7 +85,7 @@ const useIsomorphicLayoutEffect =
 export const BrandTextarea = React.forwardRef<
   HTMLTextAreaElement,
   BrandTextareaProps
->(({ label, id, className, wrapperClassName, value, onScroll, ...props }, ref) => {
+>(({ label, id, className, wrapperClassName, hideLabel, value, onScroll, ...props }, ref) => {
   const innerRef = React.useRef<HTMLTextAreaElement>(null)
   const [expanded, setExpanded] = React.useState(false)
   const [overflows, setOverflows] = React.useState(false)
@@ -129,7 +139,7 @@ export const BrandTextarea = React.forwardRef<
 
   return (
     <div className={cn('flex flex-col gap-1.5', wrapperClassName)}>
-      <label htmlFor={id} className="modal-label">
+      <label htmlFor={id} className={cn('modal-label', hideLabel && 'sr-only')}>
         {label}
       </label>
       <div className="relative">

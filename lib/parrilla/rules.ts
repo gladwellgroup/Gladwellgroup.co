@@ -6,7 +6,13 @@
 // Sin imports de runtime a propósito (solo tipos): el cliente las incluye en su
 // bundle y las pruebas las cargan sin resolver nada del resto de la app.
 
-import type { ParrillaCategory, ParrillaFormat, ParrillaPost } from '@/lib/parrilla/posts'
+import type {
+  ParrillaCategory,
+  ParrillaFormat,
+  ParrillaPost,
+  ParrillaSection,
+  ParrillaStatus,
+} from '@/lib/parrilla/posts'
 
 /** Columnas que el usuario puede cambiar desde el modal. Un test la compara
  *  con el schema de validación, para que una columna nueva no se quede fuera
@@ -22,6 +28,8 @@ export const EDITABLE_KEYS = [
   'format',
   'cover_image_url',
   'talent',
+  'inspiration_url',
+  'hidden_sections',
   'filmmaker_ids',
   'editor_ids',
   'category',
@@ -41,6 +49,11 @@ export const isUuid = (value: string): boolean => UUID_RE.test(value)
  *  carrusel de texto). */
 export const showsTalent = (format: ParrillaFormat | null): boolean => format === 'video'
 
+/** Inspiración (el enlace a la referencia) solo aplica a video: es de donde
+ *  parte la grabación y la edición. Es una regla aparte de `showsTalent` aunque
+ *  hoy coincidan: son campos distintos y pueden separarse. */
+export const showsInspiration = (format: ParrillaFormat | null): boolean => format === 'video'
+
 /** Filmmaker solo hace falta cuando hay algo que capturar en bruto: siempre en
  *  video, y en imagen/carrusel únicamente si son fotos de evento (categorías
  *  roots y comunidad) — los carruseles de crecer/conectar/construir/aprender
@@ -56,22 +69,46 @@ export function showsFilmmaker(
   )
 }
 
+/** Una pieza archivada no tiene fecha de publicación: archivar la borra, y sin
+ *  fecha una pieza solo puede estar archivada (lo exige también el CHECK de
+ *  SQL). Aquí y no en posts.ts: este módulo no importa nada en runtime. */
+export const isArchived = (status: ParrillaStatus): boolean => status === 'archivado'
+
 const blankToNull = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
 }
 
-/** Estado listo para guardar: un solo valor para "vacío" (NULL) y sin
+/** Si la sección tiene algo guardado. Ocultar una sección no borra su
+ *  contenido, así que el modal lo avisa en la cabecera («con contenido») para que
+ *  no quede un dato que nadie ve. Un texto en blanco cuenta como vacío. */
+export function sectionHasContent(
+  fields: Pick<EditableFields, 'inspiration_url' | 'copy_text' | 'caption' | 'cover_image_url'>,
+  section: ParrillaSection
+): boolean {
+  const value = {
+    inspiracion: fields.inspiration_url,
+    guion: fields.copy_text,
+    copy: fields.caption,
+    portada: fields.cover_image_url,
+  }[section]
+  return blankToNull(value) !== null
+}
+
+/** Estado listo para guardar: un solo valor para "vacío" (NULL), sin
  *  asignaciones de campos que la combinación formato/categoría oculta — si no,
- *  quedan datos que la pantalla ya no muestra pero el dashboard sí cuenta. */
+ *  quedan datos que la pantalla ya no muestra pero el dashboard sí cuenta — y
+ *  sin fecha de publicación si la pieza está archivada. */
 export function normalizeFields(fields: EditableFields): EditableFields {
   return {
     ...fields,
     title: fields.title.trim(),
+    publish_date: isArchived(fields.status) ? null : fields.publish_date,
     copy_text: blankToNull(fields.copy_text),
     caption: blankToNull(fields.caption),
     cover_image_url: blankToNull(fields.cover_image_url),
     talent: showsTalent(fields.format) ? blankToNull(fields.talent) : null,
+    inspiration_url: showsInspiration(fields.format) ? blankToNull(fields.inspiration_url) : null,
     filmmaker_ids: showsFilmmaker(fields.format, fields.category) ? fields.filmmaker_ids : [],
   }
 }
@@ -111,13 +148,19 @@ export function isRealDateOnly(value: string): boolean {
 }
 
 /** Publicar el mismo día que se produce es lo normal; antes, no. Las fechas
- *  ISO se ordenan igual como texto que como fechas. */
-export const datesInOrder = (production: string, publish: string): boolean =>
-  publish >= production
+ *  ISO se ordenan igual como texto que como fechas. Sin fecha de publicación
+ *  (pieza archivada) no hay orden que romper. */
+export const datesInOrder = (production: string, publish: string | null): boolean =>
+  publish === null || publish >= production
 
 // ───────────────── Qué cambió y cómo fusionar con lo último ─────────────────
 
-const SET_KEYS: ReadonlySet<EditableKey> = new Set(['platforms', 'filmmaker_ids', 'editor_ids'])
+const SET_KEYS: ReadonlySet<EditableKey> = new Set([
+  'platforms',
+  'filmmaker_ids',
+  'editor_ids',
+  'hidden_sections',
+])
 
 /** Valor comparable: el orden de una lista no es un cambio, y '' o solo
  *  espacios es lo mismo que null. Sin esto, alternar una plataforma dejaría

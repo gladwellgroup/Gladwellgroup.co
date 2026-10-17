@@ -2,12 +2,13 @@ import { z } from 'zod'
 import {
   PARRILLA_CATEGORIES,
   PARRILLA_FORMATS,
+  PARRILLA_SECTIONS,
   PARRILLA_STATUSES,
   PLATFORMS,
 } from '@/lib/parrilla/posts'
 import { datesInOrder, isRealDateOnly } from '@/lib/parrilla/rules'
 
-// Los 4 enums se derivan de las constantes de la UI, para que ninguna lista se
+// Los enums se derivan de las constantes de la UI, para que ninguna lista se
 // desfase de lo que el modal ofrece (el CHECK de SQL sí se mantiene a mano: una
 // prueba compara ambas listas). El mensaje en español es para quien tenga la
 // página abierta con una versión anterior: el modal muestra este texto tal cual.
@@ -18,6 +19,7 @@ export const parrillaPlatformSchema = enumEs(PLATFORMS, 'Plataforma no válida')
 export const parrillaStatusValueSchema = enumEs(PARRILLA_STATUSES, 'Estado no válido')
 export const parrillaCategorySchema = enumEs(PARRILLA_CATEGORIES, 'Categoría no válida')
 export const parrillaFormatSchema = enumEs(PARRILLA_FORMATS, 'Formato no válido')
+export const parrillaSectionSchema = enumEs(PARRILLA_SECTIONS, 'Sección no válida')
 
 // '' y solo-espacios se guardan como NULL: un único valor para "vacío". undefined
 // se conserva, para que un PATCH no toque el campo.
@@ -28,6 +30,20 @@ const optionalText = z
 
 const coverImageUrlSchema = optionalText.pipe(
   z.string().url('La imagen de portada no es válida').nullish()
+)
+
+// Inspiración: un enlace que el modal convierte en un <a href>. `.url()` solo
+// no basta —acepta `javascript:alert(1)`—, así que se exige http(s) sin
+// espacios, igual que el CHECK de SQL (parrilla_posts_inspiration_url_check): si
+// una de las dos reglas cambia, la otra también.
+const INSPIRATION_URL_MESSAGE = 'El enlace de inspiración no es válido'
+const inspirationUrlSchema = optionalText.pipe(
+  z
+    .string()
+    .max(2048, INSPIRATION_URL_MESSAGE)
+    .url(INSPIRATION_URL_MESSAGE)
+    .regex(/^https?:\/\/\S+$/i, INSPIRATION_URL_MESSAGE)
+    .nullish()
 )
 
 const dateOnlySchema = z
@@ -46,13 +62,19 @@ export const parrillaPostShape = {
   caption: optionalText,
   platforms: z.array(parrillaPlatformSchema).min(1, 'Selecciona al menos una plataforma'),
   production_date: dateOnlySchema,
-  publish_date: dateOnlySchema,
+  // `null` solo llega de una pieza archivada (archivar borra la fecha); que
+  // falte en una pieza que no lo está lo revisan el POST (abajo) y el PATCH
+  // (planPostUpdate, que conoce el estado guardado).
+  publish_date: dateOnlySchema.nullish(),
   status: parrillaStatusValueSchema.optional(),
   // `null` = "Sin definir"/"Sin categoría": limpia el valor guardado. Omitirlo
   // (undefined) deja la columna como estaba en un PATCH.
   format: parrillaFormatSchema.nullish(),
   cover_image_url: coverImageUrlSchema,
   talent: optionalText,
+  inspiration_url: inspirationUrlSchema,
+  // Secciones del modal que el equipo ocultó (el ojo). Solo esconden el campo.
+  hidden_sections: z.array(parrillaSectionSchema),
   filmmaker_ids: z.array(z.string().uuid('Identificador no válido')),
   editor_ids: z.array(z.string().uuid('Identificador no válido')),
   category: parrillaCategorySchema.nullish(),
@@ -62,7 +84,7 @@ export const parrillaPostShape = {
 // superRefine (siempre al final: ZodEffects ya no admite .partial ni .extend) y
 // corre aunque otro campo haya fallado, así que no da por buenas las fechas.
 function checkDateOrder(
-  data: { production_date?: string; publish_date?: string },
+  data: { production_date?: string; publish_date?: string | null },
   ctx: z.RefinementCtx
 ) {
   const { production_date: production, publish_date: publish } = data
@@ -81,14 +103,31 @@ function checkDateOrder(
   }
 }
 
+// Al crear no hay estado guardado contra el que comparar: sin fecha de
+// publicación solo vale una pieza archivada.
+function checkPublishDateRequired(
+  data: { publish_date?: string | null; status?: string },
+  ctx: z.RefinementCtx
+) {
+  if (!data.publish_date && data.status !== 'archivado') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['publish_date'],
+      message: 'Falta la fecha de publicación',
+    })
+  }
+}
+
 /** Crear: la pieza completa. */
 export const parrillaPostSchema = z
   .object({
     ...parrillaPostShape,
+    hidden_sections: parrillaPostShape.hidden_sections.default([]),
     filmmaker_ids: parrillaPostShape.filmmaker_ids.default([]),
     editor_ids: parrillaPostShape.editor_ids.default([]),
   })
   .superRefine(checkDateOrder)
+  .superRefine(checkPublishDateRequired)
 
 /** Editar: solo lo que cambió. `expected_updated_at` es el token de
  *  concurrencia tal como llegó del servidor — un texto opaco: con

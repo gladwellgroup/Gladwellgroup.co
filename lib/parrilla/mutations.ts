@@ -11,9 +11,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ParrillaPost } from '@/lib/parrilla/posts'
 import {
   datesInOrder,
+  isArchived,
   isUuid,
   normalizeFields,
   showsFilmmaker,
+  showsInspiration,
   showsTalent,
   type PostPatch,
 } from '@/lib/parrilla/rules'
@@ -24,16 +26,18 @@ const BUCKET = 'parrilla-media'
 /** Lo único que hace falta leer antes de escribir: el estado efectivo para
  *  validar fechas y visibilidad, el token y la portada actual. */
 export const GUARD_COLUMNS =
-  'format, category, production_date, publish_date, cover_image_url, talent, filmmaker_ids, updated_at'
+  'status, format, category, production_date, publish_date, cover_image_url, talent, inspiration_url, filmmaker_ids, updated_at'
 
 export type GuardRow = Pick<
   ParrillaPost,
+  | 'status'
   | 'format'
   | 'category'
   | 'production_date'
   | 'publish_date'
   | 'cover_image_url'
   | 'talent'
+  | 'inspiration_url'
   | 'filmmaker_ids'
   | 'updated_at'
 >
@@ -68,11 +72,33 @@ export function planPostUpdate(current: GuardRow, patch: PostPatch, expected?: s
 
   if (expected !== undefined && expected !== current.updated_at) return CONFLICT
 
+  const update: PostPatch = { ...patch }
+
+  // `null` es un valor válido de publish_date (pieza archivada), así que no se
+  // puede resolver con `??`: un null explícito del parche sí cuenta.
+  let publish = patch.publish_date !== undefined ? patch.publish_date : current.publish_date
+
+  // Archivar borra la fecha de publicación; sacar una pieza del archivo exige
+  // una. Solo se evalúa si el parche toca el estado o esa fecha: así una pieza
+  // vieja con datos raros se puede seguir renombrando.
+  if (patch.status !== undefined || patch.publish_date !== undefined) {
+    const status = patch.status ?? current.status
+    if (isArchived(status)) {
+      if (publish !== null) update.publish_date = null
+      publish = null
+    } else if (publish === null) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'Pon una fecha de publicación para sacarla del archivo',
+      }
+    }
+  }
+
   // El orden solo se valida si el parche toca una fecha: así una pieza vieja
   // que ya quedó con fechas al revés se puede seguir renombrando.
   if (patch.production_date !== undefined || patch.publish_date !== undefined) {
     const production = patch.production_date ?? current.production_date
-    const publish = patch.publish_date ?? current.publish_date
     if (!datesInOrder(production, publish)) {
       return {
         ok: false,
@@ -82,8 +108,6 @@ export function planPostUpdate(current: GuardRow, patch: PostPatch, expected?: s
     }
   }
 
-  const update: PostPatch = { ...patch }
-
   // Las asignaciones que la combinación formato/categoría oculta se vacían
   // cuando el parche toca algo que decide esa visibilidad. Solo se escribe si
   // hay algo que vaciar.
@@ -91,6 +115,7 @@ export function planPostUpdate(current: GuardRow, patch: PostPatch, expected?: s
     patch.format !== undefined ||
     patch.category !== undefined ||
     patch.talent !== undefined ||
+    patch.inspiration_url !== undefined ||
     patch.filmmaker_ids !== undefined
 
   if (decidesVisibility) {
@@ -99,6 +124,12 @@ export function planPostUpdate(current: GuardRow, patch: PostPatch, expected?: s
 
     if (!showsTalent(format) && (patch.talent != null || current.talent != null)) {
       update.talent = null
+    }
+    if (
+      !showsInspiration(format) &&
+      (patch.inspiration_url != null || current.inspiration_url != null)
+    ) {
+      update.inspiration_url = null
     }
     if (
       !showsFilmmaker(format, category) &&
@@ -117,6 +148,9 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   parrilla_posts_category_check: 'La categoría no es válida',
   parrilla_posts_format_check: 'El formato no es válido',
   parrilla_posts_platforms_check: 'Alguna plataforma no es válida',
+  parrilla_posts_publish_date_check: 'Falta la fecha de publicación',
+  parrilla_posts_inspiration_url_check: 'El enlace de inspiración no es válido',
+  parrilla_posts_hidden_sections_check: 'Alguna sección oculta no es válida',
 }
 
 const RELOAD_HINT = 'Recarga la página e inténtalo de nuevo.'
@@ -198,11 +232,13 @@ export async function createPost(
     caption: input.caption ?? null,
     platforms: input.platforms,
     production_date: input.production_date,
-    publish_date: input.publish_date,
+    publish_date: input.publish_date ?? null,
     status: input.status ?? 'idea',
     format: input.format ?? null,
     cover_image_url: input.cover_image_url ?? null,
     talent: input.talent ?? null,
+    inspiration_url: input.inspiration_url ?? null,
+    hidden_sections: input.hidden_sections,
     filmmaker_ids: input.filmmaker_ids,
     editor_ids: input.editor_ids,
     category: input.category ?? null,

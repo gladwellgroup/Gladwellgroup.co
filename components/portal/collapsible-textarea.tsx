@@ -9,6 +9,7 @@ import { BrandTextarea } from '@/components/brand/brand-field'
 export function CollapsibleTextarea({
   id,
   label,
+  hideLabel,
   value,
   onChange,
   expanded,
@@ -18,6 +19,9 @@ export function CollapsibleTextarea({
 }: {
   id: string
   label: string
+  /** El título lo pone quien envuelve el campo (la cabecera de una sección con
+   *  ojo): aquí no se dibuja, pero sigue siendo el nombre accesible del campo. */
+  hideLabel?: boolean
   value: string
   onChange: (value: string) => void
   expanded: boolean
@@ -34,6 +38,7 @@ export function CollapsibleTextarea({
           <BrandTextarea
             id={id}
             label={label}
+            hideLabel={hideLabel}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
@@ -56,7 +61,7 @@ export function CollapsibleTextarea({
         </>
       ) : (
         <>
-          <span className="modal-label">{label}</span>
+          {!hideLabel && <span className="modal-label">{label}</span>}
           <button
             type="button"
             onClick={() => onExpandedChange(true)}

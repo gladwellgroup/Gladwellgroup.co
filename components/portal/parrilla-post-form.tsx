@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Trash2 } from 'lucide-react'
 import { BrandButton } from '@/components/brand/brand-button'
@@ -8,6 +8,7 @@ import { BrandField } from '@/components/brand/brand-field'
 import { CollapsibleTextarea } from '@/components/portal/collapsible-textarea'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
 import { ParrillaMediaUpload } from '@/components/portal/parrilla-media-upload'
+import { ToggleableSection } from '@/components/portal/parrilla-section'
 import { TeamPicker } from '@/components/portal/team-picker'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -15,6 +16,7 @@ import {
   PARRILLA_CATEGORY_LABELS,
   PARRILLA_FORMATS,
   PARRILLA_FORMAT_LABELS,
+  PARRILLA_SECTION_LABELS,
   PARRILLA_STATUSES,
   PARRILLA_STATUS_LABELS,
   PLATFORMS,
@@ -24,14 +26,18 @@ import {
   type ParrillaFormat,
   type ParrillaPost,
   type ParrillaPostSummary,
+  type ParrillaSection,
   type ParrillaStatus,
   type Platform,
 } from '@/lib/parrilla/posts'
 import {
   diffPost,
+  isArchived,
   mergeLatest,
   normalizeFields,
+  sectionHasContent,
   showsFilmmaker,
+  showsInspiration,
   showsTalent,
   type EditableFields,
   type EditableKey,
@@ -50,6 +56,8 @@ const FIELD_LABELS: Record<EditableKey, string> = {
   format: 'Formato',
   cover_image_url: 'Foto de portada',
   talent: 'Responsable en cámara',
+  inspiration_url: 'Inspiración',
+  hidden_sections: 'Secciones ocultas',
   filmmaker_ids: 'Filmmaker(es)',
   editor_ids: 'Editor/Diseñador(es)',
   category: 'Categoría',
@@ -65,7 +73,11 @@ function todayIso(): string {
 
 /** Punto de partida del formulario. En edición solo se conoce el resumen del
  *  calendario: Guion, Copy y portada llegan con el detalle. */
-function initialFields(post: ParrillaPostSummary | null, defaultDate?: string): EditableFields {
+function initialFields(
+  post: ParrillaPostSummary | null,
+  defaultDate?: string,
+  defaultStatus?: ParrillaStatus
+): EditableFields {
   if (post) {
     return {
       title: post.title,
@@ -76,6 +88,8 @@ function initialFields(post: ParrillaPostSummary | null, defaultDate?: string): 
       format: post.format,
       category: post.category,
       talent: post.talent,
+      inspiration_url: post.inspiration_url,
+      hidden_sections: post.hidden_sections,
       filmmaker_ids: post.filmmaker_ids,
       editor_ids: post.editor_ids,
       copy_text: null,
@@ -85,17 +99,22 @@ function initialFields(post: ParrillaPostSummary | null, defaultDate?: string): 
   }
 
   // Al crear desde un día del calendario, las dos fechas arrancan iguales — lo
-  // normal es producir y publicar el mismo día salvo que se ajuste a mano.
+  // normal es producir y publicar el mismo día salvo que se ajuste a mano. Una
+  // idea nueva del Banco (estado inicial archivado) nace sin fecha de
+  // publicación, como cualquier pieza archivada.
   const day = defaultDate ?? todayIso()
+  const status = defaultStatus ?? 'idea'
   return {
     title: '',
     platforms: [],
     production_date: day,
-    publish_date: day,
-    status: 'idea',
+    publish_date: isArchived(status) ? null : day,
+    status,
     format: null,
     category: null,
     talent: null,
+    inspiration_url: null,
+    hidden_sections: [],
     filmmaker_ids: [],
     editor_ids: [],
     copy_text: null,
@@ -116,6 +135,8 @@ function toEditable(post: ParrillaPost): EditableFields {
     format: post.format,
     cover_image_url: post.cover_image_url,
     talent: post.talent,
+    inspiration_url: post.inspiration_url,
+    hidden_sections: post.hidden_sections,
     filmmaker_ids: post.filmmaker_ids,
     editor_ids: post.editor_ids,
     category: post.category,
@@ -159,13 +180,14 @@ async function send(url: string, method: 'POST' | 'PATCH', body: unknown): Promi
 }
 
 /** Mantiene el alto del campo mientras llega el detalle, para que el modal no
- *  salte cuando aparece el contenido real. */
-function FieldSkeleton({ label, className }: { label: string; className?: string }) {
+ *  salte cuando aparece el contenido real. Solo el cuerpo: el título y el ojo
+ *  los dibuja la cabecera de la sección, que no espera al detalle. */
+function FieldSkeleton({ className }: { className?: string }) {
   return (
-    <div className="space-y-1.5 text-center" aria-busy="true">
-      <span className="modal-label">{label}</span>
-      <Skeleton className={className ?? 'h-[42px] w-full rounded-lg pointer-coarse:h-[46px]'} />
-    </div>
+    <Skeleton
+      aria-busy="true"
+      className={className ?? 'h-[42px] w-full rounded-lg pointer-coarse:h-[46px]'}
+    />
   )
 }
 
@@ -187,6 +209,9 @@ interface ParrillaPostFormProps {
    *  abre al instante y el detalle se pide aparte. */
   post: ParrillaPostSummary | null
   defaultDate?: string
+  /** Estado con el que arranca una pieza nueva; sin él, 'idea'. El Banco de
+   *  contenido crea sus ideas ya archivadas. */
+  defaultStatus?: ParrillaStatus
   editors: ParrillaEditor[]
   onClose: () => void
 }
@@ -194,10 +219,16 @@ interface ParrillaPostFormProps {
 /** Se monta una vez por apertura del modal (el diálogo lo renderiza dentro de
  *  su contenido, que Radix desmonta al cerrar) — por eso no hay un efecto que
  *  "resetee" el estado al abrir: el estado inicial ya es el correcto. */
-export function ParrillaPostForm({ post, defaultDate, editors, onClose }: ParrillaPostFormProps) {
+export function ParrillaPostForm({
+  post,
+  defaultDate,
+  defaultStatus,
+  editors,
+  onClose,
+}: ParrillaPostFormProps) {
   const router = useRouter()
   const [state, setState] = useState<FormState>(() => {
-    const start = initialFields(post, defaultDate)
+    const start = initialFields(post, defaultDate, defaultStatus)
     return {
       form: start,
       base: start,
@@ -217,8 +248,13 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conflicts, setConflicts] = useState<EditableKey[]>([])
+  // La fecha de publicación que tenía la pieza antes de archivarla: si se
+  // arrepiente y la saca del archivo, vuelve esa y no una inventada.
+  const stashedPublishDate = useRef<string | null>(null)
 
   const { form } = state
+  const archived = isArchived(form.status)
+  const isHidden = (section: ParrillaSection) => form.hidden_sections.includes(section)
   const ready = !post || state.detail === 'ready'
 
   useEffect(() => {
@@ -259,11 +295,41 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
     setState((prev) => ({ ...prev, form: { ...prev.form, [key]: value } }))
   }
 
+  /** Archivar borra la fecha de publicación (el Banco de contenido no tiene
+   *  fechas); sacarla del archivo la restaura — la anterior si la hay, si no la
+   *  de producción, igual que al crear — porque sin fecha no puede salir. */
+  function changeStatus(next: ParrillaStatus) {
+    if (isArchived(next)) {
+      if (form.publish_date) stashedPublishDate.current = form.publish_date
+      setState((prev) => ({
+        ...prev,
+        form: { ...prev.form, status: next, publish_date: null },
+      }))
+      return
+    }
+
+    const restored = stashedPublishDate.current ?? form.production_date
+    setState((prev) => ({
+      ...prev,
+      form: { ...prev.form, status: next, publish_date: prev.form.publish_date ?? restored },
+    }))
+  }
+
   function togglePlatform(platform: Platform) {
     setState((prev) => {
       const list = prev.form.platforms
       const next = list.includes(platform) ? list.filter((p) => p !== platform) : [...list, platform]
       return { ...prev, form: { ...prev.form, platforms: next } }
+    })
+  }
+
+  /** El ojo de una sección. Cambia el formulario como cualquier otro campo:
+   *  se guarda con «Guardar cambios». Ocultar no toca el contenido. */
+  function toggleSection(section: ParrillaSection) {
+    setState((prev) => {
+      const list = prev.form.hidden_sections
+      const next = list.includes(section) ? list.filter((s) => s !== section) : [...list, section]
+      return { ...prev, form: { ...prev.form, hidden_sections: next } }
     })
   }
 
@@ -446,24 +512,32 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
               type="date"
               value={form.production_date}
               onChange={(e) => setField('production_date', e.target.value)}
-              wrapperClassName="text-center"
+              wrapperClassName={archived ? 'col-span-2 text-center' : 'text-center'}
               className="text-left"
               required
             />
-            <BrandField
-              id="parrilla-publish-date"
-              label="Fecha de publicación"
-              type="date"
-              value={form.publish_date}
-              onChange={(e) => setField('publish_date', e.target.value)}
-              // Publicar antes de producir no tiene sentido: el navegador lo marca
-              // al instante (el servidor valida igual).
-              min={form.production_date}
-              wrapperClassName="text-center"
-              className="text-left"
-              required
-            />
+            {!archived && (
+              <BrandField
+                id="parrilla-publish-date"
+                label="Fecha de publicación"
+                type="date"
+                value={form.publish_date ?? ''}
+                onChange={(e) => setField('publish_date', e.target.value)}
+                // Publicar antes de producir no tiene sentido: el navegador lo marca
+                // al instante (el servidor valida igual).
+                min={form.production_date}
+                wrapperClassName="text-center"
+                className="text-left"
+                required
+              />
+            )}
           </div>
+          {archived && (
+            <p className="text-center text-xs text-muted-foreground">
+              Al archivar se quita la fecha de publicación. La idea queda guardada en el Banco de
+              contenido.
+            </p>
+          )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col items-center gap-1.5 text-center">
@@ -473,7 +547,7 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
               <select
                 id="parrilla-status"
                 value={form.status}
-                onChange={(e) => setField('status', e.target.value as ParrillaStatus)}
+                onChange={(e) => changeStatus(e.target.value as ParrillaStatus)}
                 className="modal-field"
               >
                 {PARRILLA_STATUSES.map((s) => (
@@ -535,6 +609,32 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
             />
           )}
 
+          {showsInspiration(form.format) && (
+            <ToggleableSection
+              id="parrilla-inspiration"
+              label={PARRILLA_SECTION_LABELS.inspiracion}
+              hidden={isHidden('inspiracion')}
+              hasContent={sectionHasContent(form, 'inspiracion')}
+              onToggle={() => toggleSection('inspiracion')}
+            >
+              <BrandField
+                id="parrilla-inspiration"
+                label={PARRILLA_SECTION_LABELS.inspiracion}
+                hideLabel
+                type="url"
+                value={form.inspiration_url ?? ''}
+                onChange={(e) => setField('inspiration_url', e.target.value)}
+                placeholder="https://… enlace de referencia"
+                // Un enlace no es prosa: sin mayúscula inicial ni autocorrección
+                // en iPad. BrandField dibuja el atajo "Abrir enlace" por sí solo.
+                autoCapitalize="none"
+                spellCheck={false}
+                wrapperClassName="text-center"
+                className="text-left"
+              />
+            </ToggleableSection>
+          )}
+
           {showsFilmmaker(form.format, form.category) && (
             <TeamPicker
               label="Filmmaker(es)"
@@ -551,40 +651,7 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
             onToggle={(id) => toggleTeam('editor_ids', id)}
           />
 
-          {ready ? (
-            <>
-              <CollapsibleTextarea
-                id="parrilla-guion"
-                label="Guion"
-                value={form.copy_text ?? ''}
-                onChange={(value) => setField('copy_text', value)}
-                expanded={guionExpanded}
-                onExpandedChange={setGuionExpanded}
-                placeholder="Hook, cuerpo, tiempos y dirección — todo el guion cabe acá…"
-                emptyLabel="Agregar guion…"
-              />
-
-              <CollapsibleTextarea
-                id="parrilla-caption"
-                label="Copy del post"
-                value={form.caption ?? ''}
-                onChange={(value) => setField('caption', value)}
-                expanded={captionExpanded}
-                onExpandedChange={setCaptionExpanded}
-                placeholder="Texto, hashtags y llamado a la acción que acompañan la publicación…"
-                emptyLabel="Agregar copy…"
-              />
-
-              <div className="space-y-1.5 text-center">
-                <span className="modal-label">Foto de portada</span>
-                <ParrillaMediaUpload
-                  coverImageUrl={form.cover_image_url ?? ''}
-                  onUploaded={(url) => setField('cover_image_url', url)}
-                  onCleared={() => setField('cover_image_url', null)}
-                />
-              </div>
-            </>
-          ) : state.detail === 'error' ? (
+          {state.detail === 'error' ? (
             <div className="space-y-2 text-center">
               <p role="alert" className="text-sm text-red-500">
                 {state.loadError}
@@ -598,10 +665,75 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
               </button>
             </div>
           ) : (
+            // Las cabeceras (título + ojo) no esperan al detalle: el estado de
+            // «oculta» viaja en el listado, así que una sección oculta no
+            // parpadea abierta. Solo el cuerpo muestra esqueleto mientras carga.
             <>
-              <FieldSkeleton label="Guion" />
-              <FieldSkeleton label="Copy del post" />
-              <FieldSkeleton label="Foto de portada" className="h-[120px] w-full rounded-xl" />
+              <ToggleableSection
+                id="parrilla-guion"
+                label={PARRILLA_SECTION_LABELS.guion}
+                hidden={isHidden('guion')}
+                hasContent={ready && sectionHasContent(form, 'guion')}
+                onToggle={() => toggleSection('guion')}
+              >
+                {ready ? (
+                  <CollapsibleTextarea
+                    id="parrilla-guion"
+                    label={PARRILLA_SECTION_LABELS.guion}
+                    hideLabel
+                    value={form.copy_text ?? ''}
+                    onChange={(value) => setField('copy_text', value)}
+                    expanded={guionExpanded}
+                    onExpandedChange={setGuionExpanded}
+                    placeholder="Hook, cuerpo, tiempos y dirección — todo el guion cabe acá…"
+                    emptyLabel="Agregar guion…"
+                  />
+                ) : (
+                  <FieldSkeleton />
+                )}
+              </ToggleableSection>
+
+              <ToggleableSection
+                id="parrilla-caption"
+                label={PARRILLA_SECTION_LABELS.copy}
+                hidden={isHidden('copy')}
+                hasContent={ready && sectionHasContent(form, 'copy')}
+                onToggle={() => toggleSection('copy')}
+              >
+                {ready ? (
+                  <CollapsibleTextarea
+                    id="parrilla-caption"
+                    label={PARRILLA_SECTION_LABELS.copy}
+                    hideLabel
+                    value={form.caption ?? ''}
+                    onChange={(value) => setField('caption', value)}
+                    expanded={captionExpanded}
+                    onExpandedChange={setCaptionExpanded}
+                    placeholder="Texto, hashtags y llamado a la acción que acompañan la publicación…"
+                    emptyLabel="Agregar copy…"
+                  />
+                ) : (
+                  <FieldSkeleton />
+                )}
+              </ToggleableSection>
+
+              <ToggleableSection
+                id="parrilla-portada"
+                label={PARRILLA_SECTION_LABELS.portada}
+                hidden={isHidden('portada')}
+                hasContent={ready && sectionHasContent(form, 'portada')}
+                onToggle={() => toggleSection('portada')}
+              >
+                {ready ? (
+                  <ParrillaMediaUpload
+                    coverImageUrl={form.cover_image_url ?? ''}
+                    onUploaded={(url) => setField('cover_image_url', url)}
+                    onCleared={() => setField('cover_image_url', null)}
+                  />
+                ) : (
+                  <FieldSkeleton className="h-[120px] w-full rounded-xl" />
+                )}
+              </ToggleableSection>
             </>
           )}
         </div>
@@ -641,7 +773,13 @@ export function ParrillaPostForm({ post, defaultDate, editors, onClose }: Parril
               className="ml-auto w-auto"
               disabled={submitting || !ready}
             >
-              {submitting ? 'Guardando…' : post ? 'Guardar cambios' : 'Crear publicación'}
+              {submitting
+                ? 'Guardando…'
+                : post
+                  ? 'Guardar cambios'
+                  : defaultStatus === 'archivado'
+                    ? 'Guardar idea'
+                    : 'Crear publicación'}
             </BrandButton>
           </div>
         </div>

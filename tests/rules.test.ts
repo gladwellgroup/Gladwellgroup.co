@@ -10,7 +10,9 @@ import {
   isUuid,
   mergeLatest,
   normalizeFields,
+  sectionHasContent,
   showsFilmmaker,
+  showsInspiration,
   showsTalent,
   type EditableFields,
 } from '@/lib/parrilla/rules'
@@ -31,6 +33,8 @@ function fields(overrides: Partial<EditableFields> = {}): EditableFields {
     format: 'video',
     cover_image_url: null,
     talent: null,
+    inspiration_url: null,
+    hidden_sections: [],
     filmmaker_ids: [],
     editor_ids: [],
     category: 'crecer',
@@ -44,6 +48,13 @@ describe('qué campos aplican', () => {
     assert.equal(showsTalent('imagen'), false)
     assert.equal(showsTalent('carrusel'), false)
     assert.equal(showsTalent(null), false)
+  })
+
+  test('Inspiración solo en video', () => {
+    assert.equal(showsInspiration('video'), true)
+    assert.equal(showsInspiration('imagen'), false)
+    assert.equal(showsInspiration('carrusel'), false)
+    assert.equal(showsInspiration(null), false)
   })
 
   test('Filmmaker: video siempre, con cualquier categoría o sin ella', () => {
@@ -67,6 +78,32 @@ describe('qué campos aplican', () => {
   })
 })
 
+describe('sectionHasContent (la marca «con contenido» de una sección oculta)', () => {
+  test('cada sección mira su propia columna', () => {
+    assert.equal(sectionHasContent(fields({ inspiration_url: 'https://x.com/a' }), 'inspiracion'), true)
+    assert.equal(sectionHasContent(fields({ copy_text: 'Hook…' }), 'guion'), true)
+    assert.equal(sectionHasContent(fields({ caption: '#gladwell' }), 'copy'), true)
+    assert.equal(sectionHasContent(fields({ cover_image_url: 'https://x.com/p.jpg' }), 'portada'), true)
+  })
+
+  test('el contenido de una sección no cuenta para las otras', () => {
+    const solo = fields({ copy_text: 'Solo guion' })
+    assert.equal(sectionHasContent(solo, 'guion'), true)
+    for (const otra of ['inspiracion', 'copy', 'portada'] as const) {
+      assert.equal(sectionHasContent(solo, otra), false, otra)
+    }
+  })
+
+  test('null, vacío y solo espacios son lo mismo: sin contenido', () => {
+    for (const value of [null, '', '   ', '\n\t']) {
+      const vacia = fields({ inspiration_url: value, copy_text: value, caption: value, cover_image_url: value })
+      for (const section of ['inspiracion', 'guion', 'copy', 'portada'] as const) {
+        assert.equal(sectionHasContent(vacia, section), false, `${JSON.stringify(value)} → ${section}`)
+      }
+    }
+  })
+})
+
 describe('normalizeFields', () => {
   test('limpia Responsable en cámara cuando el formato no es video', () => {
     assert.equal(normalizeFields(fields({ format: 'imagen', talent: 'Ana' })).talent, null)
@@ -75,6 +112,20 @@ describe('normalizeFields', () => {
 
   test('conserva (recortado) el Responsable en cámara en video', () => {
     assert.equal(normalizeFields(fields({ format: 'video', talent: '  Ana  ' })).talent, 'Ana')
+  })
+
+  test('limpia la Inspiración cuando el formato no es video', () => {
+    const link = 'https://www.instagram.com/reel/abc123/'
+    assert.equal(normalizeFields(fields({ format: 'imagen', inspiration_url: link })).inspiration_url, null)
+    assert.equal(normalizeFields(fields({ format: 'carrusel', inspiration_url: link })).inspiration_url, null)
+    assert.equal(normalizeFields(fields({ format: null, inspiration_url: link })).inspiration_url, null)
+  })
+
+  test('conserva (recortada) la Inspiración en video; en blanco pasa a null', () => {
+    const link = 'https://www.instagram.com/reel/abc123/'
+    assert.equal(normalizeFields(fields({ format: 'video', inspiration_url: `  ${link}  ` })).inspiration_url, link)
+    assert.equal(normalizeFields(fields({ format: 'video', inspiration_url: '   ' })).inspiration_url, null)
+    assert.equal(normalizeFields(fields({ format: 'video', inspiration_url: '' })).inspiration_url, null)
   })
 
   test('limpia Filmmaker cuando la combinación lo oculta', () => {
@@ -99,6 +150,17 @@ describe('normalizeFields', () => {
     const out = normalizeFields(fields({ title: '  Hola  ', caption: '  #gladwell  ' }))
     assert.equal(out.title, 'Hola')
     assert.equal(out.caption, '#gladwell')
+  })
+
+  test('archivar borra la fecha de publicación; en cualquier otro estado se conserva', () => {
+    assert.equal(
+      normalizeFields(fields({ status: 'archivado', publish_date: '2026-10-20' })).publish_date,
+      null
+    )
+    assert.equal(
+      normalizeFields(fields({ status: 'programado', publish_date: '2026-10-20' })).publish_date,
+      '2026-10-20'
+    )
   })
 
   test('no modifica el objeto original', () => {
@@ -164,6 +226,10 @@ describe('fechas', () => {
     assert.equal(datesInOrder('2026-10-16', '2026-10-15'), false)
     assert.equal(datesInOrder('2026-12-31', '2027-01-01'), true)
   })
+
+  test('sin fecha de publicación (pieza archivada) no hay orden que romper', () => {
+    assert.equal(datesInOrder('2026-10-16', null), true)
+  })
 })
 
 describe('isUuid', () => {
@@ -188,6 +254,15 @@ describe('diffPost', () => {
     const base = fields({ platforms: ['instagram', 'linkedin'], editor_ids: [UID_A, UID_B] })
     const mine = fields({ platforms: ['linkedin', 'instagram'], editor_ids: [UID_B, UID_A] })
     assert.deepEqual(diffPost(base, mine), {})
+  })
+
+  test('ocultar o mostrar una sección es un cambio; el orden de las ocultas no', () => {
+    assert.deepEqual(diffPost(fields(), fields({ hidden_sections: ['guion'] })), { hidden_sections: ['guion'] })
+    assert.deepEqual(diffPost(fields({ hidden_sections: ['guion'] }), fields()), { hidden_sections: [] })
+    assert.deepEqual(
+      diffPost(fields({ hidden_sections: ['guion', 'portada'] }), fields({ hidden_sections: ['portada', 'guion'] })),
+      {}
+    )
   })
 
   test('agregar a una lista sí es un cambio', () => {
@@ -241,6 +316,25 @@ describe('mergeLatest', () => {
     const { merged, conflicts } = mergeLatest(fields(), fields(), latest)
     assert.deepEqual(merged, latest)
     assert.deepEqual(conflicts, [])
+  })
+
+  test('dos personas que ocultan secciones distintas: conflicto, gana la de quien guarda', () => {
+    const base = fields()
+    const mine = fields({ hidden_sections: ['guion'] })
+    const latest = fields({ hidden_sections: ['portada'] })
+    const { merged, conflicts } = mergeLatest(base, mine, latest)
+    assert.deepEqual(conflicts, ['hidden_sections'])
+    assert.deepEqual(merged.hidden_sections, ['guion'])
+  })
+
+  test('si otra persona ocultó una sección y yo toqué otro campo, adopto lo suyo', () => {
+    const base = fields()
+    const mine = fields({ title: 'Mi título' })
+    const latest = fields({ hidden_sections: ['copy'] })
+    const { merged, conflicts } = mergeLatest(base, mine, latest)
+    assert.deepEqual(conflicts, [])
+    assert.deepEqual(merged.hidden_sections, ['copy'])
+    assert.equal(merged.title, 'Mi título')
   })
 
   test('las listas se comparan como conjuntos', () => {

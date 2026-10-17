@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { ParrillaEditor, ParrillaPostSummary } from '@/lib/parrilla/posts'
+import type { ParrillaEditor, ParrillaPostSummary, ParrillaStatus } from '@/lib/parrilla/posts'
 
 interface ParrillaPostDialogProps {
   open: boolean
@@ -19,6 +19,9 @@ interface ParrillaPostDialogProps {
    *  pide el detalle (Guion, Copy, portada) al abrirse. */
   post: ParrillaPostSummary | null
   defaultDate?: string
+  /** Estado con el que arranca una pieza nueva. 'archivado' = una idea para el
+   *  Banco de contenido: cambia el título del modal y el botón de guardar. */
+  defaultStatus?: ParrillaStatus
   editors: ParrillaEditor[]
 }
 
@@ -36,8 +39,11 @@ export function ParrillaPostDialog({
   onOpenChange,
   post,
   defaultDate,
+  defaultStatus,
   editors,
 }: ParrillaPostDialogProps) {
+  const newIdea = !post && defaultStatus === 'archivado'
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -55,11 +61,15 @@ export function ParrillaPostDialog({
         }}
       >
         <DialogHeader className="shrink-0 border-b border-border/60 px-6 pb-3 pt-6 text-center sm:text-center">
-          <DialogTitle>{post ? 'Editar publicación' : 'Nueva publicación'}</DialogTitle>
+          <DialogTitle>
+            {post ? 'Editar publicación' : newIdea ? 'Nueva idea' : 'Nueva publicación'}
+          </DialogTitle>
           <DialogDescription className="sr-only">
             {post
               ? 'Edita los datos de la publicación y guarda los cambios.'
-              : 'Completa los datos de la nueva publicación.'}
+              : newIdea
+                ? 'Completa los datos de la nueva idea para guardarla en el Banco de contenido.'
+                : 'Completa los datos de la nueva publicación.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -67,6 +77,7 @@ export function ParrillaPostDialog({
           key={post?.id ?? `new-${defaultDate ?? ''}`}
           post={post}
           defaultDate={defaultDate}
+          defaultStatus={defaultStatus}
           editors={editors}
           onClose={() => onOpenChange(false)}
         />

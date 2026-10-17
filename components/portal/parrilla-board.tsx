@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Instagram, Linkedin, Youtube } from 'lucide-react'
+import { ParrillaBank } from '@/components/portal/parrilla-bank'
 import { ParrillaCalendar } from '@/components/portal/parrilla-calendar'
+import { PLATFORM_ICONS } from '@/components/portal/parrilla-shared'
 import {
   DATE_FIELD_LABELS,
   PARRILLA_CATEGORIES,
@@ -20,15 +21,59 @@ type CategoryFilterValue = ParrillaCategory | 'todas'
 
 const DATE_FIELDS: ParrillaDateField[] = ['production_date', 'publish_date']
 
-const PLATFORM_ICONS: Record<Platform, typeof Instagram> = {
-  instagram: Instagram,
-  linkedin: Linkedin,
-  youtube: Youtube,
+/** Control segmentado de la página: el mismo aspecto para elegir qué se ve
+ *  (Calendario / Banco) y qué fecha organiza el calendario (Producción /
+ *  Publicación). */
+function PillTabs<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: { value: T; label: string; count?: number }[]
+  value: T
+  onChange: (value: T) => void
+  ariaLabel?: string
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="inline-flex rounded-full border border-border bg-muted/30 p-1"
+    >
+      {options.map((option) => {
+        const active = option.value === value
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            aria-pressed={active}
+            className={`flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition-colors pointer-coarse:min-h-11 pointer-coarse:px-6 ${
+              active
+                ? 'bg-[#7C3AED] text-white shadow-[0_0_20px_rgba(124,58,237,0.35)]'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {option.label}
+            {option.count !== undefined && (
+              <span className="tabular-nums opacity-70">{option.count}</span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
-/** El control más importante de la página — decide qué fecha organiza TODO
- *  el calendario, no es un filtro más — por eso lleva su propia leyenda y
- *  más peso visual que los chips de plataforma/categoría de abajo.
+const DATE_FIELD_OPTIONS = DATE_FIELDS.map((field) => ({
+  value: field,
+  label: DATE_FIELD_LABELS[field],
+}))
+
+/** El control más importante del calendario — decide qué fecha lo organiza
+ *  TODO, no es un filtro más — por eso lleva su propia leyenda y más peso
+ *  visual que los chips de plataforma/categoría de abajo.
  *  `self-center` no servía de nada acá: el padre (`space-y-4`) no es un
  *  contenedor flex, así que ese alineamiento nunca se aplicaba y el control
  *  quedaba pegado a la izquierda mientras todo lo demás sí se centraba. */
@@ -44,26 +89,7 @@ function ViewTabs({
       <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
         Ver calendario por
       </span>
-      <div className="inline-flex rounded-full border border-border bg-muted/30 p-1">
-        {DATE_FIELDS.map((field) => {
-          const active = field === value
-          return (
-            <button
-              key={field}
-              type="button"
-              onClick={() => onChange(field)}
-              aria-pressed={active}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors pointer-coarse:min-h-11 pointer-coarse:px-6 ${
-                active
-                  ? 'bg-[#7C3AED] text-white shadow-[0_0_20px_rgba(124,58,237,0.35)]'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {DATE_FIELD_LABELS[field]}
-            </button>
-          )
-        })}
-      </div>
+      <PillTabs options={DATE_FIELD_OPTIONS} value={value} onChange={onChange} />
     </div>
   )
 }
@@ -186,19 +212,32 @@ interface ParrillaBoardProps {
   editors: ParrillaEditor[]
 }
 
-/** Orquesta las dos vistas del mismo calendario (producción / publicación) y
- *  los filtros por plataforma y categoría — ParrillaCalendar sigue siendo
- *  "tonta": solo sabe dibujar `posts` según la fecha (`dateField`) que le
- *  pasen. */
+type BoardView = 'calendario' | 'banco'
+
+/** Orquesta el calendario (con sus dos vistas, producción / publicación), el
+ *  Banco de contenido y los filtros por plataforma y categoría, que aplican a
+ *  la pestaña activa. ParrillaCalendar y ParrillaBank siguen siendo "tontos":
+ *  solo dibujan los `posts` que les pasen. Lo archivado vive en el Banco y no
+ *  en el calendario: no tiene fecha de publicación. */
 export function ParrillaBoard({ posts, editors }: ParrillaBoardProps) {
+  const [view, setView] = useState<BoardView>('calendario')
   const [dateField, setDateField] = useState<ParrillaDateField>('publish_date')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilterValue>('todas')
 
+  const { scheduled, archived } = useMemo(() => {
+    const scheduled: ParrillaPostSummary[] = []
+    const archived: ParrillaPostSummary[] = []
+    for (const post of posts) (post.status === 'archivado' ? archived : scheduled).push(post)
+    return { scheduled, archived }
+  }, [posts])
+
+  const scoped = view === 'banco' ? archived : scheduled
+
   const platformFiltered = useMemo(() => {
-    if (selectedPlatforms.length === 0) return posts
-    return posts.filter((p) => p.platforms.some((pl) => selectedPlatforms.includes(pl)))
-  }, [posts, selectedPlatforms])
+    if (selectedPlatforms.length === 0) return scoped
+    return scoped.filter((p) => p.platforms.some((pl) => selectedPlatforms.includes(pl)))
+  }, [scoped, selectedPlatforms])
 
   const filteredPosts = useMemo(() => {
     if (categoryFilter === 'todas') return platformFiltered
@@ -211,17 +250,41 @@ export function ParrillaBoard({ posts, editors }: ParrillaBoardProps) {
     )
   }
 
+  // Los filtros se limpian al cambiar de pestaña: una categoría sin piezas en
+  // la otra pestaña dejaría la lista vacía y, con menos de dos categorías, sin
+  // el chip para quitar el filtro.
+  function changeView(next: BoardView) {
+    setView(next)
+    setSelectedPlatforms([])
+    setCategoryFilter('todas')
+  }
+
   return (
     <div className="space-y-4">
-      <ViewTabs value={dateField} onChange={setDateField} />
+      <div className="flex justify-center">
+        <PillTabs
+          ariaLabel="Parrilla"
+          options={[
+            { value: 'calendario', label: 'Calendario', count: scheduled.length },
+            { value: 'banco', label: 'Banco de contenido', count: archived.length },
+          ]}
+          value={view}
+          onChange={changeView}
+        />
+      </div>
+      {view === 'calendario' && <ViewTabs value={dateField} onChange={setDateField} />}
       <PlatformFilter
-        posts={posts}
+        posts={scoped}
         selected={selectedPlatforms}
         onToggle={togglePlatform}
         onClear={() => setSelectedPlatforms([])}
       />
       <CategoryFilter posts={platformFiltered} value={categoryFilter} onChange={setCategoryFilter} />
-      <ParrillaCalendar posts={filteredPosts} dateField={dateField} editors={editors} />
+      {view === 'calendario' ? (
+        <ParrillaCalendar posts={filteredPosts} dateField={dateField} editors={editors} />
+      ) : (
+        <ParrillaBank posts={filteredPosts} total={archived.length} editors={editors} />
+      )}
     </div>
   )
 }

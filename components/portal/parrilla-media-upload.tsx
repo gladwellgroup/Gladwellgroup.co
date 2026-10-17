@@ -2,13 +2,74 @@
 
 import { useRef, useState } from 'react'
 import { ImagePlus, X } from 'lucide-react'
+import { COVER_DEFAULT_RATIO, coverRatio } from '@/lib/parrilla/cover'
 import { IMAGE_ACCEPT, uploadImage } from '@/lib/storage/upload-image'
+import { cn } from '@/lib/utils'
 
 interface ParrillaMediaUploadProps {
   coverImageUrl: string
   onUploaded: (url: string) => void
   onCleared: () => void
   disabled?: boolean
+}
+
+/** Altura máxima de la portada en el modal: una foto vertical (reel, story) a
+ *  todo el ancho ocuparía más que la pantalla. `dvh` y no `vh`: `vh` ignora las
+ *  barras del navegador del iPad. */
+const COVER_MAX_HEIGHT = 'min(60dvh, 32rem)'
+
+/** La portada, en su propia proporción: un reel (9:16), el feed de Instagram
+ *  (4:5 o 1:1), un post de LinkedIn (1,91:1) o un video horizontal (16:9) se ven
+ *  completos, sin recorte. El contenedor toma la forma de la foto, centrado, y
+ *  una vertical se queda en el alto máximo en vez de crecer sin límite.
+ *
+ *  La proporción se conoce al cargar la foto: hasta entonces se reserva un 16:9
+ *  con el barrido de carga. El `key` de quien lo usa reinicia el estado si la
+ *  foto cambia. */
+function CoverPreview({ url, onClear }: { url: string; onClear?: () => void }) {
+  const [ratio, setRatio] = useState<number | null>(null)
+  const loaded = ratio !== null
+  const shown = ratio ?? COVER_DEFAULT_RATIO
+
+  return (
+    <div
+      className={cn(
+        'relative mx-auto overflow-hidden rounded-xl border border-border',
+        loaded ? 'bg-muted/30' : 'skeleton-shimmer'
+      )}
+      style={{
+        aspectRatio: shown,
+        width: loaded ? `min(100%, calc(${COVER_MAX_HEIGHT} * ${shown}))` : '100%',
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt=""
+        // `contain` y no `cover`: con la proporción exacta no sobra nada, y en los
+        // extremos (más allá del tope) la foto se ve entera en vez de recortada.
+        className={cn('h-full w-full object-contain', !loaded && 'opacity-0')}
+        onLoad={(event) =>
+          setRatio(
+            coverRatio(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight) ??
+              COVER_DEFAULT_RATIO
+          )
+        }
+        // Una foto rota no deja el barrido girando para siempre.
+        onError={() => setRatio(COVER_DEFAULT_RATIO)}
+      />
+      {onClear && (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Quitar foto de portada"
+          className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70 pointer-coarse:h-11 pointer-coarse:w-11"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  )
 }
 
 /** Solo foto de portada — el video real (si lo hay) vive en la red social
@@ -45,20 +106,11 @@ export function ParrillaMediaUpload({
   return (
     <div className="space-y-2">
       {coverImageUrl ? (
-        <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-muted/30">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={coverImageUrl} alt="" className="h-full w-full object-cover" />
-          {!disabled && (
-            <button
-              type="button"
-              onClick={onCleared}
-              aria-label="Quitar foto de portada"
-              className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70 pointer-coarse:h-11 pointer-coarse:w-11"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        <CoverPreview
+          key={coverImageUrl}
+          url={coverImageUrl}
+          onClear={disabled ? undefined : onCleared}
+        />
       ) : (
         <button
           type="button"
