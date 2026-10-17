@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/api'
+import { archivedSessionError } from '@/lib/deliverables/archived'
 import { deliverableSessionSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
 import { toDeliverableContent } from '@/lib/therapy/deliverable-render'
@@ -56,6 +57,11 @@ export async function POST(request: NextRequest) {
       { error: 'Solo el moderador o un super administrador pueden reenviar' },
       { status: 403 }
     )
+  }
+
+  const archived = archivedSessionError(access.session.status)
+  if (archived) {
+    return NextResponse.json({ error: archived }, { status: 403 })
   }
 
   const resendKey = process.env.RESEND_API_KEY

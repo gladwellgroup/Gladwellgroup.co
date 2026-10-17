@@ -19,6 +19,7 @@ const MOBILE_ORDER: Record<BucketFilter, string> = {
   programada: 'order-3',
   todas: 'order-4',
   generado: 'order-5',
+  archivado: 'order-6',
 }
 
 /** Chips de estado sobre el listado. Usa `bucketSession`, el mismo helper del

@@ -3,9 +3,9 @@ import { AlertTriangle } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
 import {
   CRITICAL_AFTER_DAYS,
-  PIPELINE_BUCKETS,
+  LIFECYCLE_BUCKETS,
   PIPELINE_LABELS,
-  type PipelineBucket,
+  type LifecycleBucket,
 } from '@/lib/deliverables/pipeline'
 
 export interface BucketCount {
@@ -16,7 +16,8 @@ export interface BucketCount {
   staleDays: number | null
 }
 
-export type PipelineCounts = Record<PipelineBucket, BucketCount>
+/** Sin `archivado`: lo archivado salió del ciclo de vida, no se cuenta. */
+export type PipelineCounts = Record<LifecycleBucket, BucketCount>
 
 /** Enlaces al listado de cada programa, ya filtrado por la casilla. */
 interface PipelineLinks {
@@ -29,7 +30,7 @@ function Card({
   count,
   links,
 }: {
-  bucket: PipelineBucket
+  bucket: LifecycleBucket
   count: BucketCount
   links: PipelineLinks
 }) {
@@ -99,7 +100,7 @@ export function DeliverablesPipeline({
     // rectángulos apilados obligaban a desplazarse para ver el ciclo completo
     // — y el pipeline solo cuenta su historia si se ve de una sola mirada.
     <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-      {PIPELINE_BUCKETS.map((bucket) => (
+      {LIFECYCLE_BUCKETS.map((bucket) => (
         <Card
           key={bucket}
           bucket={bucket}

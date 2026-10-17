@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/api'
+import { archivedSessionError } from '@/lib/deliverables/archived'
 import { generateDeliverableSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
 
@@ -43,6 +44,11 @@ export async function POST(request: NextRequest) {
       { error: 'Solo el moderador o un super administrador pueden crear el entregable' },
       { status: 403 }
     )
+  }
+
+  const archived = archivedSessionError(access.session.status)
+  if (archived) {
+    return NextResponse.json({ error: archived }, { status: 403 })
   }
 
   if (access.session.status === 'entregado') {

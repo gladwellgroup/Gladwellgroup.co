@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/api'
+import { archivedSessionError } from '@/lib/deliverables/archived'
 import { educationSessionRefSchema } from '@/lib/validations/education'
 import { resolveEducationAccess } from '@/lib/education/session-access'
 import { loadEducationContentSource } from '@/lib/education/content'
@@ -49,6 +50,11 @@ export async function POST(request: NextRequest) {
       { error: access.error ?? 'Sin permisos' },
       { status: access.statusCode ?? 403 }
     )
+  }
+
+  const archived = archivedSessionError(access.session.status)
+  if (archived) {
+    return NextResponse.json({ error: archived }, { status: 403 })
   }
 
   const resendKey = process.env.RESEND_API_KEY

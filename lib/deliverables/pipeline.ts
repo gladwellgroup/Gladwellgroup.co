@@ -6,14 +6,22 @@ import { parseDateOnly } from '@/lib/date'
  *
  *  `programada` no es un valor de la columna `status` — se deriva de que la
  *  fecha de la sesión todavía no llegó. Eso evita un estado que alguien tenga
- *  que mover a mano: la sesión pasa sola a borrador cuando llega el día. */
-export const PIPELINE_BUCKETS = [
+ *  que mover a mano: la sesión pasa sola a borrador cuando llega el día.
+ *
+ *  `archivado` sí es un valor de `status`, pero solo se asigna desde Supabase:
+ *  el portal no ofrece ningún control para archivar ni para desarchivar. Saca
+ *  la sesión del ciclo de vida — el dashboard no la cuenta ni la marca como
+ *  estancada — pero sigue visible en los listados y el calendario. */
+export const LIFECYCLE_BUCKETS = [
   'programada',
   'borrador',
   'generado',
   'entregado',
 ] as const
 
+export const PIPELINE_BUCKETS = [...LIFECYCLE_BUCKETS, 'archivado'] as const
+
+export type LifecycleBucket = (typeof LIFECYCLE_BUCKETS)[number]
 export type PipelineBucket = (typeof PIPELINE_BUCKETS)[number]
 
 export const PIPELINE_LABELS: Record<PipelineBucket, string> = {
@@ -21,6 +29,7 @@ export const PIPELINE_LABELS: Record<PipelineBucket, string> = {
   borrador: 'Borrador',
   generado: 'Generado',
   entregado: 'Entregado',
+  archivado: 'Archivado',
 }
 
 /** Única fuente de verdad del color del estado en toda la plataforma —
@@ -31,6 +40,7 @@ export const PIPELINE_COLORS: Record<PipelineBucket, string> = {
   borrador: 'bg-muted text-muted-foreground',
   generado: 'bg-yellow-500/15 text-yellow-500',
   entregado: 'bg-green-500/15 text-green-500',
+  archivado: 'bg-slate-500/15 text-slate-500',
 }
 
 export function isPipelineBucket(value: string): value is PipelineBucket {
@@ -45,10 +55,12 @@ export interface PipelineSession {
   session_date: string
 }
 
-/** Devuelve la casilla del pipeline. Las cuatro son exhaustivas y no se
- *  solapan: `entregado` gana siempre —por si alguna vez se envía antes de la
- *  fecha—, luego la fecha futura, y al final el estado tal cual. */
+/** Devuelve la casilla del pipeline. Son exhaustivas y no se solapan:
+ *  `archivado` gana siempre —una decisión manual no la pisa ni la fecha ni el
+ *  estado—, luego `entregado` —por si alguna vez se envía antes de la fecha—,
+ *  luego la fecha futura, y al final el estado tal cual. */
 export function bucketSession(session: PipelineSession): PipelineBucket {
+  if (session.status === 'archivado') return 'archivado'
   if (session.status === 'entregado') return 'entregado'
   if (isFutureDate(session.session_date)) return 'programada'
   return session.status === 'generado' ? 'generado' : 'borrador'

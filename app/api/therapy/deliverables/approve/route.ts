@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/api'
+import { archivedSessionError } from '@/lib/deliverables/archived'
 import { deliverableSessionSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
 import {
@@ -56,6 +57,11 @@ export async function POST(request: NextRequest) {
       { error: 'Solo el moderador o un super administrador pueden dar el visto bueno' },
       { status: 403 }
     )
+  }
+
+  const archived = archivedSessionError(access.session.status)
+  if (archived) {
+    return NextResponse.json({ error: archived }, { status: 403 })
   }
 
   if (access.session.status === 'entregado') {
@@ -217,10 +223,13 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // `in` en vez de pisar a ciegas: una sesión archivada desde Supabase no
+  // vuelve sola al ciclo de vida por haberle enviado el entregable.
   await supabase
     .from('therapy_sessions')
     .update({ status: 'entregado' })
     .eq('id', session_id)
+    .in('status', ['borrador', 'generado'])
 
   // Envío adicional, personalizado por persona, a quienes se registraron por
   // QR — separado del correo grupal de arriba, que no cambia. Es best-effort:

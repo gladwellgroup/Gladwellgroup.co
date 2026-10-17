@@ -17,7 +17,7 @@ import { CrmCard, type DashboardLead } from '@/components/portal/dashboard/crm-c
 import { ParrillaCard } from '@/components/portal/dashboard/parrilla-card'
 import { CommunityCalendarCard } from '@/components/portal/dashboard/community-calendar-card'
 import {
-  PIPELINE_BUCKETS,
+  LIFECYCLE_BUCKETS,
   STALE_AFTER_DAYS,
   bucketSession,
   daysSinceSession,
@@ -31,7 +31,7 @@ import { parseDateOnly } from '@/lib/date'
 
 function emptyCounts(): PipelineCounts {
   return Object.fromEntries(
-    PIPELINE_BUCKETS.map((b) => [
+    LIFECYCLE_BUCKETS.map((b) => [
       b,
       { terapia: 0, education: 0, staleDays: null } satisfies BucketCount,
     ])
@@ -43,6 +43,7 @@ function buildCounts(sessions: CalendarSession[]): PipelineCounts {
 
   for (const session of sessions) {
     const bucket = bucketSession(session)
+    if (bucket === 'archivado') continue
     counts[bucket][session.programa] += 1
 
     // La antigüedad solo dice algo en lo que aún no se entrega.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/api'
+import { archivedSessionError } from '@/lib/deliverables/archived'
 import { educationSessionRefSchema } from '@/lib/validations/education'
 import { resolveEducationAccess } from '@/lib/education/session-access'
 import { loadEducationContentSource } from '@/lib/education/content'
@@ -45,6 +46,11 @@ export async function POST(request: NextRequest) {
       { error: access.error ?? 'Sin permisos' },
       { status: access.statusCode ?? 403 }
     )
+  }
+
+  const archived = archivedSessionError(access.session.status)
+  if (archived) {
+    return NextResponse.json({ error: archived }, { status: 403 })
   }
 
   if (access.session.status === 'entregado') {
@@ -170,10 +176,13 @@ export async function POST(request: NextRequest) {
   // Solo se cierra la sesión cuando no queda nadie pendiente. Con envíos
   // parciales sigue en 'generado' para poder reintentar con el mismo botón.
   if (failed.length === 0) {
+    // `in` en vez de pisar a ciegas: una sesión archivada desde Supabase no
+    // vuelve sola al ciclo de vida por haberle enviado el entregable.
     await supabase
       .from('education_sessions')
       .update({ status: 'entregado' })
       .eq('id', session_id)
+      .in('status', ['borrador', 'generado'])
   }
 
   return NextResponse.json({

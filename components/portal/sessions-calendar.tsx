@@ -20,6 +20,7 @@ const DOT_BG: Record<PipelineBucket, string> = {
   borrador: 'bg-muted-foreground/50',
   generado: 'bg-yellow-500',
   entregado: 'bg-green-500',
+  archivado: 'bg-slate-500',
 }
 
 function toDateKey(d: Date): string {
