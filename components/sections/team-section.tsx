@@ -9,12 +9,12 @@ export function TeamSection() {
       <SectionDivider />
       <div className="container mx-auto px-6 relative z-10">
         <SectionHeader
-          eyebrow="Nuestro Equipo"
+          eyebrow="Fundadores"
           title="Los arquitectos de Gladwell"
           className="mb-20"
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-4xl mx-auto">
           {FOUNDERS.map((founder) => (
             <article key={founder.name} className="group text-center">
               <div className="relative w-48 h-48 mx-auto mb-6">

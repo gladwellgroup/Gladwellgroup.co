@@ -20,11 +20,4 @@ export const FOUNDERS: Founder[] = [
       "Administrador de Empresas de la Javeriana. Executive Programs Director en 30X con Andrés Bilbao. Especialista en consultoría estratégica, gestión comercial, productos digitales y construcción de marca personal.",
     image: "/images/founder-2.jpg",
   },
-  {
-    name: "Miguel Angel Martínez Valencia",
-    role: "Co-Fundador",
-    description:
-      "Docente e investigador de la Universidad Externado de Colombia. Fundador de Next Leap, empresa de automatización e IA en el sector jurídico. Especialista en gobernanza de IA, derecho tecnológico y automatización de procesos jurídicos.",
-    image: "/images/founder-3.jpg",
-  },
 ]
