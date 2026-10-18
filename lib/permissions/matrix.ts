@@ -22,6 +22,11 @@ export const PERMISSIONS = {
   'education:create': 'education:create',
   'education:deliver': 'education:deliver',
 
+  // Crear y gestionar Charlas Catárticas (nombre, foto y asistencia por QR). Se
+  // otorga vía módulo, nunca fijo en ROLE_PERMISSIONS: no hay entregable que
+  // entregar, así que no existe un `charlas:deliver`.
+  'charlas:manage': 'charlas:manage',
+
   'content:publish': 'content:publish',
   'content:read': 'content:read',
 

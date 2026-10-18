@@ -11,7 +11,7 @@ const coAdminsSchema = z.object({
 /** Reemplazo atómico del set completo de coadministradores de una sesión —
  *  da acceso total de edición (mismo trato que el moderador original en
  *  resolveDeliverableAccess). Por eso cada destino debe ya tener el módulo
- *  de Entregables · Terapia otorgado, no basta con ser community_admin. */
+ *  de Encuentros · Terapia otorgado, no basta con ser community_admin. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -61,7 +61,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            'Cada coadministrador debe ser un administrador de comunidad con el módulo de Entregables · Terapia otorgado',
+            'Cada coadministrador debe ser un administrador de comunidad con el módulo de Encuentros · Terapia otorgado',
         },
         { status: 400 }
       )

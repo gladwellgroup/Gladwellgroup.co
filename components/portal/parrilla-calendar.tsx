@@ -39,7 +39,7 @@ const MAX_VISIBLE_PER_DAY = 3
 const MAX_DOTS = 6
 
 /** Punto de color por estado — mismo criterio visual que el pipeline de
- *  Entregables (celda compacta = punto, panel/agenda = badge completo). */
+ *  Encuentros (celda compacta = punto, panel/agenda = badge completo). */
 const DOT_BG: Record<ParrillaStatus, string> = {
   idea: 'bg-muted-foreground/50',
   agendado: 'bg-[#7C3AED]',
@@ -133,7 +133,7 @@ interface ParrillaCalendarProps {
 }
 
 /** Calendario mensual de la parrilla — mismo lenguaje visual que
- *  SessionsCalendar (Entregables), pero con edición en modal en vez de
+ *  SessionsCalendar (Encuentros), pero con edición en modal en vez de
  *  navegar a una página propia.
  *
  *  La cuadrícula se ve desde `sm` (640px, iPad en vertical incluido) y tiene

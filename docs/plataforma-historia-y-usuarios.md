@@ -64,6 +64,25 @@ Una sola comunidad Gladwell en v1, organizada conceptualmente bajo los tres pila
 
 Aprobación colectiva por asistentes: **v2** (fuera de v1).
 
+### 2.4 Encuentros: Terapia, Education y Charlas Catárticas
+
+La sección **Encuentros** del portal (antes «Entregables») agrupa los espacios en vivo de la comunidad y su
+calendario común. Son tres tipos, cada uno con su módulo (se otorga por persona desde `/super/usuarios`):
+
+| Tipo | Módulo | Qué es | Entregable |
+|------|--------|--------|------------|
+| Terapia Organizacional | Encuentros · Terapia | Sesión de feedback a fundadores | Sí (PDF a la empresa invitada) |
+| Gladwell Education | Encuentros · Educación | Sesión formativa con ponente | Sí (a los asistentes registrados) |
+| Charlas Catárticas | Encuentros · Charlas Catárticas | Espacio abierto de la comunidad, sin guion | **No** |
+
+Una **Charla Catártica** es solo nombre, fecha, foto y asistencia: lo que importa es tenerlas mapeadas en el
+calendario y saber quién asistió. La asistencia se registra con un **código QR**: quien lo escanea deja su nombre
+y correo en una página pública (sin login) que muestra la foto y el nombre de la charla; el código vence a las
+24 horas y se regenera con un botón. Quien gestiona charlas ve la lista de asistentes (y puede quitar un registro
+equivocado); quien solo tiene el calendario ve cuántas personas asistieron, nunca quiénes.
+
+Las rutas viven en `/super/encuentros` y `/admin/encuentros`; las anteriores `…/entregables/…` redirigen.
+
 ---
 
 ## 3. Catálogo de usuarios (roles)
@@ -252,6 +271,8 @@ app/
 | Lead | Persona inscrita vía landing aún no integrante activo |
 | Integrante | `community_member` con acceso al portal |
 | Terapia Organizacional | Sesión con invitados; produce entregable PDF |
+| Encuentros | Sección del portal con los tres tipos de espacio en vivo y su calendario común |
+| Charla Catártica | Espacio abierto de la comunidad, sin guion ni entregable; se registra su asistencia por QR |
 | Entregable | Documento PDF con conclusiones y recomendaciones de la sesión |
 | Delegación | Asignación de un lead del super admin a un admin de comunidad |
 

@@ -3,11 +3,13 @@ import { Briefcase, ChevronRight } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
 import { parseDateOnly } from '@/lib/date'
 import type { CalendarSession } from '@/lib/deliverables/sessions'
+import { PROGRAMA_LABEL } from '@/lib/encuentros/programas'
 
 /** Para quien solo tiene el módulo de solo lectura "Calendario de
  *  sesiones" (sin administrar ningún programa) — no tiene sentido mostrarle
  *  el pipeline/atención/comunidad de Entregables, que son de quien
- *  administra. Esto es lo único relevante: qué se viene en la comunidad. */
+ *  administra. Esto es lo único relevante: qué se viene en la comunidad
+ *  (sesiones con entregable y charlas). */
 export function CommunityCalendarCard({
   sessions,
   href,
@@ -33,9 +35,7 @@ export function CommunityCalendarCard({
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{session.title}</p>
               <p className="text-xs text-muted-foreground">
-                {session.programa === 'terapia'
-                  ? 'Terapia Organizacional'
-                  : 'Gladwell Education'}
+                {PROGRAMA_LABEL[session.programa]}
               </p>
             </div>
             <p className="shrink-0 text-xs text-muted-foreground">

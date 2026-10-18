@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   // No basta con "es community_admin": si además no tiene el módulo de
-  // Entregables · Terapia otorgado, quedaría con una sesión asignada que
+  // Encuentros · Terapia otorgado, quedaría con una sesión asignada que
   // jamás puede abrir (resolveDeliverableAccess la bloquearía igual).
   const { data: moderator } = await supabase
     .from('profiles')
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   if (!moderator || !moderatorPermissions.includes('therapy:create')) {
     return NextResponse.json(
-      { error: 'El moderador debe tener el módulo Entregables · Terapia.' },
+      { error: 'El moderador debe tener el módulo Encuentros · Terapia.' },
       { status: 400 }
     )
   }

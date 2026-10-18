@@ -15,12 +15,26 @@ const nextConfig = {
     return [
       {
         source: '/super/terapia-organizacional',
-        destination: '/super/entregables',
+        destination: '/super/encuentros',
         permanent: true,
       },
       {
         source: '/admin/terapia-organizacional',
-        destination: '/admin/entregables',
+        destination: '/admin/encuentros',
+        permanent: true,
+      },
+      // La sección «Entregables» pasó a llamarse «Encuentros» (suma las charlas,
+      // que no tienen entregable). Los enlaces guardados con la ruta vieja
+      // —favoritos, el `?estado=` del dashboard— siguen llegando a su destino.
+      // `:path*` también cubre la raíz de la sección.
+      {
+        source: '/super/entregables/:path*',
+        destination: '/super/encuentros/:path*',
+        permanent: true,
+      },
+      {
+        source: '/admin/entregables/:path*',
+        destination: '/admin/encuentros/:path*',
         permanent: true,
       },
     ]

@@ -41,7 +41,7 @@ export async function resolveEducationAccess(
     ? resolvePermissionsFromGrants(profile.role as Role, profile.profile_module_grants)
     : []
 
-  // 'education:create' es el permiso que otorga el módulo Entregables ·
+  // 'education:create' es el permiso que otorga el módulo Encuentros ·
   // Educación — revocarlo debe cortar el acceso real a estas rutas, no
   // solo el ítem del menú (antes esto solo miraba el rol a secas).
   if (!profile || !permissions.includes('education:create')) {

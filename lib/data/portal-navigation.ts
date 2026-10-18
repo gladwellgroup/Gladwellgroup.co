@@ -4,7 +4,7 @@ export interface PortalNavItem {
   label: string
   icon: string
   permission?: Permission
-  /** Static href, or role-based resolver (e.g. Entregables). */
+  /** Static href, or role-based resolver (e.g. Encuentros). */
   href: string | ((role: Role) => string)
   /**
    * Si es `true`, el ítem queda fijo en la barra inferior de móvil/tablet
@@ -31,9 +31,9 @@ export const PORTAL_NAV_ITEMS: PortalNavItem[] = [
     pinnedMobile: true,
   },
   {
-    label: 'Entregables',
+    label: 'Encuentros',
     href: (role) =>
-      role === 'super_admin' ? '/super/entregables' : '/admin/entregables',
+      role === 'super_admin' ? '/super/encuentros' : '/admin/encuentros',
     icon: 'Briefcase',
     permission: 'sessions:read_community',
     pinnedMobile: true,

@@ -23,9 +23,13 @@ import {
   daysSinceSession,
 } from '@/lib/deliverables/pipeline'
 import {
+  isUpcoming,
+  loadCalendarSessions,
   loadPipelineSessions,
-  type CalendarSession,
+  type DeliverableSession,
 } from '@/lib/deliverables/sessions'
+import { loadCharlaSessions } from '@/lib/charlas/queries'
+import { PROGRAMA_LABEL, sessionHref } from '@/lib/encuentros/programas'
 import { loadParrillaPending } from '@/lib/parrilla/posts'
 import { parseDateOnly } from '@/lib/date'
 
@@ -38,7 +42,7 @@ function emptyCounts(): PipelineCounts {
   ) as PipelineCounts
 }
 
-function buildCounts(sessions: CalendarSession[]): PipelineCounts {
+function buildCounts(sessions: DeliverableSession[]): PipelineCounts {
   const counts = emptyCounts()
 
   for (const session of sessions) {
@@ -68,7 +72,7 @@ interface SessionIds {
  *  pipeline, porque aquí es donde se decide a quién avisar. */
 async function loadAttention(
   supabase: SupabaseClient,
-  sessions: CalendarSession[],
+  sessions: DeliverableSession[],
   basePath: string,
   role: string,
   ids: SessionIds
@@ -101,8 +105,7 @@ async function loadAttention(
   ])
 
   const items: AttentionItem[] = []
-  const path = (s: CalendarSession) =>
-    `${basePath}/${s.programa === 'terapia' ? 'terapia' : 'education'}/${s.id}`
+  const path = (s: DeliverableSession) => sessionHref(basePath, s)
 
   for (const row of [...(terrT.data ?? []), ...(terrE.data ?? [])]) {
     const s = byId.get(row.session_id as string)
@@ -213,18 +216,24 @@ export default async function DashboardPage() {
   const role = user.role
 
   // Cada sección del dashboard depende de su propio módulo, sin relación
-  // entre sí — un admin con CRM y Parrilla pero sin Entregables no debería
-  // ver nada de sesiones, y viceversa. `sessions:read_community` sin ningún
-  // módulo de administrar es el caso "solo puede ver el calendario, no
+  // entre sí — un admin con CRM y Parrilla pero sin Terapia ni Education no
+  // debería ver nada de sesiones, y viceversa. `sessions:read_community` sin
+  // ningún módulo de administrar es el caso "solo puede ver el calendario, no
   // administra nada" (el módulo nuevo de solo lectura).
+  //
+  // `hasEntregables` es solo Terapia y Education: son los programas con
+  // entregable, los únicos que alimentan el pipeline, «Requiere atención» y
+  // «Comunidad». Las charlas no tienen entregable; solo aportan sus próximas
+  // fechas (abajo).
   const canTherapy = user.permissions.includes('therapy:create')
   const canEducation = user.permissions.includes('education:create')
+  const canCharlas = user.permissions.includes('charlas:manage')
   const hasEntregables = canTherapy || canEducation
   const hasCalendarOnly = !hasEntregables && user.permissions.includes('sessions:read_community')
   const hasCrm = user.permissions.includes('leads:read_delegated')
   const hasParrilla = user.permissions.includes('parrilla:manage')
 
-  const basePath = role === 'super_admin' ? '/super/entregables' : '/admin/entregables'
+  const basePath = role === 'super_admin' ? '/super/encuentros' : '/admin/encuentros'
   const crmHref = role === 'super_admin' ? '/super/crm' : '/admin/leads'
   const parrillaHref = role === 'super_admin' ? '/super/parrilla' : '/admin/parrilla'
   // Si solo administra uno de los dos programas, "crear tu primera sesión"
@@ -236,9 +245,13 @@ export default async function DashboardPage() {
         ? `${basePath}/education`
         : `${basePath}/terapia`
 
-  const [sessions, communitySessions, crmLeadsResult, parrillaQueue] = await Promise.all([
+  const [sessions, charlas, communitySessions, crmLeadsResult, parrillaQueue] = await Promise.all([
     hasEntregables ? loadPipelineSessions(supabase, user, 'own') : Promise.resolve([]),
-    hasCalendarOnly ? loadPipelineSessions(supabase, user, 'all') : Promise.resolve([]),
+    // Las charlas no tienen dueño (las gestiona quien tiene el módulo): quien las
+    // gestiona ve las próximas de todas. Quien solo tiene el calendario las ve
+    // dentro de `communitySessions`.
+    hasEntregables && canCharlas ? loadCharlaSessions(supabase) : Promise.resolve([]),
+    hasCalendarOnly ? loadCalendarSessions(supabase, user) : Promise.resolve([]),
     hasCrm
       ? supabase
           .from('walking_list_leads')
@@ -270,13 +283,15 @@ export default async function DashboardPage() {
       : Promise.resolve({ personas: 0, recurrentes: 0, porQr: null as number | null }),
   ])
 
-  const proximas = sessions
-    .filter((s) => bucketSession(s) === 'programada')
+  // `isUpcoming` es la definición única de «próxima»: una sesión con entregable lo
+  // es si su fecha es posterior a hoy; una charla, hasta que termina su día.
+  const proximas = [...sessions, ...charlas]
+    .filter(isUpcoming)
     .sort((a, b) => a.session_date.localeCompare(b.session_date))
     .slice(0, 5)
 
   const proximasComunidad = communitySessions
-    .filter((s) => bucketSession(s) === 'programada')
+    .filter(isUpcoming)
     .sort((a, b) => a.session_date.localeCompare(b.session_date))
     .slice(0, 5)
 
@@ -306,7 +321,7 @@ export default async function DashboardPage() {
         (sessions.length === 0 ? (
           <BrandCard className="flex flex-col items-center gap-3 text-center">
             <p className="text-muted-foreground">
-              Aún no tienes sesiones de Entregables asignadas.
+              Aún no tienes sesiones asignadas.
             </p>
             <BrandButton asChild size="sm" className="w-auto">
               <Link href={entregablesEmptyHref}>Crear tu primera sesión</Link>
@@ -341,15 +356,13 @@ export default async function DashboardPage() {
             {proximas.map((session) => (
               <Link
                 key={session.id}
-                href={`${basePath}/${session.programa === 'terapia' ? 'terapia' : 'education'}/${session.id}`}
+                href={sessionHref(basePath, session)}
                 className="flex items-center justify-between gap-3 px-2 py-3 transition-colors hover:bg-muted/40"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{session.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {session.programa === 'terapia'
-                      ? 'Terapia Organizacional'
-                      : 'Gladwell Education'}
+                    {PROGRAMA_LABEL[session.programa]}
                   </p>
                 </div>
                 <p className="shrink-0 text-xs text-muted-foreground">

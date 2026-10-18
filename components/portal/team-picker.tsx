@@ -7,8 +7,8 @@ export interface TeamPickerOption {
 
 /** Multi-select de community_admin — usado primero en la Parrilla para
  *  Filmmaker(es)/Editor(es), y reutilizado acá para Coadministrador(es) de
- *  una sesión de Entregables. `size="lg"` sube el área de toque a 44px
- *  (mínimo recomendado por Apple HIG) para el caso de Entregables, donde
+ *  una sesión de Encuentros. `size="lg"` sube el área de toque a 44px
+ *  (mínimo recomendado por Apple HIG) para el caso de Encuentros, donde
  *  marcar a alguien es una acción de alto impacto (da acceso total de
  *  edición) — Parrilla sigue usando el tamaño compacto de siempre, sin
  *  cambios visuales. */

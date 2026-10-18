@@ -37,7 +37,7 @@ export async function resolveDeliverableAccess(
     ? resolvePermissionsFromGrants(profile.role as Role, profile.profile_module_grants)
     : []
 
-  // 'therapy:create' es el permiso que otorga el módulo Entregables ·
+  // 'therapy:create' es el permiso que otorga el módulo Encuentros ·
   // Terapia — revocarlo debe cortar el acceso real a estas rutas, no solo
   // el ítem del menú (antes esto solo miraba el rol a secas).
   if (!profile || !permissions.includes('therapy:create')) {

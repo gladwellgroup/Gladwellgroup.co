@@ -2,12 +2,22 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, GraduationCap, Users, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
-import { PipelineBadge } from '@/components/portal/pipeline-badge'
+import { ProgramaIcon } from '@/components/portal/programa-icon'
+import { SessionBadge } from '@/components/portal/session-badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { CHARLA_DOTS, bucketCharla } from '@/lib/charlas/status'
 import { bucketSession, type PipelineBucket } from '@/lib/deliverables/pipeline'
-import { parseDateOnly } from '@/lib/date'
+import { parseDateOnly, toDateKey } from '@/lib/date'
 import type { CalendarSession } from '@/lib/deliverables/sessions'
+import { PROGRAMA_LABEL, sessionHref } from '@/lib/encuentros/programas'
 
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 const MAX_VISIBLE_PER_DAY = 3
@@ -23,11 +33,11 @@ const DOT_BG: Record<PipelineBucket, string> = {
   archivado: 'bg-slate-500',
 }
 
-function toDateKey(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+/** El punto de color de una sesión: por casilla del pipeline, o por fecha en
+ *  una charla (que no tiene entregable ni pipeline). */
+function dotClass(session: CalendarSession): string {
+  if (session.programa === 'charla') return CHARLA_DOTS[bucketCharla(session.session_date)]
+  return DOT_BG[bucketSession(session)]
 }
 
 function isSameMonth(a: Date, b: Date): boolean {
@@ -52,21 +62,6 @@ function getMonthGrid(monthDate: Date): Date[] {
   })
 }
 
-function CategoryIcon({
-  programa,
-  className,
-}: {
-  programa: CalendarSession['programa']
-  className?: string
-}) {
-  const Icon = programa === 'terapia' ? Users : GraduationCap
-  return <Icon className={className} />
-}
-
-function programaLabel(programa: CalendarSession['programa']): string {
-  return programa === 'terapia' ? 'Terapia Organizacional' : 'Gladwell Education'
-}
-
 function formatDayHeading(date: Date): string {
   return date.toLocaleDateString('es-CO', {
     weekday: 'long',
@@ -75,7 +70,7 @@ function formatDayHeading(date: Date): string {
   })
 }
 
-/** Vista general de las sesiones de ambos programas, tipo Google Calendar.
+/** Vista general de los encuentros de los tres programas, tipo Google Calendar.
  *  No hace fetch propio: recibe `sessions` ya cargadas y acotadas por
  *  pertenencia (loadPipelineSessions), igual para todos los que la usan. */
 export function SessionsCalendar({
@@ -89,10 +84,13 @@ export function SessionsCalendar({
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
+  // Los datos del día y su apertura van por separado: al cerrar, el Dialog anima su
+  // salida con el contenido todavía a la vista en vez de vaciarse de golpe.
   const [dayPanel, setDayPanel] = useState<{
     date: Date
     sessions: CalendarSession[]
   } | null>(null)
+  const [dayPanelOpen, setDayPanelOpen] = useState(false)
 
   const sessionsByDate = useMemo(() => {
     const map = new Map<string, CalendarSession[]>()
@@ -135,24 +133,33 @@ export function SessionsCalendar({
 
   function goToMonth(offset: number) {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1))
-    setDayPanel(null)
+    setDayPanelOpen(false)
   }
 
   function goToday() {
     const now = new Date()
     setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1))
-    setDayPanel(null)
+    setDayPanelOpen(false)
   }
 
   return (
     <BrandCard padding="sm" border="solid" className="space-y-4">
-      <div className="flex items-center justify-between px-1">
-        <h2 className="text-base font-semibold capitalize">{monthLabel}</h2>
+      {/* `first-letter:uppercase` y no `capitalize` en los títulos de mes y día: este
+          pone «De» en mayúscula («Octubre De 2026»); en español solo va la primera letra. */}
+      {/* Encabezado y agenda comparten una columna centrada de hasta 48 rem: en un
+          iPad horizontal las filas medían más de 1000 px y el nombre quedaba a un
+          extremo y el estado al otro. La rejilla de escritorio (ratón y ancho) sí
+          usa todo el ancho, y con ella el encabezado. */}
+      <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-1 lg:pointer-fine:max-w-none">
+        <h2 className="text-base font-semibold first-letter:uppercase">{monthLabel}</h2>
         <div className="flex items-center gap-1">
+          {/* 44 px al tacto (Apple HIG) con `pointer-coarse:`, no por ancho: un iPad
+              horizontal pasa de 1024 px y sigue siendo un dedo. `active:` porque
+              `hover:` no existe al tacto. */}
           <button
             type="button"
             onClick={goToday}
-            className="rounded-full px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            className="rounded-full px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:bg-muted/60 pointer-coarse:min-h-11 pointer-coarse:px-4"
           >
             Hoy
           </button>
@@ -160,7 +167,7 @@ export function SessionsCalendar({
             type="button"
             onClick={() => goToMonth(-1)}
             aria-label="Mes anterior"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:bg-muted/60 pointer-coarse:size-11"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -168,18 +175,19 @@ export function SessionsCalendar({
             type="button"
             onClick={() => goToMonth(1)}
             aria-label="Mes siguiente"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:bg-muted/60 pointer-coarse:size-11"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* Cuadrícula mensual — desde lg (mismo corte mobile/tablet que el
-          resto de la app). En una pantalla chica o táctil 7 columnas quedan
-          ilegibles/difíciles de tocar, por eso la agenda vertical de abajo
-          la reemplaza. */}
-      <div className="hidden overflow-hidden rounded-xl border border-border lg:block">
+      {/* Cuadrícula mensual — solo con ancho Y ratón (`lg:pointer-fine:`). El ancho
+          no decide si algo es táctil: un iPad horizontal pasa de 1024 px y sigue
+          siendo un dedo, y sus chips de 21 px y el «+N más» de 17 px eran
+          imposibles de acertar. Al tacto, a cualquier ancho, manda la agenda de
+          abajo, con filas de 44 px. */}
+      <div className="hidden overflow-hidden rounded-xl border border-border lg:pointer-fine:block">
         <div className="grid grid-cols-7 border-b border-border bg-muted/20">
           {WEEKDAYS.map((wd, i) => (
             <div
@@ -218,13 +226,11 @@ export function SessionsCalendar({
                 {visible.map((s) => (
                   <Link
                     key={s.id}
-                    href={`${basePath}/${s.programa}/${s.id}`}
+                    href={sessionHref(basePath, s)}
                     className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11px] transition-colors hover:bg-muted/60"
                   >
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_BG[bucketSession(s)]}`}
-                    />
-                    <CategoryIcon
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass(s)}`} />
+                    <ProgramaIcon
                       programa={s.programa}
                       className="h-3 w-3 shrink-0 text-muted-foreground"
                     />
@@ -234,7 +240,10 @@ export function SessionsCalendar({
                 {overflow > 0 && (
                   <button
                     type="button"
-                    onClick={() => setDayPanel({ date, sessions: daySessions })}
+                    onClick={() => {
+                      setDayPanel({ date, sessions: daySessions })
+                      setDayPanelOpen(true)
+                    }}
                     className="px-1 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground"
                   >
                     +{overflow} más
@@ -246,8 +255,9 @@ export function SessionsCalendar({
         </div>
       </div>
 
-      {/* Agenda móvil/tablet */}
-      <div className="lg:hidden">
+      {/* Agenda: móvil, tablet y cualquier pantalla táctil, aunque sea ancha. Solo
+          se oculta cuando la cuadrícula de arriba ocupa su lugar. */}
+      <div className="mx-auto w-full max-w-3xl lg:pointer-fine:hidden">
         {agendaGroups.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No hay sesiones este mes.
@@ -256,24 +266,24 @@ export function SessionsCalendar({
           <div className="divide-y divide-border">
             {agendaGroups.map((g) => (
               <div key={g.dateKey} className="space-y-2 py-3 first:pt-0 last:pb-0">
-                <p className="text-xs font-medium capitalize text-muted-foreground">
+                <p className="text-xs font-medium text-muted-foreground first-letter:uppercase">
                   {formatDayHeading(g.date)}
                 </p>
                 <div className="space-y-1.5">
                   {g.items.map((s) => (
                     <Link
                       key={s.id}
-                      href={`${basePath}/${s.programa}/${s.id}`}
-                      className="flex items-center gap-2 rounded-lg border border-border p-2.5 transition-colors hover:bg-muted/40"
+                      href={sessionHref(basePath, s)}
+                      className="flex min-h-11 items-center gap-2 rounded-lg border border-border p-2.5 transition-colors hover:bg-muted/40 active:bg-muted/60"
                     >
-                      <CategoryIcon
+                      <ProgramaIcon
                         programa={s.programa}
                         className="h-4 w-4 shrink-0 text-muted-foreground"
                       />
                       <p className="min-w-0 flex-1 truncate text-sm font-medium">
                         {s.subtitulo ?? s.title}
                       </p>
-                      <PipelineBadge session={s} />
+                      <SessionBadge session={s} />
                     </Link>
                   ))}
                 </div>
@@ -283,46 +293,43 @@ export function SessionsCalendar({
         )}
       </div>
 
-      {/* Panel del día — mismo patrón visual que ConfirmDialog, pero de
-          lectura: se cierra con la X, no con confirmar/cancelar. */}
-      {dayPanel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="portal-header w-full max-w-md space-y-4 rounded-xl border border-border/50 p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold capitalize">
-                {formatDayHeading(dayPanel.date)}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setDayPanel(null)}
-                aria-label="Cerrar"
-                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      {/* Panel del día, sobre el Dialog de Radix y no sobre un `fixed inset-0` propio:
+          la tarjeta que envuelve el calendario lleva `backdrop-filter` (.glass) y
+          Safari ata cualquier `fixed` a un ancestro así — el panel se dibujaba del
+          tamaño de la tarjeta (no de la pantalla) y, con la página desplazada, medio
+          fuera de vista. El Dialog sale a <body>, cierra con Esc, atrapa el foco y
+          trae su propia X de 44 px al tacto. */}
+      <Dialog open={dayPanelOpen} onOpenChange={setDayPanelOpen}>
+        <DialogContent className="portal-header rounded-xl border-border/50 sm:max-w-md">
+          <DialogHeader className="pr-8 text-left sm:text-left">
+            <DialogTitle className="text-base font-semibold first-letter:uppercase">
+              {dayPanel ? formatDayHeading(dayPanel.date) : ''}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Encuentros programados para este día.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60dvh] space-y-2 overflow-y-auto">
+            {dayPanel?.sessions.map((s) => (
+              <Link
+                key={s.id}
+                href={sessionHref(basePath, s)}
+                className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40 active:bg-muted/60"
               >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="max-h-80 space-y-2 overflow-y-auto">
-              {dayPanel.sessions.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`${basePath}/${s.programa}/${s.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {s.subtitulo ?? s.title}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {programaLabel(s.programa)}
-                    </p>
-                  </div>
-                  <PipelineBadge session={s} />
-                </Link>
-              ))}
-            </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {s.subtitulo ?? s.title}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {PROGRAMA_LABEL[s.programa]}
+                  </p>
+                </div>
+                <SessionBadge session={s} />
+              </Link>
+            ))}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </BrandCard>
   )
 }

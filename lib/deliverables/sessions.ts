@@ -1,19 +1,46 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SessionUser } from '@/lib/auth/session'
+import { loadCharlaSessions } from '@/lib/charlas/queries'
+import { bucketCharla } from '@/lib/charlas/status'
+import { bucketSession } from '@/lib/deliverables/pipeline'
+import type { CalendarPrograma, Programa } from '@/lib/encuentros/programas'
 
-export type Programa = 'terapia' | 'education'
-
-export interface CalendarSession {
+interface SessionBase {
   id: string
   title: string
   session_date: string
+  /** Estado del entregable. Una charla no tiene entregable: llega en null. */
   status: string | null
-  programa: Programa
-  /** Empresa (Terapia) o ponente (Education); null si aún no se ha llenado. */
+  /** Empresa (Terapia) o ponente (Education); null si aún no se ha llenado, y
+   *  siempre null en una charla. */
   subtitulo: string | null
   /** Moderador (Terapia) o administrador (Education) responsable de la
-   *  sesión — quién debe destrabarla si queda estancada. */
+   *  sesión — quién debe destrabarla si queda estancada. Una charla no tiene
+   *  responsable: la gestiona quien tiene el módulo. */
   responsable: string | null
+}
+
+/** Una sesión con entregable (Terapia o Education): la única que cuentan el
+ *  pipeline y la atención del dashboard. Tipada aparte de `CalendarSession` a
+ *  propósito: así esas cuentas siguen indexadas por los dos programas y el
+ *  compilador marca cualquier uso que olvide que ahora hay un tercero. */
+export interface DeliverableSession extends SessionBase {
+  programa: Programa
+}
+
+/** Cualquier encuentro del calendario: las sesiones con entregable más las
+ *  charlas. */
+export interface CalendarSession extends SessionBase {
+  programa: CalendarPrograma
+}
+
+/** ¿Todavía no ocurre? La única definición de «próxima» para los tres programas.
+ *  Una sesión con entregable es próxima si su fecha es posterior a hoy; una charla,
+ *  hasta que termina su día (ver `bucketCharla`). */
+export function isUpcoming(session: CalendarSession): boolean {
+  return session.programa === 'charla'
+    ? bucketCharla(session.session_date) === 'programada'
+    : bucketSession(session) === 'programada'
 }
 
 // supabase-js tipa las relaciones embebidas como arrays; en runtime son
@@ -26,7 +53,7 @@ export type SessionsScope = 'own' | 'all'
 
 /** El Dashboard ("requiere atención") necesita solo las sesiones propias —
  *  es una cola de trabajo personal, no un calendario de la comunidad. El
- *  hub de Entregables, en cambio, ahora es alcanzable con el módulo de solo
+ *  hub de Encuentros, en cambio, ahora es alcanzable con el módulo de solo
  *  lectura "Calendario de sesiones" (ver sessions:read_community), así que
  *  pide el scope 'all'. El cliente server usa la service role key e ignora
  *  RLS, así que este filtro es la única barrera para el caso 'own' — por eso
@@ -48,9 +75,12 @@ function scopeToOwner<T>(
 
 /** Sesiones de Terapia y Education combinadas, con el dato que identifica a
  *  cada una según su categoría — empresa invitada o ponente. Fuente única
- *  para el dashboard y el calendario de Entregables: si cada pantalla
+ *  para el dashboard y el calendario de Encuentros: si cada pantalla
  *  escribiera su propio filtro de alcance, sería fácil que una quedara
  *  desactualizada mientras la otra se corrige.
+ *
+ *  Solo las sesiones CON entregable: las charlas no pasan por el pipeline y se
+ *  suman aparte (`loadCalendarSessions`, `loadCharlaSessions`).
  *
  *  El calendario en sí nunca muestra datos de contacto (solo título/empresa/
  *  estado), así que mostrar sesiones ajenas acá no filtra nada sensible —
@@ -59,7 +89,7 @@ export async function loadPipelineSessions(
   supabase: SupabaseClient,
   user: SessionUser,
   scope: SessionsScope
-): Promise<CalendarSession[]> {
+): Promise<DeliverableSession[]> {
   const applyScope = <T,>(query: T, ownerColumn: 'moderator_id' | 'admin_id'): T =>
     scope === 'all' ? query : scopeToOwner(query, user, ownerColumn)
 
@@ -86,7 +116,7 @@ export async function loadPipelineSessions(
     ),
   ])
 
-  const terapiaSessions: CalendarSession[] = ((terapia.data ?? []) as EmbeddedRow[]).map(
+  const terapiaSessions: DeliverableSession[] = ((terapia.data ?? []) as EmbeddedRow[]).map(
     (s) => ({
       id: s.id,
       title: s.title,
@@ -98,7 +128,7 @@ export async function loadPipelineSessions(
     })
   )
 
-  const educationSessions: CalendarSession[] = (
+  const educationSessions: DeliverableSession[] = (
     (education.data ?? []) as EmbeddedRow[]
   ).map((s) => ({
     id: s.id,
@@ -111,4 +141,20 @@ export async function loadPipelineSessions(
   }))
 
   return [...terapiaSessions, ...educationSessions]
+}
+
+/** Todo lo que pinta el calendario de Encuentros: las sesiones con entregable
+ *  de toda la comunidad más las charlas. Siempre `all`: el calendario es de la
+ *  comunidad, no una cola personal, y las charlas no tienen dueño — las gestiona
+ *  quien tiene el módulo. Mismo criterio de privacidad que arriba: título y
+ *  fecha, nunca contacto. */
+export async function loadCalendarSessions(
+  supabase: SupabaseClient,
+  user: SessionUser
+): Promise<CalendarSession[]> {
+  const [pipeline, charlas] = await Promise.all([
+    loadPipelineSessions(supabase, user, 'all'),
+    loadCharlaSessions(supabase),
+  ])
+  return [...pipeline, ...charlas]
 }

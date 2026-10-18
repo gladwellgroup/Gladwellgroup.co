@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { attendanceFormSchema } from '@/lib/validations/attendees'
 
 export const runtime = 'nodejs'
-
-const bodySchema = z.object({
-  nombre: z.string().trim().min(1, 'El nombre es obligatorio'),
-  correo: z.string().trim().email('Correo inválido'),
-})
 
 /** Registro público de asistencia — sin login, como /invite/[token]. La
  *  protección real es la coincidencia exacta de token + expires_at vigente,
@@ -26,7 +21,7 @@ export async function POST(
     return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
   }
 
-  const parsed = bodySchema.safeParse(body)
+  const parsed = attendanceFormSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.errors[0]?.message ?? 'Datos inválidos' },
@@ -37,7 +32,7 @@ export async function POST(
   const supabase = getSupabaseServer()
   const { data: link } = await supabase
     .from('session_attendance_links')
-    .select('therapy_session_id, education_session_id, expires_at')
+    .select('therapy_session_id, education_session_id, charla_id, expires_at')
     .eq('token', token)
     .maybeSingle()
 
@@ -50,18 +45,24 @@ export async function POST(
   }
 
   const { nombre, correo } = parsed.data
-  const isTherapy = Boolean(link.therapy_session_id)
-  const table = isTherapy ? 'therapy_session_attendees' : 'education_attendees'
-  const sessionId = link.therapy_session_id ?? link.education_session_id
 
-  const row: Record<string, unknown> = {
-    session_id: sessionId,
-    nombre,
-    correo: correo.toLowerCase(),
-    source: 'qr',
-  }
-
-  const { error } = await supabase.from(table).insert(row)
+  // Cada programa guarda a sus asistentes en su propia tabla. La charla no manda
+  // ningún entregable, así que su fila no lleva ni `source` (todos llegan por QR)
+  // ni estado de envío.
+  const { error } = link.charla_id
+    ? await supabase.from('charla_attendees').insert({
+        charla_id: link.charla_id,
+        nombre,
+        correo: correo.toLowerCase(),
+      })
+    : await supabase
+        .from(link.therapy_session_id ? 'therapy_session_attendees' : 'education_attendees')
+        .insert({
+          session_id: link.therapy_session_id ?? link.education_session_id,
+          nombre,
+          correo: correo.toLowerCase(),
+          source: 'qr',
+        })
 
   // 23505 = unique_violation: ya se había registrado con este correo en esta
   // sesión — reenviar el formulario es idempotente, no un error.

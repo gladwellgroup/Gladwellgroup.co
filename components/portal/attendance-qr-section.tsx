@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { BrandButton } from '@/components/brand/brand-button'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
+import { useIsClient } from '@/hooks/use-is-client'
 
 export interface AttendanceLinkData {
   token: string
@@ -11,8 +12,9 @@ export interface AttendanceLinkData {
 }
 
 interface AttendanceQrSectionProps {
+  /** El id de la sesión, o el de la charla cuando `program` es `charla`. */
   sessionId: string
-  program: 'therapy' | 'education'
+  program: 'therapy' | 'education' | 'charla'
   /** Controlado por el formulario padre, no por este componente: el
    *  acordeón que lo contiene desmonta su contenido al cerrarse, así que un
    *  useState local aquí perdería el link recién generado al reabrirlo. */
@@ -88,7 +90,11 @@ export function AttendanceQrSection({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const expired = link ? new Date(link.expires_at) <= new Date() : false
+  // La fecha de vencimiento y si ya venció dependen del reloj y del formato del
+  // navegador: el servidor (Node) y Safari no escriben igual «5:48 p. m.», y con el
+  // acordeón de una charla abierto de entrada eso rompía la hidratación (#418).
+  const isClient = useIsClient()
+  const expired = isClient && link ? new Date(link.expires_at) <= new Date() : false
 
   return (
     <div className="space-y-3">
@@ -125,10 +131,11 @@ export function AttendanceQrSection({
               <p className="break-all text-sm text-foreground">{url}</p>
               <p className={`text-xs ${expired ? 'text-red-500' : 'text-muted-foreground'}`}>
                 {expired ? 'Venció el ' : 'Vence el '}
-                {new Date(link.expires_at).toLocaleString('es-CO', {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                })}
+                {isClient &&
+                  new Date(link.expires_at).toLocaleString('es-CO', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })}
               </p>
               <div className="flex flex-wrap gap-2">
                 <BrandButton

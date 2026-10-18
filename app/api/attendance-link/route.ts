@@ -4,6 +4,7 @@ import { getSupabaseServer } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/api'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
 import { resolveEducationAccess } from '@/lib/education/session-access'
+import { resolveCharlaAccess } from '@/lib/charlas/access'
 import { buildAttendanceToken } from '@/lib/deliverables/slugify'
 
 export const runtime = 'nodejs'
@@ -11,13 +12,22 @@ export const runtime = 'nodejs'
 const EXPIRES_IN_MS = 24 * 60 * 60 * 1000
 
 const bodySchema = z.object({
+  // Para `charla` es el id de la charla: el nombre del campo se queda para no
+  // romper a quien ya llama a esta ruta.
   session_id: z.string().uuid(),
-  program: z.enum(['therapy', 'education']),
+  program: z.enum(['therapy', 'education', 'charla']),
 })
 
-/** Genera o regenera el link/QR de asistencia de una sesión. Sirve para
- *  ambos casos: si ya existe una fila para esa sesión se actualiza (eso es
- *  lo que invalida el token anterior al instante); si no, se crea. */
+/** Columna de `session_attendance_links` que apunta a cada programa. */
+const SESSION_COLUMN = {
+  therapy: 'therapy_session_id',
+  education: 'education_session_id',
+  charla: 'charla_id',
+} as const
+
+/** Genera o regenera el link/QR de asistencia de una sesión o charla. Sirve
+ *  para ambos casos: si ya existe una fila para ese encuentro se actualiza (eso
+ *  es lo que invalida el token anterior al instante); si no, se crea. */
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) {
@@ -61,7 +71,7 @@ export async function POST(request: NextRequest) {
       )
     }
     title = access.session.title
-  } else {
+  } else if (program === 'education') {
     const access = await resolveEducationAccess(supabase, user, session_id)
     if (!access.allowed || !access.session) {
       return NextResponse.json(
@@ -70,10 +80,16 @@ export async function POST(request: NextRequest) {
       )
     }
     title = access.session.title
+  } else {
+    // Una charla no tiene responsable: basta el módulo (`charlas:manage`).
+    const access = await resolveCharlaAccess(supabase, user, session_id)
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.statusCode })
+    }
+    title = access.charla.title
   }
 
-  const sessionColumn =
-    program === 'therapy' ? 'therapy_session_id' : 'education_session_id'
+  const sessionColumn = SESSION_COLUMN[program]
   const token = buildAttendanceToken(title)
   const expiresAt = new Date(Date.now() + EXPIRES_IN_MS).toISOString()
   const now = new Date().toISOString()

@@ -11,9 +11,16 @@ const INSTAGRAM_URL = 'https://www.instagram.com/gladwellgroup.co/'
 export function AttendanceForm({
   token,
   sessionTitle,
+  kind = 'sesion',
+  photoUrl = null,
 }: {
   token: string
   sessionTitle: string
+  /** `sesion` (Terapia o Education) promete el entregable y suma puntos de
+   *  asistencia; `charla` no: no hay entregable, solo se registra quién vino. */
+  kind?: 'sesion' | 'charla'
+  /** Foto de la charla, si tiene. */
+  photoUrl?: string | null
 }) {
   const [nombre, setNombre] = useState('')
   const [correo, setCorreo] = useState('')
@@ -61,8 +68,9 @@ export function AttendanceForm({
         </h1>
         <p className="text-muted-foreground text-sm leading-relaxed max-w-sm mx-auto">
           Quedó registrada tu asistencia a {sessionTitle}
-          {closesSentence ? '' : '.'} Ahora toca lo importante: aplica lo
-          aprendido en tu estudio o proyecto en las próximas 48 horas.
+          {closesSentence ? '' : '.'}
+          {kind === 'sesion' &&
+            ' Ahora toca lo importante: aplica lo aprendido en tu estudio o proyecto en las próximas 48 horas.'}
         </p>
         <div className="flex flex-col sm:flex-row gap-2 justify-center">
           <BrandButton asChild variant="secondary" size="sm" className="w-auto">
@@ -80,6 +88,16 @@ export function AttendanceForm({
 
   return (
     <div className="space-y-6">
+      {photoUrl && (
+        // Decorativa: el título de abajo ya dice de qué charla se trata.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photoUrl}
+          alt=""
+          className="aspect-video w-full rounded-xl border border-border object-cover"
+        />
+      )}
+
       <div className="text-center space-y-2">
         <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
           Registro de asistencia
@@ -92,13 +110,17 @@ export function AttendanceForm({
         </p>
       </div>
 
-      <div className="flex items-start gap-2.5 rounded-xl border border-[#7C3AED]/20 bg-[#7C3AED]/5 px-4 py-3">
-        <Info className="size-4 shrink-0 mt-0.5 text-[#A78BFA]" />
-        <p className="text-xs text-muted-foreground text-left">
-          Al registrar tu asistencia recibirás el entregable de esta sesión en
-          tu correo y sumas puntos de asistencia en la comunidad Gladwell.
-        </p>
-      </div>
+      {/* Solo las sesiones de Terapia y Education mandan un entregable: en una
+          charla ese aviso prometería algo que no existe. */}
+      {kind === 'sesion' && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-[#7C3AED]/20 bg-[#7C3AED]/5 px-4 py-3">
+          <Info className="size-4 shrink-0 mt-0.5 text-[#A78BFA]" />
+          <p className="text-xs text-muted-foreground text-left">
+            Al registrar tu asistencia recibirás el entregable de esta sesión en
+            tu correo y sumas puntos de asistencia en la comunidad Gladwell.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <BrandField

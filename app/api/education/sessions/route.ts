@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   }
 
   // No basta con "es community_admin": si además no tiene el módulo de
-  // Entregables · Educación otorgado, quedaría con una sesión asignada que
+  // Encuentros · Educación otorgado, quedaría con una sesión asignada que
   // jamás puede abrir (resolveEducationAccess la bloquearía igual).
   const { data: admin } = await supabase
     .from('profiles')
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   if (!admin || !adminPermissions.includes('education:create')) {
     return NextResponse.json(
-      { error: 'El responsable debe tener el módulo Entregables · Educación.' },
+      { error: 'El responsable debe tener el módulo Encuentros · Educación.' },
       { status: 400 }
     )
   }

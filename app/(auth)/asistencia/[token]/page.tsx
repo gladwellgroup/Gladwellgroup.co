@@ -35,7 +35,8 @@ export default async function AttendancePage({
       `
       token, expires_at,
       therapy_sessions ( title ),
-      education_sessions ( title )
+      education_sessions ( title ),
+      charlas ( title, photo_url )
     `
     )
     .eq('token', token)
@@ -50,25 +51,35 @@ export default async function AttendancePage({
     )
   }
 
+  // supabase-js tipa las relaciones embebidas como arrays; en runtime son
+  // objeto|null (FK hacia adelante, una sola puede estar seteada por enlace).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row: any = link
+  const charla: { title: string; photo_url: string | null } | null = row.charlas ?? null
+
   if (new Date(link.expires_at) <= new Date()) {
     return (
       <AttendanceMessage
         title="Enlace vencido"
-        message="Este enlace de asistencia ya venció. Pide al organizador de la sesión que lo regenere."
+        message={`Este enlace de asistencia ya venció. Pide al organizador de ${charla ? 'la charla' : 'la sesión'} que lo regenere.`}
       />
     )
   }
 
-  // supabase-js tipa las relaciones embebidas como arrays; en runtime son
-  // objeto|null (FK hacia adelante, una sola puede estar seteada por sesión).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const row: any = link
   const sessionTitle: string =
-    row.therapy_sessions?.title ?? row.education_sessions?.title ?? 'la sesión'
+    row.therapy_sessions?.title ??
+    row.education_sessions?.title ??
+    charla?.title ??
+    'la sesión'
 
   return (
     <BrandCard className="max-w-md w-full">
-      <AttendanceForm token={token} sessionTitle={sessionTitle} />
+      <AttendanceForm
+        token={token}
+        sessionTitle={sessionTitle}
+        kind={charla ? 'charla' : 'sesion'}
+        photoUrl={charla?.photo_url ?? null}
+      />
     </BrandCard>
   )
 }

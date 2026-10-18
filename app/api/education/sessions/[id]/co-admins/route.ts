@@ -10,7 +10,7 @@ const coAdminsSchema = z.object({
 
 /** Gemela de la ruta de Terapia — reemplazo atómico del set completo de
  *  coadministradores, validando que cada destino ya tenga el módulo de
- *  Entregables · Educación otorgado. */
+ *  Encuentros · Educación otorgado. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -60,7 +60,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            'Cada coadministrador debe ser un administrador de comunidad con el módulo de Entregables · Educación otorgado',
+            'Cada coadministrador debe ser un administrador de comunidad con el módulo de Encuentros · Educación otorgado',
         },
         { status: 400 }
       )

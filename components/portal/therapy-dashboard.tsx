@@ -57,7 +57,7 @@ export function TherapyDashboard({
   moderators: Moderator[]
   invitados: Invitado[]
   currentUserId: string
-  /** Sin el módulo de administrar Entregables · Terapia (solo con el de
+  /** Sin el módulo de administrar Encuentros · Terapia (solo con el de
    *  solo lectura), se puede ver la lista completa de la comunidad pero no
    *  crear sesiones nuevas. */
   canCreate: boolean
@@ -187,7 +187,7 @@ export function TherapyDashboard({
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
-        Entregables
+        Encuentros
       </Link>
       <div className="flex flex-col items-center gap-4 text-center">
         <div>
