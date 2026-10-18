@@ -203,7 +203,7 @@ export function PhotoUpload({
             <button
               type="button"
               onClick={() => setConfirmClear(true)}
-              className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70"
+              className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70 active:bg-black/70 pointer-coarse:top-2 pointer-coarse:right-2 pointer-coarse:size-11"
               aria-label="Eliminar foto"
             >
               <X className="h-4 w-4" />

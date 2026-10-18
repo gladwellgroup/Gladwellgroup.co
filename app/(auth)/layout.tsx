@@ -9,7 +9,12 @@ export default function AuthLayout({
   return (
     <BrandPageBackground>
       <AuthNavbar />
-      <main className="flex min-h-[calc(100vh-4rem)] md:min-h-[calc(100vh-5rem)] items-center justify-center px-4 py-8">
+      {/* La barra es `fixed` y no ocupa espacio: su alto (4rem, 5rem desde md) se reserva
+          aquí como padding. Antes `main` empezaba en y=0 con un `min-h` que le restaba el
+          alto de la barra, y cualquier tarjeta alta (la del login en un iPhone SE o en un
+          portátil de 720 px, la de asistencia con foto) se metía por debajo de ella y
+          quedaba ~60 px por encima del centro real. Si no cabe, ahora la página se desplaza. */}
+      <main className="flex min-h-screen items-center justify-center px-4 pb-8 pt-20 md:pt-28">
         {children}
       </main>
     </BrandPageBackground>
