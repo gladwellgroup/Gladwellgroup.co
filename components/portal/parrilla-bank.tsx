@@ -47,9 +47,11 @@ export function ParrillaBank({ posts, total, editors }: ParrillaBankProps) {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     const matches = q ? posts.filter((p) => p.title.toLowerCase().includes(q)) : posts
-    // `updated_at` es el de la última edición, que al archivar es el momento en
-    // que la idea entró al banco: las más recientes arriba. Es texto ISO, se
-    // ordena igual como texto.
+    // `updated_at` es el de la última edición REAL, que al archivar es el momento
+    // en que la idea entró al banco: las más recientes arriba. Lo mueve un trigger
+    // en cada UPDATE salvo el que hace la FK al borrar la frase de origen
+    // (20260921): borrar una frase no hace saltar sus ideas al primer lugar. Es
+    // texto ISO, se ordena igual como texto.
     return [...matches].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   }, [posts, query])
 
