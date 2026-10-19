@@ -1,14 +1,23 @@
-// Toda escritura de la parrilla pasa por aquí. Antes cada ruta hacía su propio
-// update sin comprobar cuántas filas tocó (editar una pieza ya borrada
-// "funcionaba"), seteaba updated_at a mano y guardaba lo que llegara. Ahora hay
-// una sola vía: leer lo mínimo → planear con funciones puras → escribir con
-// compare-and-set sobre updated_at.
+// Toda escritura de las PUBLICACIONES de la parrilla pasa por aquí. Antes cada
+// ruta hacía su propio update sin comprobar cuántas filas tocó (editar una pieza
+// ya borrada "funcionaba"), seteaba updated_at a mano y guardaba lo que llegara.
+// Ahora hay una sola vía: leer lo mínimo → planear con funciones puras → escribir
+// con compare-and-set sobre updated_at.
 //
 // `planPostUpdate`, `describeDbError` y `storagePathFromUrl` son puras y tienen
-// pruebas; el resto es el pegamento con Supabase.
+// pruebas; el resto es el pegamento con Supabase. Las escrituras de las frases
+// viven en quote-mutations.ts, que reutiliza `failure` y `describeDbError`.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ParrillaPost } from '@/lib/parrilla/posts'
+import {
+  QUOTE_AUTHOR_MAX,
+  QUOTE_AUTHOR_MIN,
+  QUOTE_CONTEXT_MAX,
+  QUOTE_SOURCE_MAX,
+  QUOTE_TEXT_MAX,
+  QUOTE_TEXT_MIN,
+} from '@/lib/parrilla/quotes'
 import {
   datesInOrder,
   isArchived,
@@ -151,6 +160,12 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   parrilla_posts_publish_date_check: 'Falta la fecha de publicación',
   parrilla_posts_inspiration_url_check: 'El enlace de inspiración no es válido',
   parrilla_posts_hidden_sections_check: 'Alguna sección oculta no es válida',
+  // Frases (supabase/migrations/20260920_parrilla_frases.sql).
+  parrilla_quotes_quote_text_check: `La frase debe tener entre ${QUOTE_TEXT_MIN} y ${QUOTE_TEXT_MAX} caracteres`,
+  parrilla_quotes_author_check: `El referente debe tener entre ${QUOTE_AUTHOR_MIN} y ${QUOTE_AUTHOR_MAX} caracteres`,
+  parrilla_quotes_author_context_check: `«Quién fue» no puede pasar de ${QUOTE_CONTEXT_MAX} caracteres`,
+  parrilla_quotes_source_check: `La fuente no puede pasar de ${QUOTE_SOURCE_MAX} caracteres`,
+  parrilla_quotes_category_check: 'La categoría no es válida',
 }
 
 const RELOAD_HINT = 'Recarga la página e inténtalo de nuevo.'
@@ -167,8 +182,14 @@ export function describeDbError(error: DbError, fallback: string): string {
     return `${what}. ${RELOAD_HINT}`
   }
   // 42703 = columna inexistente; PGRST204 = PostgREST no la encuentra en su
-  // caché de esquema. En la práctica: se desplegó el código antes que el SQL.
-  if (error.code === '42703' || error.code === 'PGRST204') {
+  // caché de esquema. 42P01 = tabla inexistente; PGRST205 = lo mismo para una
+  // tabla. En la práctica: se desplegó el código antes que el SQL.
+  if (
+    error.code === '42703' ||
+    error.code === 'PGRST204' ||
+    error.code === '42P01' ||
+    error.code === 'PGRST205'
+  ) {
     return 'Falta aplicar una migración de la base de datos. Avisa a quien administra la plataforma.'
   }
   return fallback
@@ -201,7 +222,9 @@ export function storagePathFromUrl(url: string): string | null {
 
 // ───────────────────────────── Escrituras ─────────────────────────────
 
-function failure(error: DbError, fallback: string): MutationFailure {
+/** Un error de Supabase como fallo de escritura: se loguea y se traduce a un
+ *  mensaje claro. Compartido con quote-mutations.ts. */
+export function failure(error: DbError, fallback: string): MutationFailure {
   console.error('[parrilla] Supabase error:', error)
   return {
     ok: false,
@@ -244,12 +267,25 @@ export async function createPost(
     category: input.category ?? null,
   })
 
-  const { data, error } = await sb
+  const row: Record<string, unknown> = { ...fields, created_by: userId }
+
+  // `quote_id` (la frase de la que nace la pieza) viaja SOLO cuando existe: una
+  // alta normal no debe depender de la migración 20260920. Con el código
+  // desplegado antes que el SQL, enviar la columna —aunque fuera null— haría
+  // fallar TODAS las altas de publicaciones.
+  let result = await sb
     .from('parrilla_posts')
-    .insert({ ...fields, created_by: userId })
+    .insert(input.quote_id ? { ...row, quote_id: input.quote_id } : row)
     .select('id')
     .single()
 
+  // 23503: la frase se borró mientras se llenaba el formulario. La pieza se crea
+  // igual, sin el vínculo: no se pierde el trabajo de la persona.
+  if (result.error?.code === '23503' && input.quote_id) {
+    result = await sb.from('parrilla_posts').insert(row).select('id').single()
+  }
+
+  const { data, error } = result
   if (error) return failure(error, 'No se pudo crear la publicación')
   return { ok: true, id: data.id }
 }

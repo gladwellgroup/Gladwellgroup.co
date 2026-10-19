@@ -10,7 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useRestoreFocus } from '@/hooks/use-restore-focus'
 import type { ParrillaEditor, ParrillaPostSummary, ParrillaStatus } from '@/lib/parrilla/posts'
+import type { PostDraft } from '@/lib/parrilla/rules'
 
 interface ParrillaPostDialogProps {
   open: boolean
@@ -22,6 +24,12 @@ interface ParrillaPostDialogProps {
   /** Estado con el que arranca una pieza nueva. 'archivado' = una idea para el
    *  Banco de contenido: cambia el título del modal y el botón de guardar. */
   defaultStatus?: ParrillaStatus
+  /** Título, copy y categoría con los que arranca una pieza NUEVA (p. ej. desde
+   *  una frase de la pestaña «Frases»). En edición se ignora. */
+  draft?: PostDraft
+  /** La frase de la que nace la pieza nueva: se guarda como vínculo para poder
+   *  marcarla «Usada». */
+  sourceQuoteId?: string
   editors: ParrillaEditor[]
 }
 
@@ -40,9 +48,14 @@ export function ParrillaPostDialog({
   post,
   defaultDate,
   defaultStatus,
+  draft,
+  sourceQuoteId,
   editors,
 }: ParrillaPostDialogProps) {
   const newIdea = !post && defaultStatus === 'archivado'
+  // Diálogo controlado, sin trigger: se devuelve el foco a quien lo abrió (el día del
+  // calendario, la fila del Banco o «Crear contenido»).
+  const { remember, restore } = useRestoreFocus()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -53,12 +66,16 @@ export function ParrillaPostDialog({
         // lo escrito: se cierra con la X, con Esc o al guardar.
         onInteractOutside={(event) => event.preventDefault()}
         // Al consultar una pieza existente no se enfoca el Título: en iPad subiría
-        // el teclado solo por abrirla. El foco queda en el diálogo (sigue atrapado).
+        // el teclado solo por abrirla. Con un borrador (una frase ya prellenada)
+        // tampoco: lo que sigue es elegir plataformas y fechas, no escribir. El
+        // foco queda en el diálogo (sigue atrapado).
         onOpenAutoFocus={(event) => {
-          if (!post) return
+          remember()
+          if (!post && !draft) return
           event.preventDefault()
           ;(event.currentTarget as HTMLElement | null)?.focus()
         }}
+        onCloseAutoFocus={restore}
       >
         <DialogHeader className="shrink-0 border-b border-border/60 px-6 pb-3 pt-6 text-center sm:text-center">
           <DialogTitle>
@@ -74,10 +91,12 @@ export function ParrillaPostDialog({
         </DialogHeader>
 
         <ParrillaPostForm
-          key={post?.id ?? `new-${defaultDate ?? ''}`}
+          key={post?.id ?? `new-${defaultDate ?? ''}-${sourceQuoteId ?? ''}`}
           post={post}
           defaultDate={defaultDate}
           defaultStatus={defaultStatus}
+          draft={draft}
+          sourceQuoteId={sourceQuoteId}
           editors={editors}
           onClose={() => onOpenChange(false)}
         />

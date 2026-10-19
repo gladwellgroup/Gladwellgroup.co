@@ -70,3 +70,40 @@ describe('modales del portal', () => {
     assert.deepEqual(offenders, [], `usa un Dialog de Radix en vez de un overlay propio: ${offenders.join(', ')}`)
   })
 })
+
+describe('pestaña «Frases» de la parrilla', () => {
+  const list = read('components/portal/parrilla-quotes.tsx')
+  const dialog = read('components/portal/parrilla-quote-dialog.tsx')
+  const form = read('components/portal/parrilla-quote-form.tsx')
+
+  test('la lista: el chip «Sin usar» mide 44 px al tacto y «Crear contenido» es un BrandButton sm (que ya los mide)', () => {
+    assert.match(list, /pointer-coarse:min-h-11/)
+    assert.match(list, /<BrandButton[\s\S]*?size="sm"[\s\S]*?Crear contenido/)
+  })
+
+  test('la lista no usa vh ni formatea fechas (Node y Safari no las escriben igual)', () => {
+    assert.doesNotMatch(list, /\b\d+vh\b/)
+    assert.doesNotMatch(list, /toLocale|Intl\.DateTimeFormat/)
+  })
+
+  test('el diálogo usa `dvh` (la barra del navegador del iPad no cuenta en `vh`) y no dibuja su propio overlay', () => {
+    assert.match(dialog, /max-h-\[85dvh\]/)
+    assert.doesNotMatch(dialog, /max-h-\[\d+vh\]/)
+    assert.doesNotMatch(dialog, /\bfixed\b[^"'`]*\binset-0\b/)
+  })
+
+  test('el formulario: «Eliminar frase» mide 44 px al tacto y pide confirmación en un ConfirmDialog', () => {
+    assert.match(form, /pointer-coarse:min-h-11[^"]*[\s\S]{0,200}Eliminar frase/)
+    assert.match(form, /<ConfirmDialog/)
+  })
+
+  test('los rojos del formulario pasan AA en tema claro: `red-500` sobre el fondo del modal da 3,5:1 (mínimo 4,5:1)', () => {
+    assert.doesNotMatch(form, /text-red-500/, 'usa red-700 en claro y red-400 en oscuro (`dark:`)')
+    assert.match(form, /text-red-700[^"]*dark:text-red-400/)
+  })
+
+  test('los campos del formulario son los del branding (modal-field: 16 px al tacto, sin zoom en Safari)', () => {
+    assert.match(form, /<select[\s\S]*?className="modal-field"/)
+    assert.doesNotMatch(form, /maxLength=/, 'un maxLength truncaría en silencio una frase pegada')
+  })
+})

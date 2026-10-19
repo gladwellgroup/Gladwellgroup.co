@@ -1,14 +1,16 @@
 import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { loadParrillaEditors, loadParrillaPosts } from '@/lib/parrilla/posts'
+import { loadParrillaQuotes } from '@/lib/parrilla/quotes'
 import { ParrillaBoard } from '@/components/portal/parrilla-board'
 
 export default async function AdminParrillaPage() {
   await requirePermission('parrilla:manage')
   const supabase = getSupabaseServer()
-  const [posts, editors] = await Promise.all([
+  const [posts, editors, quotes] = await Promise.all([
     loadParrillaPosts(supabase),
     loadParrillaEditors(supabase),
+    loadParrillaQuotes(supabase),
   ])
 
   return (
@@ -21,7 +23,7 @@ export default async function AdminParrillaPage() {
           Planifica y sigue las publicaciones de redes sociales de Gladwell.
         </p>
       </div>
-      <ParrillaBoard posts={posts} editors={editors} />
+      <ParrillaBoard posts={posts} editors={editors} quotes={quotes} />
     </div>
   )
 }

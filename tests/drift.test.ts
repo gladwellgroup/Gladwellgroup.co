@@ -2,7 +2,16 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { GUARD_COLUMNS } from '@/lib/parrilla/mutations'
+import { GUARD_COLUMNS, describeDbError } from '@/lib/parrilla/mutations'
+import {
+  QUOTE_AUTHOR_MAX,
+  QUOTE_AUTHOR_MIN,
+  QUOTE_COLUMNS,
+  QUOTE_CONTEXT_MAX,
+  QUOTE_SOURCE_MAX,
+  QUOTE_TEXT_MAX,
+  QUOTE_TEXT_MIN,
+} from '@/lib/parrilla/quotes'
 import {
   PARRILLA_CATEGORIES,
   PARRILLA_DETAIL_COLUMNS,
@@ -43,11 +52,19 @@ function lastList(pattern: RegExp, what: string): string[] {
 
 const sorted = (list: readonly string[]) => [...list].sort()
 
+/** El CHECK vigente de parrilla_posts.category (20260913), anclado a su NOMBRE y
+ *  no solo a `check (category in (…))`: la tabla de frases (20260920) también
+ *  tiene un CHECK de `category`, y sin el ancla la última coincidencia entre todas
+ *  las migraciones sería la suya — esta prueba compararía contra la tabla
+ *  equivocada y dejaría de proteger a parrilla_posts sin avisar. El CHECK inline
+ *  original de 20260906 no tiene nombre, así que no entra (20260913 lo reemplazó).
+ *  También ignora los `where category in (…)` de las migraciones de datos. */
+const POSTS_CATEGORY_CHECK =
+  /add\s+constraint\s+parrilla_posts_category_check\s+check\s*\(\s*category\s+in\s*\(([^)]*)\)\s*\)/gi
+
 describe('el código coincide con el esquema de SQL', () => {
   test('categorías ↔ CHECK de parrilla_posts.category', () => {
-    // Anclado a `check (category in (…))`: ignora los `where category in (…)`
-    // de las migraciones de datos.
-    const sql = lastList(/check\s*\(\s*category\s+in\s*\(([^)]*)\)\s*\)/gi, 'categorías')
+    const sql = lastList(POSTS_CATEGORY_CHECK, 'categorías de parrilla_posts')
     assert.deepEqual(
       sorted(PARRILLA_CATEGORIES),
       sorted(sql),
@@ -137,4 +154,115 @@ describe('las columnas que el código lee existen en el esquema de SQL', () => {
       )
     })
   }
+})
+
+describe('las frases del código coinciden con el esquema de SQL', () => {
+  const QUOTES_FILE = '20260920_parrilla_frases.sql'
+
+  // Sin los comentarios: la cabecera y el bloque «REVERTIR» mencionan tablas y
+  // columnas que una regex encontraría antes que el DDL vigente (mismo método que
+  // charlas.test.ts).
+  const QUOTES_SQL = fs
+    .readFileSync(path.join(MIGRATIONS_DIR, QUOTES_FILE), 'utf8')
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('--'))
+    .join('\n')
+
+  /** Columnas de `create table if not exists public.parrilla_quotes (…)`: una por
+   *  línea, con dos espacios de sangría (las restricciones van más adentro). */
+  function quotesColumns(): string[] {
+    const start = QUOTES_SQL.indexOf('create table if not exists public.parrilla_quotes (')
+    assert.ok(start >= 0, `No encontré public.parrilla_quotes en ${QUOTES_FILE}`)
+    const end = QUOTES_SQL.indexOf('\n);', start)
+    return [
+      ...QUOTES_SQL.slice(start, end).matchAll(/^ {2}([a-z_]+)\s+(?:uuid|text|date|timestamptz)\b/gm),
+    ].map((match) => match[1])
+  }
+
+  test('el ancla de categorías de parrilla_posts no se deja secuestrar por la tabla de frases', () => {
+    const raw = fs.readFileSync(path.join(MIGRATIONS_DIR, QUOTES_FILE), 'utf8')
+    assert.doesNotMatch(raw, new RegExp(POSTS_CATEGORY_CHECK.source, 'i'))
+    // …y sigue encontrando el CHECK de parrilla_posts en las migraciones de siempre.
+    assert.ok(SQL.some((sql) => new RegExp(POSTS_CATEGORY_CHECK.source, 'i').test(sql)))
+  })
+
+  test('categorías de frases ↔ CHECK de parrilla_quotes.category', () => {
+    const match =
+      /constraint\s+parrilla_quotes_category_check\s+check\s*\(\s*category\s+in\s*\(([^)]*)\)\s*\)/i.exec(QUOTES_SQL)
+    assert.ok(match, 'No encontré el CHECK de categoría de parrilla_quotes')
+    assert.deepEqual(
+      sorted(PARRILLA_CATEGORIES),
+      sorted(quoted(match[1])),
+      'Las frases usan las categorías de la parrilla: si cambia PARRILLA_CATEGORIES hace falta una migración para parrilla_quotes también'
+    )
+  })
+
+  test('las columnas que lee la lista existen en parrilla_quotes', () => {
+    const columns = quotesColumns()
+    for (const column of [...QUOTE_COLUMNS, 'created_by', 'created_at', 'updated_at']) {
+      assert.ok(columns.includes(column), `public.parrilla_quotes no tiene la columna ${column}`)
+    }
+  })
+
+  test('los topes del SQL son los que valida el servidor', () => {
+    /** [mínimo, máximo] de `check (… char_length(btrim(<columna>)) between a and b)`. */
+    function limits(constraint: string, column: string, optional: boolean): number[] {
+      const nullable = optional ? `${column}\\s+is\\s+null\\s+or\\s+` : ''
+      const match = new RegExp(
+        `${constraint}\\s+check\\s*\\(\\s*${nullable}char_length\\(btrim\\(${column}\\)\\)\\s+between\\s+(\\d+)\\s+and\\s+(\\d+)\\s*\\)`,
+        'i'
+      ).exec(QUOTES_SQL)
+      assert.ok(match, `No encontré el CHECK ${constraint}`)
+      return [Number(match[1]), Number(match[2])]
+    }
+
+    assert.deepEqual(limits('parrilla_quotes_quote_text_check', 'quote_text', false), [QUOTE_TEXT_MIN, QUOTE_TEXT_MAX])
+    assert.deepEqual(limits('parrilla_quotes_author_check', 'author', false), [QUOTE_AUTHOR_MIN, QUOTE_AUTHOR_MAX])
+    assert.deepEqual(limits('parrilla_quotes_author_context_check', 'author_context', true), [1, QUOTE_CONTEXT_MAX])
+    assert.deepEqual(limits('parrilla_quotes_source_check', 'source', true), [1, QUOTE_SOURCE_MAX])
+  })
+
+  test('cada CHECK de frases tiene mensaje propio: no cae en el genérico', () => {
+    const names = [...QUOTES_SQL.matchAll(/constraint\s+(parrilla_quotes_[a-z_]+_check)\b/g)].map((m) => m[1])
+    assert.equal(names.length, 5, `se esperaban 5 CHECK con nombre y hay ${names.length}: ¿cambió la migración?`)
+    for (const name of names) {
+      const message = describeDbError({ code: '23514', message: `violates check constraint "${name}"` }, 'No se pudo guardar')
+      assert.doesNotMatch(message, /Alguno de los valores no está permitido/, `falta el mensaje de ${name} en CONSTRAINT_MESSAGES`)
+    }
+  })
+
+  test('el vínculo de la pieza con su frase es ON DELETE SET NULL: borrar una frase no borra contenido', () => {
+    assert.match(
+      QUOTES_SQL,
+      /constraint\s+parrilla_posts_quote_id_fkey\s+references\s+public\.parrilla_quotes\s*\(id\)\s+on\s+delete\s+set\s+null/i
+    )
+  })
+
+  test('RLS activado, con la policy de la parrilla y el trigger de updated_at', () => {
+    assert.match(QUOTES_SQL, /alter table public\.parrilla_quotes enable row level security/i)
+    assert.match(
+      QUOTES_SQL,
+      /create policy "Parrilla admins manage quotes"\s+on public\.parrilla_quotes for all\s+using \(public\.is_parrilla_admin\(\)\)/i
+    )
+    assert.match(
+      QUOTES_SQL,
+      /create trigger parrilla_quotes_touch_updated_at\s+before update on public\.parrilla_quotes\s+for each row execute function public\.touch_updated_at\(\)/i
+    )
+  })
+
+  test('quote_id no está en ninguna lista de lectura de publicaciones: sin la columna el calendario se vería vacío', () => {
+    // Es el outage documentado: una columna nueva en PARRILLA_LIST_COLUMNS, con el
+    // SQL aún sin aplicar, deja el calendario sin piezas. La lista de frases sí
+    // consulta el vínculo, pero por su cuenta (embed), así que solo ella se ve afectada.
+    const lists: Record<string, string> = {
+      PARRILLA_LIST_COLUMNS,
+      PARRILLA_DETAIL_COLUMNS,
+      PARRILLA_PENDING_COLUMNS,
+      GUARD_COLUMNS,
+    }
+    for (const [name, list] of Object.entries(lists)) {
+      const columns = list.split(',').map((column) => column.trim())
+      assert.ok(!columns.includes('quote_id'), `${name} no debe pedir quote_id`)
+    }
+  })
 })

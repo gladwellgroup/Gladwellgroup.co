@@ -1,10 +1,21 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
+import {
+  QUOTE_AUTHOR_MAX,
+  QUOTE_AUTHOR_MIN,
+  QUOTE_CONTEXT_MAX,
+  QUOTE_SOURCE_MAX,
+  QUOTE_TEXT_MAX,
+  QUOTE_TEXT_MIN,
+} from '@/lib/parrilla/quotes'
 import { EDITABLE_KEYS } from '@/lib/parrilla/rules'
 import {
   parrillaPostPatchSchema,
   parrillaPostSchema,
   parrillaPostShape,
+  parrillaQuotePatchSchema,
+  parrillaQuoteSchema,
+  parrillaQuoteShape,
   parrillaRescheduleSchema,
 } from '@/lib/validations/parrilla'
 
@@ -335,5 +346,272 @@ describe('reprogramar (arrastre)', () => {
   test('rechaza otro campo o una fecha imposible', () => {
     assert.equal(parrillaRescheduleSchema.safeParse({ field: 'title', date: '2026-10-30' }).success, false)
     assert.equal(parrillaRescheduleSchema.safeParse({ field: 'publish_date', date: '2026-02-30' }).success, false)
+  })
+})
+
+// ───────────── Frases de referentes (pestaña «Frases») ─────────────
+
+const frase = {
+  quote_text: 'La felicidad de tu vida depende de la calidad de tus pensamientos.',
+  author: 'Marco Aurelio',
+}
+
+describe('frases: crear (POST)', () => {
+  test('acepta el mínimo: los opcionales quedan sin valor', () => {
+    const result = parrillaQuoteSchema.safeParse(frase)
+    assert.equal(result.success, true)
+    if (result.success) {
+      assert.equal(result.data.author_context ?? null, null)
+      assert.equal(result.data.source ?? null, null)
+      assert.equal(result.data.category ?? null, null)
+    }
+  })
+
+  test('recorta, y el texto en blanco de los opcionales se guarda como null', () => {
+    const result = parrillaQuoteSchema.safeParse({
+      quote_text: '  Una frase  ',
+      author: ' Séneca ',
+      author_context: '   ',
+      source: '',
+      category: null,
+    })
+    assert.equal(result.success, true)
+    if (result.success) {
+      assert.deepEqual(result.data, {
+        quote_text: 'Una frase',
+        author: 'Séneca',
+        author_context: null,
+        source: null,
+        category: null,
+      })
+    }
+  })
+
+  test('conserva el contenido de los opcionales, recortado', () => {
+    const result = parrillaQuoteSchema.safeParse({
+      ...frase,
+      author_context: ' Emperador y filósofo estoico ',
+      source: ' Meditaciones, libro V ',
+      category: 'crecer',
+    })
+    assert.equal(result.success, true)
+    if (result.success) {
+      assert.equal(result.data.author_context, 'Emperador y filósofo estoico')
+      assert.equal(result.data.source, 'Meditaciones, libro V')
+      assert.equal(result.data.category, 'crecer')
+    }
+  })
+
+  test('los topes son los del CHECK de SQL: justo en el límite pasa, uno más se rechaza con su mensaje', () => {
+    const justo = {
+      quote_text: 'x'.repeat(QUOTE_TEXT_MAX),
+      author: 'a'.repeat(QUOTE_AUTHOR_MAX),
+      author_context: 'c'.repeat(QUOTE_CONTEXT_MAX),
+      source: 's'.repeat(QUOTE_SOURCE_MAX),
+    }
+    assert.equal(parrillaQuoteSchema.safeParse(justo).success, true)
+
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...justo, quote_text: `${justo.quote_text}x` })),
+      `La frase no puede pasar de ${QUOTE_TEXT_MAX} caracteres`
+    )
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...justo, author: `${justo.author}a` })),
+      `El referente no puede pasar de ${QUOTE_AUTHOR_MAX} caracteres`
+    )
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...justo, author_context: `${justo.author_context}c` })),
+      `«Quién fue» no puede pasar de ${QUOTE_CONTEXT_MAX} caracteres`
+    )
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...justo, source: `${justo.source}s` })),
+      `La fuente no puede pasar de ${QUOTE_SOURCE_MAX} caracteres`
+    )
+  })
+
+  test('los mínimos: 3 caracteres la frase y 2 el referente', () => {
+    assert.equal(parrillaQuoteSchema.safeParse({ quote_text: 'abc', author: 'Yo' }).success, true)
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...frase, quote_text: 'ab' })),
+      `La frase debe tener al menos ${QUOTE_TEXT_MIN} caracteres`
+    )
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...frase, author: 'Y' })),
+      `El referente debe tener al menos ${QUOTE_AUTHOR_MIN} caracteres`
+    )
+  })
+
+  test('una frase o un referente de solo espacios no pasa: el recorte lo deja vacío', () => {
+    assert.equal(firstError(parrillaQuoteSchema.safeParse({ ...frase, quote_text: '      ' })) !== null, true)
+    assert.equal(firstError(parrillaQuoteSchema.safeParse({ ...frase, author: '     ' })) !== null, true)
+  })
+
+  test('la frase y el referente son obligatorios, con su mensaje', () => {
+    assert.equal(firstError(parrillaQuoteSchema.safeParse({ author: 'Séneca' })), 'Escribe la frase')
+    assert.equal(firstError(parrillaQuoteSchema.safeParse({ quote_text: 'Una frase' })), 'Escribe el referente')
+    assert.equal(firstError(parrillaQuoteSchema.safeParse({ quote_text: 5, author: 'Séneca' })), 'La frase no es válida')
+  })
+
+  test('categoría: null y omitida valen; una desconocida o retirada se rechaza', () => {
+    for (const category of [null, undefined, 'crecer', 'conectar', 'construir', 'aprender', 'roots', 'comunidad']) {
+      assert.equal(parrillaQuoteSchema.safeParse({ ...frase, category }).success, true, String(category))
+    }
+    for (const category of ['valor', 'prospeccion', 'Crecer', '']) {
+      assert.equal(
+        firstError(parrillaQuoteSchema.safeParse({ ...frase, category })),
+        'Categoría no válida. Recarga la página e inténtalo de nuevo.',
+        category
+      )
+    }
+  })
+
+  test('un cuerpo que no es un objeto se rechaza en español, no con el «Expected object» de zod', () => {
+    for (const body of ['hola', 5, null, [], undefined]) {
+      assert.equal(firstError(parrillaQuoteSchema.safeParse(body)), 'Datos inválidos', JSON.stringify(body))
+      assert.equal(firstError(parrillaQuotePatchSchema.safeParse(body)), 'Datos inválidos', JSON.stringify(body))
+    }
+  })
+
+  test('descarta lo que no es suyo: id, created_by, updated_at y used_count nunca llegan a la base', () => {
+    const result = parrillaQuoteSchema.safeParse({
+      ...frase,
+      id: 'otro',
+      created_by: '99999999-9999-4999-8999-999999999999',
+      updated_at: '2000-01-01',
+      used_count: 9,
+    })
+    assert.equal(result.success, true)
+    if (result.success) {
+      const allowed = Object.keys(parrillaQuoteShape)
+      assert.deepEqual(
+        Object.keys(result.data).filter((key) => !allowed.includes(key)),
+        []
+      )
+    }
+  })
+})
+
+describe('frases: editar (PATCH)', () => {
+  test('un parche vacío no es una edición', () => {
+    for (const body of [{}, { author: undefined }]) {
+      assert.equal(firstError(parrillaQuotePatchSchema.safeParse(body)), 'No hay nada que guardar')
+    }
+  })
+
+  test('un solo campo basta, recortado: lo que no llega no se toca', () => {
+    const result = parrillaQuotePatchSchema.safeParse({ author: ' Séneca ' })
+    assert.equal(result.success, true)
+    if (result.success) assert.deepEqual(result.data, { author: 'Séneca' })
+  })
+
+  test('null (o el texto en blanco) limpia los opcionales', () => {
+    const result = parrillaQuotePatchSchema.safeParse({ source: null, author_context: '  ', category: null })
+    assert.equal(result.success, true)
+    if (result.success) assert.deepEqual(result.data, { source: null, author_context: null, category: null })
+  })
+
+  test('los mismos límites y mensajes que al crear; omitir un campo no lo vuelve «vacío»', () => {
+    assert.equal(
+      firstError(parrillaQuotePatchSchema.safeParse({ quote_text: '   ' })),
+      `La frase debe tener al menos ${QUOTE_TEXT_MIN} caracteres`
+    )
+    assert.equal(
+      firstError(parrillaQuotePatchSchema.safeParse({ source: 's'.repeat(QUOTE_SOURCE_MAX + 1) })),
+      `La fuente no puede pasar de ${QUOTE_SOURCE_MAX} caracteres`
+    )
+    assert.equal(
+      firstError(parrillaQuotePatchSchema.safeParse({ category: 'valor' })),
+      'Categoría no válida. Recarga la página e inténtalo de nuevo.'
+    )
+  })
+
+  test('descarta lo que no es editable', () => {
+    const result = parrillaQuotePatchSchema.safeParse({ author: 'Séneca', id: 'x', created_by: 'y', used_count: 3 })
+    assert.equal(result.success, true)
+    if (result.success) assert.deepEqual(result.data, { author: 'Séneca' })
+  })
+})
+
+describe('quote_id: la frase de la que nace una pieza', () => {
+  const QUOTE_ID = '20000000-0000-4000-8000-000000000002'
+
+  test('crear acepta un uuid, null y omitido', () => {
+    for (const quote_id of [QUOTE_ID, null, undefined]) {
+      const result = parrillaPostSchema.safeParse({ ...minimo, quote_id })
+      assert.equal(result.success, true, String(quote_id))
+    }
+    const withId = parrillaPostSchema.safeParse({ ...minimo, quote_id: QUOTE_ID })
+    assert.equal(withId.success && withId.data.quote_id, QUOTE_ID)
+  })
+
+  test('rechaza lo que no es un uuid', () => {
+    for (const quote_id of ['no-es-uuid', '', 5]) {
+      assert.equal(
+        firstError(parrillaPostSchema.safeParse({ ...minimo, quote_id })),
+        'Identificador no válido',
+        String(quote_id)
+      )
+    }
+  })
+
+  test('solo existe al crear: el PATCH de piezas lo descarta, nadie lo edita después', () => {
+    const result = parrillaPostPatchSchema.safeParse({ title: 'Nuevo', quote_id: QUOTE_ID })
+    assert.equal(result.success, true)
+    if (result.success) assert.ok(!('quote_id' in result.data), 'el vínculo no debe poder cambiarse por PATCH')
+  })
+
+  test('no es un campo editable: ni está en el schema compartido ni en EDITABLE_KEYS', () => {
+    assert.ok(!('quote_id' in parrillaPostShape))
+    assert.ok(!(EDITABLE_KEYS as readonly string[]).includes('quote_id'))
+  })
+})
+
+describe('frases: largo como la base (puntos de código) y comillas envolventes', () => {
+  const emoji = '😀' // 1 punto de código para Postgres, 2 unidades para JS
+
+  test('un referente de un solo emoji mide 1 y se rechaza, como lo haría el CHECK de SQL', () => {
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...frase, author: emoji })),
+      `El referente debe tener al menos ${QUOTE_AUTHOR_MIN} caracteres`
+    )
+    assert.equal(parrillaQuoteSchema.safeParse({ ...frase, author: emoji.repeat(2) }).success, true)
+  })
+
+  test('una frase de 2 emojis mide 2 y se rechaza; de 3 pasa', () => {
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...frase, quote_text: emoji.repeat(2) })),
+      `La frase debe tener al menos ${QUOTE_TEXT_MIN} caracteres`
+    )
+    assert.equal(parrillaQuoteSchema.safeParse({ ...frase, quote_text: emoji.repeat(3) }).success, true)
+  })
+
+  test('los topes también cuentan puntos de código: justo en el límite pasa y uno más se rechaza', () => {
+    const ok = (data: object) => parrillaQuoteSchema.safeParse({ ...frase, ...data }).success
+    assert.equal(ok({ quote_text: emoji.repeat(QUOTE_TEXT_MAX) }), true, '500 emojis son 500, no 1000')
+    assert.equal(ok({ quote_text: emoji.repeat(QUOTE_TEXT_MAX + 1) }), false)
+    assert.equal(ok({ author: emoji.repeat(QUOTE_AUTHOR_MAX) }), true)
+    assert.equal(ok({ author: emoji.repeat(QUOTE_AUTHOR_MAX + 1) }), false)
+    assert.equal(ok({ author_context: emoji.repeat(QUOTE_CONTEXT_MAX) }), true)
+    assert.equal(ok({ author_context: emoji.repeat(QUOTE_CONTEXT_MAX + 1) }), false)
+    assert.equal(ok({ source: emoji.repeat(QUOTE_SOURCE_MAX) }), true)
+    assert.equal(ok({ source: emoji.repeat(QUOTE_SOURCE_MAX + 1) }), false)
+  })
+
+  test('las comillas que envuelven la frase se quitan ANTES de medirla', () => {
+    const ok = parrillaQuoteSchema.safeParse({ ...frase, quote_text: '“Quien no arriesga no gana”' })
+    assert.equal(ok.success && ok.data.quote_text, 'Quien no arriesga no gana')
+    // «“ab”» mide 2 una vez sin comillas: no llega al mínimo de 3.
+    assert.equal(
+      firstError(parrillaQuoteSchema.safeParse({ ...frase, quote_text: '“ab”' })),
+      `La frase debe tener al menos ${QUOTE_TEXT_MIN} caracteres`
+    )
+    // Dos citas no son una frase entre comillas: se respetan.
+    const dos = parrillaQuoteSchema.safeParse({ ...frase, quote_text: '"A" y "B"' })
+    assert.equal(dos.success && dos.data.quote_text, '"A" y "B"')
+  })
+
+  test('en el PATCH también', () => {
+    const patch = parrillaQuotePatchSchema.safeParse({ quote_text: '«Quien no arriesga no gana»' })
+    assert.equal(patch.success && patch.data.quote_text, 'Quien no arriesga no gana')
   })
 })

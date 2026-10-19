@@ -6,6 +6,16 @@ import {
   PARRILLA_STATUSES,
   PLATFORMS,
 } from '@/lib/parrilla/posts'
+import {
+  QUOTE_AUTHOR_MAX,
+  QUOTE_AUTHOR_MIN,
+  QUOTE_CONTEXT_MAX,
+  QUOTE_SOURCE_MAX,
+  QUOTE_TEXT_MAX,
+  QUOTE_TEXT_MIN,
+  charLength,
+  stripOuterQuotes,
+} from '@/lib/parrilla/quotes'
 import { datesInOrder, isRealDateOnly } from '@/lib/parrilla/rules'
 
 // Los enums se derivan de las constantes de la UI, para que ninguna lista se
@@ -125,6 +135,13 @@ export const parrillaPostSchema = z
     hidden_sections: parrillaPostShape.hidden_sections.default([]),
     filmmaker_ids: parrillaPostShape.filmmaker_ids.default([]),
     editor_ids: parrillaPostShape.editor_ids.default([]),
+    // La frase de la que nace la pieza («Crear contenido», pestaña Frases). Solo
+    // se escribe al crear y nadie la edita después, por eso NO está en
+    // `parrillaPostShape` (ni en EDITABLE_KEYS): el PATCH la descarta.
+    quote_id: z
+      .string({ invalid_type_error: 'Identificador no válido' })
+      .uuid('Identificador no válido')
+      .nullish(),
   })
   .superRefine(checkDateOrder)
   .superRefine(checkPublishDateRequired)
@@ -147,6 +164,87 @@ export const parrillaRescheduleSchema = z.object({
   date: dateOnlySchema,
 })
 
+// ───────────────────────── Frases de referentes ─────────────────────────
+
+// Los límites son los del CHECK de SQL (20260920_parrilla_frases.sql): si uno
+// cambia, el otro también (tests/drift.test.ts los compara). Se miden con
+// `charLength` —puntos de código, como `char_length` de Postgres— y no con
+// `.min()/.max()` de zod, que cuentan unidades UTF-16: un emoji fuera del plano
+// básico mide 2 allí y 1 en la base, y los extremos dejaban de coincidir.
+const quoteText = z
+  .string({ required_error: 'Escribe la frase', invalid_type_error: 'La frase no es válida' })
+  // Recorta y quita las comillas que envuelven la frase ANTES de medirla: «“ab”» mide 2.
+  .transform(stripOuterQuotes)
+  .pipe(
+    z
+      .string()
+      .refine(
+        (value) => charLength(value) >= QUOTE_TEXT_MIN,
+        `La frase debe tener al menos ${QUOTE_TEXT_MIN} caracteres`
+      )
+      .refine(
+        (value) => charLength(value) <= QUOTE_TEXT_MAX,
+        `La frase no puede pasar de ${QUOTE_TEXT_MAX} caracteres`
+      )
+  )
+
+const quoteAuthor = z
+  .string({ required_error: 'Escribe el referente', invalid_type_error: 'El referente no es válido' })
+  .trim()
+  .refine(
+    (value) => charLength(value) >= QUOTE_AUTHOR_MIN,
+    `El referente debe tener al menos ${QUOTE_AUTHOR_MIN} caracteres`
+  )
+  .refine(
+    (value) => charLength(value) <= QUOTE_AUTHOR_MAX,
+    `El referente no puede pasar de ${QUOTE_AUTHOR_MAX} caracteres`
+  )
+
+// Todas las columnas editables, sin defaults a propósito (igual que
+// `parrillaPostShape`): el PATCH deriva de aquí con `.partial()`. Un test
+// compara estas claves con QUOTE_EDITABLE_KEYS (lib/parrilla/quotes.ts).
+export const parrillaQuoteShape = {
+  quote_text: quoteText,
+  author: quoteAuthor,
+  author_context: optionalText.pipe(
+    z
+      .string()
+      .refine(
+        (value) => charLength(value) <= QUOTE_CONTEXT_MAX,
+        `«Quién fue» no puede pasar de ${QUOTE_CONTEXT_MAX} caracteres`
+      )
+      .nullish()
+  ),
+  source: optionalText.pipe(
+    z
+      .string()
+      .refine(
+        (value) => charLength(value) <= QUOTE_SOURCE_MAX,
+        `La fuente no puede pasar de ${QUOTE_SOURCE_MAX} caracteres`
+      )
+      .nullish()
+  ),
+  // `null` = «Sin categoría»; omitirlo deja la columna como estaba en un PATCH.
+  category: parrillaCategorySchema.nullish(),
+}
+
+// Un cuerpo que no es un objeto (`"hola"`, `5`, `null`, `[]`) llegaba a la persona con el
+// mensaje en inglés de zod («Expected object, received string»).
+const quoteBody = { invalid_type_error: 'Datos inválidos', required_error: 'Datos inválidos' }
+
+/** Crear: la frase completa. */
+export const parrillaQuoteSchema = z.object(parrillaQuoteShape, quoteBody)
+
+/** Editar: solo lo que cambió. Un parche vacío no es una edición. */
+export const parrillaQuotePatchSchema = z
+  .object(parrillaQuoteShape, quoteBody)
+  .partial()
+  .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
+    message: 'No hay nada que guardar',
+  })
+
 export type ParrillaPostInput = z.infer<typeof parrillaPostSchema>
 export type ParrillaPostPatchInput = z.infer<typeof parrillaPostPatchSchema>
 export type ParrillaDateField = z.infer<typeof parrillaDateFieldSchema>
+export type ParrillaQuoteInput = z.infer<typeof parrillaQuoteSchema>
+export type ParrillaQuotePatchInput = z.infer<typeof parrillaQuotePatchSchema>

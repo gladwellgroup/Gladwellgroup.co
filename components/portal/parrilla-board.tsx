@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { ParrillaBank } from '@/components/portal/parrilla-bank'
 import { ParrillaCalendar } from '@/components/portal/parrilla-calendar'
+import { ParrillaQuotes } from '@/components/portal/parrilla-quotes'
 import { PLATFORM_ICONS } from '@/components/portal/parrilla-shared'
 import {
   DATE_FIELD_LABELS,
@@ -16,21 +17,29 @@ import {
   type ParrillaPostSummary,
   type Platform,
 } from '@/lib/parrilla/posts'
+import { distinctAuthors, type ParrillaQuote } from '@/lib/parrilla/quotes'
 
 type CategoryFilterValue = ParrillaCategory | 'todas'
 
 const DATE_FIELDS: ParrillaDateField[] = ['production_date', 'publish_date']
 
 /** Control segmentado de la página: el mismo aspecto para elegir qué se ve
- *  (Calendario / Banco) y qué fecha organiza el calendario (Producción /
- *  Publicación). */
+ *  (Calendario / Banco / Frases) y qué fecha organiza el calendario (Producción /
+ *  Publicación).
+ *
+ *  Con tres pestañas ya no caben en un teléfono (≈ 343 px de ancho útil): bajo
+ *  `sm` el relleno es menor y una opción puede traer `shortLabel` («Banco»). La
+ *  etiqueta corta y la larga son dos `span` hermanos y `display: none` saca de
+ *  `sm` para arriba / para abajo al que no se ve, así que el nombre accesible es
+ *  siempre el texto visible (WCAG 2.5.3, «label in name») — por eso no se usa un
+ *  `aria-label` que lo pise. Al tacto el relleno vuelve a crecer desde `sm`. */
 function PillTabs<T extends string>({
   options,
   value,
   onChange,
   ariaLabel,
 }: {
-  options: { value: T; label: string; count?: number }[]
+  options: { value: T; label: string; shortLabel?: string; count?: number }[]
   value: T
   onChange: (value: T) => void
   ariaLabel?: string
@@ -49,13 +58,20 @@ function PillTabs<T extends string>({
             type="button"
             onClick={() => onChange(option.value)}
             aria-pressed={active}
-            className={`flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition-colors pointer-coarse:min-h-11 pointer-coarse:px-6 ${
+            className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-sm font-semibold transition-colors pointer-coarse:min-h-11 sm:px-5 sm:pointer-coarse:px-6 ${
               active
                 ? 'bg-[#7C3AED] text-white shadow-[0_0_20px_rgba(124,58,237,0.35)]'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-muted-foreground hover:text-foreground active:text-foreground'
             }`}
           >
-            {option.label}
+            {option.shortLabel ? (
+              <>
+                <span className="sm:hidden">{option.shortLabel}</span>
+                <span className="hidden sm:inline">{option.label}</span>
+              </>
+            ) : (
+              option.label
+            )}
             {option.count !== undefined && (
               <span className="tabular-nums opacity-70">{option.count}</span>
             )}
@@ -159,26 +175,34 @@ function PlatformFilter({
 }
 
 /** Single-select: a diferencia de plataformas, cada post tiene como mucho
- *  una categoría — no tiene sentido "coincide con varias" acá. */
-function CategoryFilter({
-  posts,
+ *  una categoría — no tiene sentido "coincide con varias" acá. Solo lee
+ *  `category`, así que sirve igual para las publicaciones que para las frases.
+ *
+ *  La fila se oculta con menos de dos categorías (un solo chip no filtra nada)…
+ *  salvo que haya un filtro ACTIVO: si la última pieza de esa categoría se borra o
+ *  cambia de categoría, el filtro seguía puesto, la lista quedaba vacía y, sin la
+ *  fila, no había ningún chip para quitarlo (solo cambiar de pestaña). Así la
+ *  categoría activa se queda con su chip —con el conteo en 0— y «Todas» sigue ahí.
+ *  Exportada para probarla sin dibujar el tablero. */
+export function CategoryFilter({
+  items,
   value,
   onChange,
 }: {
-  posts: ParrillaPostSummary[]
+  items: readonly { category: ParrillaCategory | null }[]
   value: CategoryFilterValue
   onChange: (value: CategoryFilterValue) => void
 }) {
   const counts = new Map<ParrillaCategory, number>()
-  for (const p of posts) {
-    if (p.category) counts.set(p.category, (counts.get(p.category) ?? 0) + 1)
+  for (const item of items) {
+    if (item.category) counts.set(item.category, (counts.get(item.category) ?? 0) + 1)
   }
 
-  const visibles = PARRILLA_CATEGORIES.filter((c) => (counts.get(c) ?? 0) > 0)
-  if (visibles.length < 2) return null
+  const visibles = PARRILLA_CATEGORIES.filter((c) => (counts.get(c) ?? 0) > 0 || c === value)
+  if (value === 'todas' && visibles.length < 2) return null
 
   const opciones: { key: CategoryFilterValue; label: string; count: number }[] = [
-    { key: 'todas', label: 'Todas', count: posts.length },
+    { key: 'todas', label: 'Todas', count: items.length },
     ...visibles.map((c) => ({ key: c as CategoryFilterValue, label: PARRILLA_CATEGORY_LABELS[c], count: counts.get(c) ?? 0 })),
   ]
 
@@ -210,16 +234,20 @@ function CategoryFilter({
 interface ParrillaBoardProps {
   posts: ParrillaPostSummary[]
   editors: ParrillaEditor[]
+  /** La biblioteca de frases de referentes históricos (pestaña «Frases»). */
+  quotes: ParrillaQuote[]
 }
 
-type BoardView = 'calendario' | 'banco'
+type BoardView = 'calendario' | 'banco' | 'frases'
 
 /** Orquesta el calendario (con sus dos vistas, producción / publicación), el
- *  Banco de contenido y los filtros por plataforma y categoría, que aplican a
- *  la pestaña activa. ParrillaCalendar y ParrillaBank siguen siendo "tontos":
- *  solo dibujan los `posts` que les pasen. Lo archivado vive en el Banco y no
- *  en el calendario: no tiene fecha de publicación. */
-export function ParrillaBoard({ posts, editors }: ParrillaBoardProps) {
+ *  Banco de contenido, la biblioteca de frases y los filtros por plataforma y
+ *  categoría, que aplican a la pestaña activa. ParrillaCalendar, ParrillaBank y
+ *  ParrillaQuotes siguen siendo "tontos": solo dibujan lo que les pasen. Lo
+ *  archivado vive en el Banco y no en el calendario: no tiene fecha de
+ *  publicación. Las frases no tienen plataforma, así que en esa pestaña solo
+ *  aplica el filtro de categoría. */
+export function ParrillaBoard({ posts, editors, quotes }: ParrillaBoardProps) {
   const [view, setView] = useState<BoardView>('calendario')
   const [dateField, setDateField] = useState<ParrillaDateField>('publish_date')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
@@ -244,6 +272,13 @@ export function ParrillaBoard({ posts, editors }: ParrillaBoardProps) {
     return platformFiltered.filter((p) => p.category === categoryFilter)
   }, [platformFiltered, categoryFilter])
 
+  const filteredQuotes = useMemo(() => {
+    if (categoryFilter === 'todas') return quotes
+    return quotes.filter((q) => q.category === categoryFilter)
+  }, [quotes, categoryFilter])
+  const authors = useMemo(() => distinctAuthors(quotes), [quotes])
+  const anyQuoteUsed = useMemo(() => quotes.some((q) => q.used_count > 0), [quotes])
+
   function togglePlatform(platform: Platform) {
     setSelectedPlatforms((prev) =>
       prev.includes(platform) ? prev.filter((p) => p !== platform) : [...prev, platform]
@@ -266,24 +301,44 @@ export function ParrillaBoard({ posts, editors }: ParrillaBoardProps) {
           ariaLabel="Parrilla"
           options={[
             { value: 'calendario', label: 'Calendario', count: scheduled.length },
-            { value: 'banco', label: 'Banco de contenido', count: archived.length },
+            {
+              value: 'banco',
+              label: 'Banco de contenido',
+              shortLabel: 'Banco',
+              count: archived.length,
+            },
+            { value: 'frases', label: 'Frases', count: quotes.length },
           ]}
           value={view}
           onChange={changeView}
         />
       </div>
       {view === 'calendario' && <ViewTabs value={dateField} onChange={setDateField} />}
-      <PlatformFilter
-        posts={scoped}
-        selected={selectedPlatforms}
-        onToggle={togglePlatform}
-        onClear={() => setSelectedPlatforms([])}
+      {view !== 'frases' && (
+        <PlatformFilter
+          posts={scoped}
+          selected={selectedPlatforms}
+          onToggle={togglePlatform}
+          onClear={() => setSelectedPlatforms([])}
+        />
+      )}
+      <CategoryFilter
+        items={view === 'frases' ? quotes : platformFiltered}
+        value={categoryFilter}
+        onChange={setCategoryFilter}
       />
-      <CategoryFilter posts={platformFiltered} value={categoryFilter} onChange={setCategoryFilter} />
       {view === 'calendario' ? (
         <ParrillaCalendar posts={filteredPosts} dateField={dateField} editors={editors} />
-      ) : (
+      ) : view === 'banco' ? (
         <ParrillaBank posts={filteredPosts} total={archived.length} editors={editors} />
+      ) : (
+        <ParrillaQuotes
+          quotes={filteredQuotes}
+          total={quotes.length}
+          anyUsed={anyQuoteUsed}
+          authors={authors}
+          editors={editors}
+        />
       )}
     </div>
   )

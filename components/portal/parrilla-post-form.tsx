@@ -41,6 +41,7 @@ import {
   showsTalent,
   type EditableFields,
   type EditableKey,
+  type PostDraft,
 } from '@/lib/parrilla/rules'
 
 /** Nombres con los que el modal muestra cada campo — para avisar cuál cambió
@@ -72,11 +73,15 @@ function todayIso(): string {
 }
 
 /** Punto de partida del formulario. En edición solo se conoce el resumen del
- *  calendario: Guion, Copy y portada llegan con el detalle. */
-function initialFields(
+ *  calendario: Guion, Copy y portada llegan con el detalle. Al crear, `draft` (p.
+ *  ej. una frase de la pestaña «Frases») prellena título, copy y categoría, y nada
+ *  más: las fechas y el estado siguen saliendo de `defaultDate` / `defaultStatus`.
+ *  Exportada para probarla sin dibujar el formulario. */
+export function initialFields(
   post: ParrillaPostSummary | null,
   defaultDate?: string,
-  defaultStatus?: ParrillaStatus
+  defaultStatus?: ParrillaStatus,
+  draft?: PostDraft
 ): EditableFields {
   if (post) {
     return {
@@ -105,20 +110,20 @@ function initialFields(
   const day = defaultDate ?? todayIso()
   const status = defaultStatus ?? 'idea'
   return {
-    title: '',
+    title: draft?.title ?? '',
     platforms: [],
     production_date: day,
     publish_date: isArchived(status) ? null : day,
     status,
     format: null,
-    category: null,
+    category: draft?.category ?? null,
     talent: null,
     inspiration_url: null,
     hidden_sections: [],
     filmmaker_ids: [],
     editor_ids: [],
     copy_text: null,
-    caption: null,
+    caption: draft?.caption ?? null,
     cover_image_url: null,
   }
 }
@@ -212,6 +217,10 @@ interface ParrillaPostFormProps {
   /** Estado con el que arranca una pieza nueva; sin él, 'idea'. El Banco de
    *  contenido crea sus ideas ya archivadas. */
   defaultStatus?: ParrillaStatus
+  /** Prellenado de una pieza NUEVA (título, copy y categoría); se ignora al editar. */
+  draft?: PostDraft
+  /** La frase de la que nace la pieza nueva. Se manda al crear, una sola vez. */
+  sourceQuoteId?: string
   editors: ParrillaEditor[]
   onClose: () => void
 }
@@ -223,12 +232,14 @@ export function ParrillaPostForm({
   post,
   defaultDate,
   defaultStatus,
+  draft,
+  sourceQuoteId,
   editors,
   onClose,
 }: ParrillaPostFormProps) {
   const router = useRouter()
   const [state, setState] = useState<FormState>(() => {
-    const start = initialFields(post, defaultDate, defaultStatus)
+    const start = initialFields(post, defaultDate, defaultStatus, draft)
     return {
       form: start,
       base: start,
@@ -240,9 +251,11 @@ export function ParrillaPostForm({
   const [reloadKey, setReloadKey] = useState(0)
   // Colapsados por defecto: un guion o un copy largo no debe dominar el modal.
   // Si ya tenía texto (edición), arranca abierto para que no parezca que se
-  // perdió — se decide cuando llega el detalle.
+  // perdió — se decide cuando llega el detalle. Un copy prellenado desde una
+  // frase también arranca abierto: colapsado se vería como un botón con el texto
+  // truncado, y es justo lo que se quiere revisar.
   const [guionExpanded, setGuionExpanded] = useState(false)
-  const [captionExpanded, setCaptionExpanded] = useState(false)
+  const [captionExpanded, setCaptionExpanded] = useState(() => !post && Boolean(draft?.caption))
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -352,7 +365,12 @@ export function ParrillaPostForm({
   }
 
   async function submitCreate() {
-    const outcome = await send('/api/parrilla', 'POST', normalizeFields(form))
+    // `quote_id` solo viaja si la pieza nace de una frase: una alta normal manda
+    // exactamente lo mismo de siempre.
+    const outcome = await send('/api/parrilla', 'POST', {
+      ...normalizeFields(form),
+      ...(sourceQuoteId ? { quote_id: sourceQuoteId } : {}),
+    })
     if (outcome.kind === 'ok') return finish()
     setError(outcome.kind === 'error' ? outcome.message : 'No se pudo crear la publicación')
   }

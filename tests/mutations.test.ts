@@ -10,6 +10,7 @@ import {
   storagePathFromUrl,
   type GuardRow,
 } from '@/lib/parrilla/mutations'
+import { createQuote, deleteQuote, updateQuote } from '@/lib/parrilla/quote-mutations'
 
 const ID = '10000000-0000-4000-8000-000000000001'
 const USER = '00000000-0000-4000-8000-000000000001'
@@ -245,6 +246,25 @@ describe('describeDbError', () => {
     for (const code of ['42703', 'PGRST204']) {
       assert.match(describeDbError({ code }, 'x'), /migración/)
     }
+  })
+
+  test('tabla inexistente = migración sin aplicar (p. ej. las frases, si falta el SQL)', () => {
+    for (const code of ['42P01', 'PGRST205']) {
+      assert.match(describeDbError({ code }, 'x'), /migración/)
+    }
+  })
+
+  test('conoce los CHECK de las frases por nombre', () => {
+    const msg = (name: string) =>
+      describeDbError(
+        { code: '23514', message: `new row for relation "parrilla_quotes" violates check constraint "${name}"` },
+        'No se pudo guardar'
+      )
+    assert.match(msg('parrilla_quotes_quote_text_check'), /^La frase debe tener entre 3 y 500 caracteres\. Recarga/)
+    assert.match(msg('parrilla_quotes_author_check'), /^El referente debe tener entre 2 y 120 caracteres\. Recarga/)
+    assert.match(msg('parrilla_quotes_author_context_check'), /^«Quién fue» no puede pasar de 160 caracteres\. Recarga/)
+    assert.match(msg('parrilla_quotes_source_check'), /^La fuente no puede pasar de 300 caracteres\. Recarga/)
+    assert.match(msg('parrilla_quotes_category_check'), /^La categoría no es válida\. Recarga/)
   })
 
   test('cualquier otro error usa el mensaje de la ruta', () => {
@@ -542,5 +562,202 @@ describe('createPost', () => {
     const fake = fakeSupabase([{ data: null, error: { code: '23514', message: 'violates check constraint "parrilla_posts_category_check"' } }])
     const out = await createPost(fake.client, input, USER)
     assert.equal(out.ok, false)
+  })
+
+  // Pestaña «Frases»: «Crear contenido» crea la pieza con el vínculo a su frase.
+  const QUOTE = '20000000-0000-4000-8000-000000000002'
+  const FK_ERROR = { code: '23503', message: 'violates foreign key constraint "parrilla_posts_quote_id_fkey"' }
+
+  test('sin frase de origen el INSERT NO lleva quote_id: una alta normal no depende de la migración 20260920', async () => {
+    // Con el código desplegado antes que el SQL, mandar la columna —aunque sea
+    // null— haría fallar TODAS las altas de publicaciones (PGRST204).
+    for (const extra of [{}, { quote_id: null }, { quote_id: undefined }]) {
+      const fake = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+      await createPost(fake.client, { ...input, ...extra }, USER)
+      const row = fake.callsTo('insert')[0].args[0] as Record<string, unknown>
+      assert.ok(!('quote_id' in row), `quote_id no debe viajar con ${JSON.stringify(extra)}`)
+    }
+  })
+
+  test('creada desde una frase, guarda el vínculo y sigue siendo una sola escritura', async () => {
+    const fake = fakeSupabase([{ data: { id: 'nuevo-id' } }])
+    const out = await createPost(fake.client, { ...input, quote_id: QUOTE }, USER)
+    assert.deepEqual(out, { ok: true, id: 'nuevo-id' })
+    assert.equal(fake.callsTo('insert').length, 1)
+    const row = fake.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.equal(row.quote_id, QUOTE)
+    assert.equal(row.created_by, USER)
+    assert.equal(row.title, 'Pieza nueva')
+  })
+
+  test('si la frase se borró mientras tanto (23503), crea la pieza igual, sin el vínculo', async () => {
+    const fake = fakeSupabase([{ data: null, error: FK_ERROR }, { data: { id: 'nuevo-id' } }])
+    const out = await createPost(fake.client, { ...input, quote_id: QUOTE }, USER)
+
+    assert.deepEqual(out, { ok: true, id: 'nuevo-id' })
+    const inserts = fake.callsTo('insert')
+    assert.equal(inserts.length, 2, 'se reintenta una sola vez')
+    assert.equal((inserts[0].args[0] as Record<string, unknown>).quote_id, QUOTE)
+    const retry = inserts[1].args[0] as Record<string, unknown>
+    assert.ok(!('quote_id' in retry), 'el reintento va sin el vínculo')
+    assert.equal(retry.title, 'Pieza nueva', 'y con todo lo demás: no se pierde el trabajo de la persona')
+    assert.equal(retry.created_by, USER)
+  })
+
+  test('un 23503 sin frase de origen no se reintenta', async () => {
+    const fake = fakeSupabase([{ data: null, error: FK_ERROR }])
+    const out = await createPost(fake.client, input, USER)
+    assert.equal(out.ok, false)
+    assert.equal(fake.callsTo('insert').length, 1)
+  })
+
+  test('si el reintento también falla, devuelve ese fallo y no reintenta más', async () => {
+    const fake = fakeSupabase([
+      { data: null, error: FK_ERROR },
+      { data: null, error: { code: '23514', message: 'violates check constraint "parrilla_posts_category_check"' } },
+    ])
+    const out = await createPost(fake.client, { ...input, quote_id: QUOTE }, USER)
+    assert.equal(out.ok === false && out.status, 400)
+    assert.equal(fake.callsTo('insert').length, 2)
+  })
+
+  test('otros errores con frase de origen no se reintentan', async () => {
+    const fake = fakeSupabase([{ data: null, error: { code: '23514', message: 'violates check constraint "parrilla_posts_category_check"' } }])
+    const out = await createPost(fake.client, { ...input, quote_id: QUOTE }, USER)
+    assert.equal(out.ok === false && out.status, 400)
+    assert.equal(fake.callsTo('insert').length, 1)
+  })
+})
+
+// ───────────── Frases (lib/parrilla/quote-mutations.ts) ─────────────
+
+describe('createQuote', () => {
+  const input = { quote_text: ' La felicidad depende de tus pensamientos ', author: ' Marco Aurelio ' }
+
+  test('guarda la frase normalizada y con el usuario de la sesión', async () => {
+    const fake = fakeSupabase([{ data: { id: 'frase-id' } }])
+    const out = await createQuote(
+      fake.client,
+      { ...input, author_context: '   ', source: ' Meditaciones ', category: 'crecer' },
+      USER
+    )
+
+    assert.deepEqual(out, { ok: true, id: 'frase-id' })
+    assert.deepEqual(fake.callsTo('from')[0].args, ['parrilla_quotes'])
+    assert.deepEqual(fake.callsTo('insert')[0].args[0], {
+      quote_text: 'La felicidad depende de tus pensamientos',
+      author: 'Marco Aurelio',
+      author_context: null,
+      source: 'Meditaciones',
+      category: 'crecer',
+      created_by: USER,
+    })
+  })
+
+  test('quita las comillas que envuelven la frase: la tarjeta y el copy ponen las suyas', async () => {
+    const fake = fakeSupabase([{ data: { id: 'frase-id' } }])
+    await createQuote(fake.client, { quote_text: '“Quien no arriesga no gana”', author: 'Refrán popular' }, USER)
+    const row = fake.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.equal(row.quote_text, 'Quien no arriesga no gana')
+  })
+
+  test('los opcionales que no llegan se guardan como null', async () => {
+    const fake = fakeSupabase([{ data: { id: 'frase-id' } }])
+    await createQuote(fake.client, input, USER)
+    const row = fake.callsTo('insert')[0].args[0] as Record<string, unknown>
+    assert.equal(row.author_context, null)
+    assert.equal(row.source, null)
+    assert.equal(row.category, null)
+  })
+
+  test('un CHECK de la base es 400, con el mensaje de esa restricción', async () => {
+    const fake = fakeSupabase([
+      { data: null, error: { code: '23514', message: 'violates check constraint "parrilla_quotes_quote_text_check"' } },
+    ])
+    const out = await createQuote(fake.client, input, USER)
+    assert.equal(out.ok === false && out.status, 400)
+    assert.match(out.ok === false ? out.error : '', /^La frase debe tener entre 3 y 500 caracteres/)
+  })
+
+  test('tabla inexistente (migración sin aplicar): 500 con un aviso claro', async () => {
+    for (const code of ['PGRST205', '42P01']) {
+      const out = await createQuote(fakeSupabase([{ data: null, error: { code } }]).client, input, USER)
+      assert.equal(out.ok === false && out.status, 500, code)
+      assert.match(out.ok === false ? out.error : '', /migración/, code)
+    }
+  })
+
+  test('cualquier otro error usa el mensaje de la ruta', async () => {
+    const out = await createQuote(fakeSupabase([{ data: null, error: { code: '57014' } }]).client, input, USER)
+    assert.deepEqual(out, { ok: false, status: 500, error: 'No se pudo crear la frase' })
+  })
+})
+
+describe('updateQuote', () => {
+  test('un id que no es uuid es 404 y no toca la base', async () => {
+    const fake = fakeSupabase([])
+    const out = await updateQuote(fake.client, 'no-es-uuid', { author: 'Séneca' })
+    assert.deepEqual(out, { ok: false, status: 404, error: 'La frase ya no existe' })
+    assert.equal(fake.calls.length, 0)
+  })
+
+  test('un parche sin cambios no escribe', async () => {
+    for (const patch of [{}, { author: undefined }]) {
+      const fake = fakeSupabase([])
+      assert.deepEqual(await updateQuote(fake.client, ID, patch), { ok: true })
+      assert.equal(fake.calls.length, 0)
+    }
+  })
+
+  test('escribe solo las claves que llegan; null limpia un opcional', async () => {
+    const fake = fakeSupabase([{ data: { id: ID } }])
+    const out = await updateQuote(fake.client, ID, { author: 'Séneca', source: null, category: undefined })
+
+    assert.deepEqual(out, { ok: true })
+    assert.deepEqual(fake.callsTo('update')[0].args[0], { author: 'Séneca', source: null })
+    assert.ok(fake.callsTo('eq').some((call) => call.args.join('=') === `id=${ID}`))
+  })
+
+  test('sin fila afectada, la frase ya no existe (404): otra persona la borró', async () => {
+    const out = await updateQuote(fakeSupabase([{ data: null }]).client, ID, { author: 'Séneca' })
+    assert.deepEqual(out, { ok: false, status: 404, error: 'La frase ya no existe' })
+  })
+
+  test('un CHECK de la base es 400 con su mensaje; otro error usa el de la ruta', async () => {
+    const check = fakeSupabase([
+      { data: null, error: { code: '23514', message: 'violates check constraint "parrilla_quotes_category_check"' } },
+    ])
+    const a = await updateQuote(check.client, ID, { category: 'crecer' })
+    assert.equal(a.ok === false && a.status, 400)
+    assert.match(a.ok === false ? a.error : '', /^La categoría no es válida/)
+
+    const other = await updateQuote(fakeSupabase([{ data: null, error: { code: '57014' } }]).client, ID, { author: 'x' })
+    assert.deepEqual(other, { ok: false, status: 500, error: 'No se pudo actualizar la frase' })
+  })
+})
+
+describe('deleteQuote', () => {
+  test('un id que no es uuid es 404 y no toca la base', async () => {
+    const fake = fakeSupabase([])
+    const out = await deleteQuote(fake.client, 'x')
+    assert.equal(out.ok === false && out.status, 404)
+    assert.equal(fake.calls.length, 0)
+  })
+
+  test('borrar algo que no existe es 404, no éxito', async () => {
+    const out = await deleteQuote(fakeSupabase([{ data: null }]).client, ID)
+    assert.deepEqual(out, { ok: false, status: 404, error: 'La frase ya no existe' })
+  })
+
+  test('borra la fila en una sola llamada', async () => {
+    const fake = fakeSupabase([{ data: { id: ID } }])
+    assert.deepEqual(await deleteQuote(fake.client, ID), { ok: true })
+    assert.equal(fake.callsTo('delete').length, 1)
+    assert.deepEqual(fake.callsTo('from')[0].args, ['parrilla_quotes'])
+  })
+
+  test('un error de la base es 500 con el mensaje de la ruta', async () => {
+    const out = await deleteQuote(fakeSupabase([{ data: null, error: { code: '57014' } }]).client, ID)
+    assert.deepEqual(out, { ok: false, status: 500, error: 'No se pudo eliminar la frase' })
   })
 })

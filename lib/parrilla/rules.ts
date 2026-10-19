@@ -39,6 +39,12 @@ export type EditableKey = (typeof EDITABLE_KEYS)[number]
 export type EditableFields = Omit<ParrillaPost, 'id' | 'updated_at'>
 export type PostPatch = Partial<EditableFields>
 
+/** Lo único que otra pantalla puede prellenar al CREAR una pieza (hoy, la
+ *  biblioteca de frases): título, copy y categoría. Estrecho a propósito: así
+ *  nadie prellena fechas ni estado y rompe «archivada ⇒ sin fecha de
+ *  publicación». */
+export type PostDraft = Partial<Pick<EditableFields, 'title' | 'caption' | 'category'>>
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const isUuid = (value: string): boolean => UUID_RE.test(value)
@@ -74,7 +80,9 @@ export function showsFilmmaker(
  *  SQL). Aquí y no en posts.ts: este módulo no importa nada en runtime. */
 export const isArchived = (status: ParrillaStatus): boolean => status === 'archivado'
 
-const blankToNull = (value: string | null | undefined): string | null => {
+/** '' y solo-espacios son lo mismo que «sin valor»: un único NULL para vacío.
+ *  También lo usan las frases (lib/parrilla/quotes.ts). */
+export const blankToNull = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
 }

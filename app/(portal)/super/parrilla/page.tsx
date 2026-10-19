@@ -2,15 +2,17 @@ import { redirect } from 'next/navigation'
 import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { loadParrillaEditors, loadParrillaPosts } from '@/lib/parrilla/posts'
+import { loadParrillaQuotes } from '@/lib/parrilla/quotes'
 import { ParrillaBoard } from '@/components/portal/parrilla-board'
 
 export default async function SuperParrillaPage() {
   const user = await requirePermission('parrilla:manage')
   if (user.role !== 'super_admin') redirect('/admin/parrilla')
   const supabase = getSupabaseServer()
-  const [posts, editors] = await Promise.all([
+  const [posts, editors, quotes] = await Promise.all([
     loadParrillaPosts(supabase),
     loadParrillaEditors(supabase),
+    loadParrillaQuotes(supabase),
   ])
 
   return (
@@ -23,7 +25,7 @@ export default async function SuperParrillaPage() {
           Planifica y sigue las publicaciones de redes sociales de Gladwell.
         </p>
       </div>
-      <ParrillaBoard posts={posts} editors={editors} />
+      <ParrillaBoard posts={posts} editors={editors} quotes={quotes} />
     </div>
   )
 }
