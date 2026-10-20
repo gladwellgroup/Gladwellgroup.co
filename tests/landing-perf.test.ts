@@ -89,3 +89,41 @@ describe('landing: toda imagen declara su `sizes`', () => {
     }
   })
 })
+
+describe('landing: el hero pide una sola foto', () => {
+  // Antes: 8 capas con `background-image` en línea; las fotos oscura y clara de cada breakpoint se
+  // descargaban a la vez (1,5 MB en escritorio, 1,7 MB en móvil) aunque solo se viera una.
+  const background = code(read('components/sections/hero-background.tsx'))
+  const section = code(read('components/sections/hero-section.tsx'))
+
+  test('usa getImageProps con fotos importadas, no un background-image en línea', () => {
+    assert.match(background, /getImageProps\(/)
+    for (const name of ['hero-bg-desktop', 'hero-bg-desktop-light', 'hero-bg-mobile', 'hero-bg-mobile-light']) {
+      assert.match(background, new RegExp(`from "@/public/images/${name}\\.jpg"`), name)
+    }
+    for (const source of [background, section]) {
+      assert.doesNotMatch(source, /backgroundImage|url\(['"]\/images\/hero/, 'volvió el background-image en línea')
+    }
+  })
+
+  test('sin priority ni preload (precargarían los dos breakpoints) y una sola foto eager', () => {
+    assert.doesNotMatch(background, /\bpriority\b|\bpreload\b/)
+    // `layer(móvil, escritorio, eager)`: solo la del tema por defecto (oscuro) se pide con prisa; la clara es lazy
+    const calls = [...background.matchAll(/\blayer\((\w+), (\w+), (true|false)\)/g)].map((m) => ({ mobile: m[1], eager: m[3] === 'true' }))
+    assert.equal(calls.length, 2, 'una capa por tema')
+    assert.deepEqual(calls.filter((call) => call.eager).map((call) => call.mobile), ['mobileDark'], 'solo la foto oscura es eager')
+    assert.match(background, /loading: eager \? "eager" : "lazy"/)
+  })
+
+  test('la foto clara va oculta por defecto: no se pide hasta que alguien activa el tema claro', () => {
+    assert.match(background, /<picture className="absolute inset-0 light:hidden">/)
+    assert.match(background, /<picture className="absolute inset-0 hidden light:block">/)
+    assert.match(read('app/globals.css'), /@custom-variant light \(&:is\(\.light \*\)\);/)
+  })
+
+  test('el fondo llega a HeroSection como children: las fotos no entran al JS del cliente', () => {
+    assert.match(section, /\{children\}/)
+    assert.doesNotMatch(section, /hero-background|getImageProps/)
+    assert.match(code(read('app/page.tsx')), /<HeroSection>\s*<HeroBackground \/>\s*<\/HeroSection>/)
+  })
+})

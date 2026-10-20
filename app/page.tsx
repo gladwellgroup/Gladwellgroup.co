@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/layout/navbar"
 import { HeroSection } from "@/components/sections/hero-section"
+import { HeroBackground } from "@/components/sections/hero-background"
 import { VideoSection } from "@/components/sections/video-section"
 import { PillarsSection } from "@/components/sections/pillars-section"
 import { GallerySection } from "@/components/sections/gallery-section"
@@ -13,7 +14,9 @@ export default function Home() {
     <WalkingListProvider>
       <main>
         <Navbar />
-        <HeroSection />
+        <HeroSection>
+          <HeroBackground />
+        </HeroSection>
         <ContentBackground>
           <VideoSection />
           <PillarsSection />

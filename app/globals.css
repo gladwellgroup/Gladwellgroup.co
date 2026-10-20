@@ -2,6 +2,10 @@
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
+/* El tema por defecto es el oscuro (`defaultTheme="dark"`): quien solo tiene la foto oscura de fondo
+   escribe la clase base y usa `light:` para el caso poco común, y así lo claro no se pide ni se pinta
+   hasta que alguien lo activa (ver components/sections/hero-background.tsx). */
+@custom-variant light (&:is(.light *));
 
 :root {
   /* Gladwell Brand Colors - DARK MODE (default) */

@@ -3,54 +3,14 @@
 import { useWalkingList } from "@/components/providers/walking-list-provider"
 import { HERO_INDICATORS } from "@/lib/data/navigation"
 
-export function HeroSection() {
+/** `children` es el fondo (fotos + degradado): lo renderiza el servidor (hero-background.tsx) y llega ya
+ *  hecho para que las fotos y `getImageProps` no entren al JS del cliente. */
+export function HeroSection({ children }: { children: React.ReactNode }) {
   const { openWalkingList } = useWalkingList()
 
   return (
     <section id="inicio" className="relative min-h-screen flex items-center justify-center overflow-hidden scroll-mt-0">
-      {/* Mobile backgrounds */}
-      <div
-        className="absolute inset-0 md:hidden bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out opacity-100 dark:opacity-0"
-        style={{ backgroundImage: "url('/images/hero-bg-mobile-light.jpg')" }}
-        aria-hidden
-      />
-      <div
-        className="absolute inset-0 md:hidden bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out opacity-0 dark:opacity-100"
-        style={{ backgroundImage: "url('/images/hero-bg-mobile.jpg')" }}
-        aria-hidden
-      />
-
-      {/* Mobile overlays */}
-      <div
-        className="absolute inset-0 md:hidden bg-gradient-to-b from-white/15 via-black/25 to-black/55 transition-opacity duration-500 ease-in-out opacity-100 dark:opacity-0 pointer-events-none"
-        aria-hidden
-      />
-      <div
-        className="absolute inset-0 md:hidden bg-gradient-to-b from-black/30 via-black/50 to-black/90 transition-opacity duration-500 ease-in-out opacity-0 dark:opacity-100 pointer-events-none"
-        aria-hidden
-      />
-
-      {/* Desktop backgrounds */}
-      <div
-        className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out opacity-0 dark:opacity-100"
-        style={{ backgroundImage: "url('/images/hero-bg-desktop.jpg')" }}
-        aria-hidden
-      />
-      <div
-        className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out opacity-100 dark:opacity-0"
-        style={{ backgroundImage: "url('/images/hero-bg-desktop-light.jpg')" }}
-        aria-hidden
-      />
-
-      {/* Desktop overlays */}
-      <div
-        className="absolute inset-0 hidden md:block bg-gradient-to-b from-white/15 via-black/25 to-black/55 transition-opacity duration-500 ease-in-out opacity-100 dark:opacity-0 pointer-events-none"
-        aria-hidden
-      />
-      <div
-        className="absolute inset-0 hidden md:block bg-gradient-to-b from-black/30 via-black/50 to-black/90 transition-opacity duration-500 ease-in-out opacity-0 dark:opacity-100 pointer-events-none"
-        aria-hidden
-      />
+      {children}
 
       {/* Content */}
       <div className="relative z-10 container mx-auto px-6 text-center pt-24 md:pt-20">

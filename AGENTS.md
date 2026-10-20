@@ -93,6 +93,9 @@ Solo instalar lo que se usará activamente.
   `.glow-cyan` (degradado radial) en `app/globals.css`.
 - **Al reemplazar una foto de `public/images/`, usar un nombre nuevo**: el CDN y el navegador pueden
   conservar la anterior bajo la misma URL.
+- **El fondo del hero pide UNA foto por tema y pantalla** (`components/sections/hero-background.tsx`:
+  `getImageProps` + `<picture>`, fotos importadas). No volver a un `background-image` en línea (descarga las
+  fotos oscura y clara a la vez) ni a `priority`/`preload` (precargarían los dos breakpoints).
 - Al medir el scroll, hacerlo en WebKit (el motor de Safari) y en Chromium con perfil móvil: lo que
   solo falla en Safari no se ve en Chrome.
 
