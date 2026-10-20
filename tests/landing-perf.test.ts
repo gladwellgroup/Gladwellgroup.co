@@ -2,6 +2,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import vm from 'node:vm'
 
 // La landing se mide (WebKit y Chromium con perfil móvil; ver AGENTS.md, «Imágenes y efectos pesados»).
 // Lo que más pesaba al hacer scroll era, en Safari, un desenfoque de ~768 px (dos `blur-3xl` de la
@@ -125,5 +126,104 @@ describe('landing: el hero pide una sola foto', () => {
     assert.match(section, /\{children\}/)
     assert.doesNotMatch(section, /hero-background|getImageProps/)
     assert.match(code(read('app/page.tsx')), /<HeroSection>\s*<HeroBackground \/>\s*<\/HeroSection>/)
+  })
+})
+
+describe('landing: cabecera, footer y caché de imágenes', () => {
+  test('la cabecera fija solo transiciona color, borde y sombra', () => {
+    const header = /<header[\s\S]*?>/.exec(code(read('components/layout/navbar.tsx')))?.[0]
+    assert.ok(header, 'no encontré el <header> de la barra')
+    assert.doesNotMatch(header, /transition-all/, '`transition-all` animaba también el backdrop-filter al primer scroll')
+    assert.match(header, /transition-\[background-color,border-color,box-shadow\]/)
+  })
+
+  test('el enlace «Iniciar sesión» del footer no precarga el login (~295 KB de JS)', () => {
+    assert.match(code(read('components/layout/footer.tsx')), /<Link href="\/login" prefetch=\{false\}/)
+  })
+
+  test('las imágenes se cachean al menos un día en el CDN (minimumCacheTTL)', () => {
+    const ttl = /minimumCacheTTL:\s*(\d+)/.exec(code(read('next.config.mjs')))
+    assert.ok(ttl, 'falta images.minimumCacheTTL en next.config.mjs')
+    assert.ok(Number(ttl[1]) >= 86_400, `minimumCacheTTL=${ttl[1]} es menos de un día`)
+  })
+})
+
+describe('service worker (public/sw.js)', () => {
+  const ORIGIN = 'https://sitio.test'
+  const CACHED = { cached: true }
+  const NETWORK = { network: true, ok: false, clone() { return this } }
+
+  /** Carga el worker en un contexto aislado y devuelve cómo se comporta. */
+  function load(cacheKeys: string[] = []) {
+    const listeners: Record<string, (event: unknown) => void> = {}
+    const deleted: string[] = []
+    let fetches = 0
+    vm.runInNewContext(read('public/sw.js'), {
+      URL,
+      self: { location: { origin: ORIGIN }, addEventListener: (type: string, fn: (event: unknown) => void) => { listeners[type] = fn } },
+      caches: {
+        keys: async () => cacheKeys,
+        delete: async (key: string) => { deleted.push(key); return true },
+        match: async () => undefined,
+        // Todo lo que se pide a la caché ya está guardado: así se ve quién la usa primero.
+        open: async () => ({ match: async () => CACHED, put: async () => undefined }),
+      },
+      fetch: async () => { fetches += 1; return NETWORK },
+      Response: { error: () => ({}) },
+    })
+    return {
+      /** Pide `pathname` al worker: ¿lo toma?, ¿con qué responde? y ¿fue a la red? */
+      async request(pathname: string, method = 'GET') {
+        let answer: Promise<unknown> | undefined
+        const before = fetches
+        listeners.fetch({ request: { method, url: `${ORIGIN}${pathname}` }, respondWith: (promise: Promise<unknown>) => { answer = promise } })
+        const body = answer ? await answer : undefined
+        return { handled: answer !== undefined, body, network: fetches > before }
+      },
+      async activate() {
+        let work: Promise<unknown> = Promise.resolve()
+        listeners.activate({ waitUntil: (promise: Promise<unknown>) => { work = promise } })
+        await work
+        return deleted
+      },
+    }
+  }
+
+  test('no intercepta las imágenes: ni /_next/image ni /images/', async () => {
+    const sw = load()
+    for (const route of ['/_next/image?url=%2Fimages%2Fa.jpg&w=640&q=75', '/images/hero-bg-desktop.jpg', '/_next/image']) {
+      assert.equal((await sw.request(route)).handled, false, route)
+    }
+  })
+
+  test('los estáticos de build y de marca van primero a la caché, sin tocar la red', async () => {
+    const sw = load()
+    for (const route of ['/_next/static/chunks/a.js', '/brand/logo.png', '/icon-192.png']) {
+      const answer = await sw.request(route)
+      assert.equal(answer.handled, true, route)
+      assert.equal(answer.body, CACHED, `${route}: debía salir de la caché`)
+      assert.equal(answer.network, false, `${route}: no debía ir a la red`)
+    }
+  })
+
+  test('las páginas públicas van primero a la red (con la caché solo de respaldo sin conexión)', async () => {
+    const answer = await load().request('/')
+    assert.equal(answer.handled, true)
+    assert.equal(answer.network, true, 'debía pedir a la red')
+    assert.equal(answer.body, NETWORK, 'con conexión responde la red, no la copia guardada')
+  })
+
+  test('nunca toca rutas autenticadas ni peticiones que no sean GET', async () => {
+    const sw = load()
+    for (const route of ['/dashboard', '/api/parrilla', '/admin/parrilla', '/super/parrilla', '/comunidad/x', '/perfil']) {
+      assert.equal((await sw.request(route)).handled, false, route)
+    }
+    assert.equal((await sw.request('/', 'POST')).handled, false)
+  })
+
+  test('al activarse borra las cachés de versiones anteriores (la v1 guardaba copias de las imágenes)', async () => {
+    assert.match(read('public/sw.js'), /const CACHE_NAME = 'gladwell-v2'/)
+    const deleted = await load(['gladwell-v1', 'gladwell-v2']).activate()
+    assert.deepEqual(deleted, ['gladwell-v1'])
   })
 })

@@ -48,9 +48,11 @@ export function Navbar() {
     setTimeout(openWalkingList, 150)
   }
 
+  // Solo transicionan color, borde y sombra: `transition-all` animaba también el `backdrop-filter` (blur
+  // de 20 px) de `.glass` durante 500 ms justo al empezar a hacer scroll.
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-[background-color,border-color,box-shadow] duration-500 ${
         scrolled ? "glass border-b border-border/50 shadow-lg" : "bg-transparent"
       }`}
     >

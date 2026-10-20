@@ -29,7 +29,9 @@ export function Footer() {
             <a href="#inicio">
               <span className="text-xl font-bold tracking-tight gladwell-gradient-text">GLADWELL</span>
             </a>
-            <Link href="/login" className={navLinkClass}>
+            {/* prefetch={false}: en producción el enlace precargaba ~295 KB de JS (el chunk de Supabase del
+                login) al llegar al final de la página; ahora se descarga al hacer clic. */}
+            <Link href="/login" prefetch={false} className={navLinkClass}>
               Iniciar sesión
             </Link>
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">

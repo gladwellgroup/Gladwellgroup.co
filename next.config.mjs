@@ -11,6 +11,13 @@ process.env.TZ = 'America/Bogota'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Las fotos de la landing no cambian entre despliegues. En Vercel cada MISS o STALE de /_next/image
+  // se factura como una transformación (plan Hobby: 5 000 al mes) y con el TTL por defecto (4 h) cada
+  // variante se rehace hasta 6 veces al día. 31 días es lo que recomienda Vercel; la clave de las
+  // imágenes locales es el hash del contenido, así que cambiar la foto y redesplegar la invalida.
+  images: {
+    minimumCacheTTL: 2678400,
+  },
   async redirects() {
     return [
       {
