@@ -467,6 +467,21 @@
     );
   }
 
+  /* Círculos decorativos de ContentBackground: el elemento es una caja vacía con posición y tamaño, y un
+     único degradado radial pinta relleno, aro, brillo interior y halo (variables `--orb-dark` /
+     `--orb-light`, generadas en lib/landing/orb-gradient.ts) en una capa que sobresale `--orb-reach`
+     del círculo. Antes eran `bg-*` + `border-2` + `box-shadow` de 50–150 px de desenfoque. */
+  .decor-orb::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--orb-reach) * -1);
+    background-image: var(--orb-dark);
+  }
+
+  .light .decor-orb::before {
+    background-image: var(--orb-light);
+  }
+
   .gladwell-border-gradient {
     position: relative;
   }

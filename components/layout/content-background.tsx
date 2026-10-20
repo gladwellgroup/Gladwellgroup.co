@@ -1,116 +1,50 @@
-"use client"
+import { DECOR_ORBS, ORB_RGB, type DecorOrb, type OrbTheme } from "@/lib/data/decor-orbs"
+import { orbGradient } from "@/lib/landing/orb-gradient"
 
-import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
+// Fondo decorativo de las secciones de contenido. Componente de servidor: el tema lo resuelven las
+// variantes `light:` de Tailwind (el oscuro es el estado base, como `defaultTheme="dark"`), sin
+// `useTheme`, sin estado `mounted` y sin JS en el cliente. Antes, 10 capas arrancaban en `opacity-0` y
+// hacían un fundido de 500 ms justo después de hidratar —el momento en que se empieza a hacer scroll—,
+// y cada círculo llevaba `transition-all` y una sombra de 50–150 px de desenfoque (hasta 800 px de
+// círculo), que es lo que más costaba pintar en Chrome/Android.
+//
+// Ahora cada círculo es UNA caja vacía con posición y tamaño, y un solo degradado radial
+// (`.decor-orb::before` en globals.css) pinta relleno, aro, brillo interior y halo; lo genera
+// lib/landing/orb-gradient.ts con el mismo perfil que la sombra y viaja, uno por tema, en variables CSS.
+// Con el relleno y el aro en el propio elemento, el relleno translúcido de los tres círculos mayores seguía
+// costando lo mismo que las sombras (ver orb-gradient.ts). Los círculos viven en lib/data/decor-orbs.ts.
 
-interface ContentBackgroundProps {
-  children: React.ReactNode
+/** Variables CSS de un círculo: el degradado de cada tema y cuánto sobresale la capa del halo. */
+function orbVars(orb: DecorOrb): React.CSSProperties {
+  const rgb = ORB_RGB[orb.tone]
+  const reach = Math.max(orb.dark.blur, orb.light.blur)
+  const layer = (theme: OrbTheme) => orbGradient({ rgb, radius: orb.radius, reach, ...theme })
+  return {
+    "--orb-dark": layer(orb.dark),
+    "--orb-light": layer(orb.light),
+    "--orb-reach": `${reach}px`,
+  } as React.CSSProperties
 }
 
-export function ContentBackground({ children }: ContentBackgroundProps) {
-  const { resolvedTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const isDark = !mounted || resolvedTheme === "dark"
-  const decorClass = mounted
-    ? "opacity-100 transition-opacity duration-500"
-    : "opacity-0 pointer-events-none"
-
+export function ContentBackground({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative overflow-hidden">
-      {/* Base background */}
+      <div aria-hidden className="absolute inset-0 bg-[#0a0a14] light:bg-[#f5f7fa]" />
+
+      {DECOR_ORBS.map((orb) => (
+        <div
+          key={orb.place}
+          aria-hidden
+          style={orbVars(orb)}
+          className={`decor-orb pointer-events-none absolute ${orb.place}`}
+        />
+      ))}
+
       <div
-        className={`absolute inset-0 transition-colors duration-500 ${
-          isDark ? "bg-[#0a0a14]" : "bg-[#f5f7fa]"
-        } ${decorClass}`}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a14]/30 to-[#0a0a14]/80 light:via-transparent light:to-[#f5f7fa]/60"
       />
 
-      {/* Large circle top right */}
-      <div
-        className={`absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full transition-all duration-500 ${
-          isDark
-            ? "bg-[#7C3AED]/15 border-2 border-[#7C3AED]/40 shadow-[0_0_120px_rgba(124,58,237,0.4),inset_0_0_80px_rgba(124,58,237,0.15)]"
-            : "bg-[#7C3AED]/8 border-2 border-[#7C3AED]/25 shadow-[0_0_80px_rgba(124,58,237,0.25)]"
-        } ${decorClass}`}
-      />
-
-      {/* Medium circle left */}
-      <div
-        className={`absolute top-[30%] -left-48 w-[400px] h-[400px] rounded-full transition-all duration-500 ${
-          isDark
-            ? "bg-[#06B6D4]/12 border-2 border-[#06B6D4]/35 shadow-[0_0_100px_rgba(6,182,212,0.35),inset_0_0_60px_rgba(6,182,212,0.12)]"
-            : "bg-[#06B6D4]/6 border-2 border-[#06B6D4]/20 shadow-[0_0_60px_rgba(6,182,212,0.18)]"
-        } ${decorClass}`}
-      />
-
-      {/* Large circle bottom center */}
-      <div
-        className={`absolute -bottom-64 left-1/4 w-[600px] h-[600px] rounded-full transition-all duration-500 ${
-          isDark
-            ? "bg-[#7C3AED]/12 border-2 border-[#7C3AED]/30 shadow-[0_0_140px_rgba(124,58,237,0.3),inset_0_0_100px_rgba(124,58,237,0.08)]"
-            : "bg-[#7C3AED]/5 border-2 border-[#7C3AED]/18 shadow-[0_0_90px_rgba(124,58,237,0.15)]"
-        } ${decorClass}`}
-      />
-
-      {/* Small accent circle */}
-      <div
-        className={`absolute top-[60%] right-[10%] w-[200px] h-[200px] rounded-full transition-all duration-500 ${
-          isDark
-            ? "bg-[#06B6D4]/10 border-2 border-[#06B6D4]/30 shadow-[0_0_60px_rgba(6,182,212,0.3)]"
-            : "bg-[#06B6D4]/5 border-2 border-[#06B6D4]/18 shadow-[0_0_50px_rgba(6,182,212,0.15)]"
-        } ${decorClass}`}
-      />
-
-      {/* Extra large background circle */}
-      <div
-        className={`absolute top-[50%] -translate-y-1/2 -right-96 w-[800px] h-[800px] rounded-full transition-all duration-500 ${
-          isDark
-            ? "bg-gradient-to-br from-[#7C3AED]/8 to-[#06B6D4]/8 border-2 border-white/10 shadow-[0_0_150px_rgba(124,58,237,0.2)]"
-            : "bg-gradient-to-br from-[#7C3AED]/4 to-[#06B6D4]/4 border-2 border-[#7C3AED]/12 shadow-[0_0_100px_rgba(124,58,237,0.12)]"
-        } ${decorClass}`}
-      />
-
-      {/* Small floating circle top left */}
-      <div
-        className={`absolute top-[15%] left-[15%] w-[150px] h-[150px] rounded-full transition-all duration-500 ${
-          isDark
-            ? "bg-[#7C3AED]/8 border-2 border-[#7C3AED]/25 shadow-[0_0_50px_rgba(124,58,237,0.25)]"
-            : "bg-[#7C3AED]/4 border-2 border-[#7C3AED]/15 shadow-[0_0_40px_rgba(124,58,237,0.12)]"
-        } ${decorClass}`}
-      />
-
-      {/* Medium cyan circle bottom right */}
-      <div
-        className={`absolute bottom-[20%] right-[5%] w-[300px] h-[300px] rounded-full transition-all duration-500 ${
-          isDark
-            ? "bg-[#06B6D4]/10 border-2 border-[#06B6D4]/30 shadow-[0_0_80px_rgba(6,182,212,0.3)]"
-            : "bg-[#06B6D4]/5 border-2 border-[#06B6D4]/18 shadow-[0_0_60px_rgba(6,182,212,0.15)]"
-        } ${decorClass}`}
-      />
-
-      {/* Accent purple circle middle */}
-      <div
-        className={`absolute top-[45%] left-[5%] w-[250px] h-[250px] rounded-full transition-all duration-500 ${
-          isDark
-            ? "bg-[#7C3AED]/8 border-2 border-[#7C3AED]/25 shadow-[0_0_70px_rgba(124,58,237,0.25)]"
-            : "bg-[#7C3AED]/4 border-2 border-[#7C3AED]/15 shadow-[0_0_50px_rgba(124,58,237,0.12)]"
-        } ${decorClass}`}
-      />
-
-      {/* Gradient overlay */}
-      <div
-        className={`absolute inset-0 transition-opacity duration-500 ${
-          isDark
-            ? "bg-gradient-to-b from-transparent via-[#0a0a14]/30 to-[#0a0a14]/80"
-            : "bg-gradient-to-b from-transparent via-transparent to-[#f5f7fa]/60"
-        } ${decorClass}`}
-      />
-
-      {/* Content */}
       <div className="relative z-10">{children}</div>
     </div>
   )

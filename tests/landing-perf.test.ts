@@ -227,3 +227,36 @@ describe('service worker (public/sw.js)', () => {
     assert.deepEqual(deleted, ['gladwell-v1'])
   })
 })
+
+describe('landing: el fondo decorativo es un componente de servidor y sin sombras enormes', () => {
+  // Antes: `use client` + `useTheme` + `mounted`, 10 capas con fundido de 500 ms justo tras hidratar,
+  // `transition-all` en cada círculo, 8 `box-shadow` de 50–150 px de desenfoque y el relleno translúcido
+  // de los círculos mayores en el propio elemento (lo que más costaba pintar en Chrome/Android).
+  const background = code(read('components/layout/content-background.tsx'))
+  const orbs = code(read('lib/data/decor-orbs.ts'))
+
+  test('sin use client, useTheme ni estado: el tema lo resuelven las variantes light:', () => {
+    assert.doesNotMatch(background, /["']use client["']|useTheme|useState|useEffect/)
+    assert.match(background, /light:bg-\[#f5f7fa\]/)
+  })
+
+  test('sin transition-all ni fundido de entrada', () => {
+    assert.doesNotMatch(background, /transition-all|transition-opacity|opacity-0/)
+    assert.doesNotMatch(orbs, /transition-all|transition-opacity|opacity-0/)
+  })
+
+  test('cada círculo es una caja vacía: ni box-shadow, ni relleno, ni borde en el elemento', () => {
+    for (const source of [background, orbs]) {
+      assert.doesNotMatch(source, /shadow-\[|\bborder-2\b|\brounded-full\b|\bbg-\[#(?:7C3AED|06B6D4)\]/, 'el relleno translúcido en el elemento costaba lo mismo que la sombra')
+    }
+    assert.match(background, /className=\{`decor-orb pointer-events-none absolute \$\{orb\.place\}`\}/)
+  })
+
+  test('el degradado de cada tema se pinta en .decor-orb::before', () => {
+    const css = read('app/globals.css')
+    assert.match(css, /\.decor-orb::before\s*\{[^}]*background-image:\s*var\(--orb-dark\)/)
+    assert.match(css, /\.light \.decor-orb::before\s*\{[^}]*background-image:\s*var\(--orb-light\)/)
+    assert.match(background, /"--orb-dark":/)
+    assert.match(background, /"--orb-light":/)
+  })
+})

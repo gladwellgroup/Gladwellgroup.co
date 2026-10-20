@@ -96,6 +96,9 @@ Solo instalar lo que se usará activamente.
 - **El fondo del hero pide UNA foto por tema y pantalla** (`components/sections/hero-background.tsx`:
   `getImageProps` + `<picture>`, fotos importadas). No volver a un `background-image` en línea (descarga las
   fotos oscura y clara a la vez) ni a `priority`/`preload` (precargarían los dos breakpoints).
+- **Los círculos decorativos del fondo son degradados** (`lib/data/decor-orbs.ts` →
+  `lib/landing/orb-gradient.ts`), no `box-shadow` ni relleno en el elemento: en Chrome/Android el relleno
+  translúcido de círculos de 500–800 px costaba tanto como la sombra. Para añadir uno, una entrada en esa tabla.
 - Al medir el scroll, hacerlo en WebKit (el motor de Safari) y en Chromium con perfil móvil: lo que
   solo falla en Safari no se ve en Chrome.
 
