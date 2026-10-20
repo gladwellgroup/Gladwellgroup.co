@@ -21,10 +21,12 @@ export function TeamSection() {
                 <div className="absolute inset-0 rounded-full gladwell-gradient opacity-20 blur-md group-hover:opacity-40 transition-opacity" />
                 <div className="relative w-full h-full rounded-full overflow-hidden p-1 bg-gradient-to-br from-[#7C3AED] to-[#06B6D4]">
                   <div className="w-full h-full rounded-full overflow-hidden">
+                    {/* `sizes`: el círculo mide 192 px (w-48) menos el aro de 4 px por lado. */}
                     <Image
                       src={founder.image}
                       alt={founder.name}
                       fill
+                      sizes="184px"
                       className="object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   </div>

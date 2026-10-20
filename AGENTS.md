@@ -82,6 +82,20 @@ npx shadcn@latest add <componente>
 
 Solo instalar lo que se usará activamente.
 
+### Imágenes y efectos pesados (la landing se mide: ver `tests/landing-perf.test.ts`)
+
+- **Toda `<Image fill>` declara `sizes`** con el ancho real por breakpoint. Sin él, `next/image` asume
+  `100vw` y pide la foto a 1 920–3 840 px para una tarjeta de ~390: más bytes y, sobre todo, tirones al
+  decodificarla durante el scroll. Usar `calc(100vw - 48px)` y no `100vw` para el caso móvil (si no,
+  Next descarta las variantes chicas).
+- **Nada de `blur-2xl`/`blur-3xl` sobre áreas grandes**: Safari rehace ese desenfoque cada vez que el
+  bloque entra en pantalla (fotogramas de 100–130 ms). Para un brillo de fondo usar `.glow-violet` /
+  `.glow-cyan` (degradado radial) en `app/globals.css`.
+- **Al reemplazar una foto de `public/images/`, usar un nombre nuevo**: el CDN y el navegador pueden
+  conservar la anterior bajo la misma URL.
+- Al medir el scroll, hacerlo en WebKit (el motor de Safari) y en Chromium con perfil móvil: lo que
+  solo falla en Safari no se ve en Chrome.
+
 ### Variables de entorno
 
 Nunca commitear `.env*.local`. Las variables requeridas son:

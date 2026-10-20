@@ -81,10 +81,13 @@ export function PillarModal({ isOpen, onClose, pillar, onOpenWalkingList }: Pill
                     index === currentImageIndex ? "opacity-100 scale-100" : "opacity-0 scale-105"
                   }`}
                 >
+                  {/* `sizes`: el diálogo mide 512 px desde 640 px de pantalla (`sm:max-w-lg` gana a
+                      `max-w-4xl`); debajo ocupa el ancho. Las 8 diapositivas se montan al abrir. */}
                   <Image
                     src={img}
                     alt={`${pillar.title} - Imagen ${index + 1}`}
                     fill
+                    sizes="(min-width: 640px) 512px, 100vw"
                     className="object-cover"
                     priority={index === 0}
                   />

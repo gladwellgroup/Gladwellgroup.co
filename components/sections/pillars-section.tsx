@@ -54,10 +54,14 @@ export function PillarsSection() {
               aria-label={`Ver más sobre ${pillar.title}`}
             >
               <div className="relative aspect-[4/3] overflow-hidden">
+                {/* `sizes` = ancho real de la tarjeta por breakpoint (container + px-6 + gap-8). Sin él,
+                    next/image asume 100vw y la foto se pide a 1 920–3 840 px para una tarjeta de ~390.
+                    «calc(100vw - 48px)» y no «100vw» para que Next conserve las variantes chicas. */}
                 <Image
                   src={pillar.image}
                   alt={pillar.title}
                   fill
+                  sizes="(min-width: 1536px) 475px, (min-width: 1280px) 384px, (min-width: 1024px) 304px, (min-width: 768px) 720px, (min-width: 640px) 592px, calc(100vw - 48px)"
                   className="object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
