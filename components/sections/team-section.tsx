@@ -9,7 +9,7 @@ export function TeamSection() {
       <SectionDivider />
       <div className="container mx-auto px-6 relative z-10">
         <SectionHeader
-          eyebrow="Fundadores"
+          eyebrow="Equipo base"
           title="Los arquitectos de Gladwell"
           className="mb-20"
         />
@@ -35,7 +35,9 @@ export function TeamSection() {
 
               <h3 className="text-xl font-bold text-foreground mb-1">{founder.name}</h3>
               <span className="text-sm gladwell-gradient-text uppercase tracking-wider font-medium block mb-4">
-                {founder.role}
+                {/* Cada mitad no se parte: si el cargo no cabe, baja entero a la 2.ª línea. */}
+                <span className="whitespace-nowrap">{founder.role} ·</span>{" "}
+                <span className="whitespace-nowrap">{founder.title}</span>
               </span>
               <p className="text-muted-foreground max-w-xs mx-auto leading-relaxed">
                 {founder.description}
