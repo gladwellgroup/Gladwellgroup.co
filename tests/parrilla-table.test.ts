@@ -1,11 +1,14 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  DEFAULT_LIST_VIEW,
+  PARRILLA_LIST_VIEWS,
   ariaSort,
   listViewStorageKey,
   nextSort,
   parseListView,
   readStoredView,
+  resolveListView,
   sortRows,
   writeStoredView,
   type SortState,
@@ -110,11 +113,16 @@ describe('sortRows', () => {
 })
 
 describe('la vista elegida', () => {
-  test('parseListView: lo desconocido es la vista de siempre', () => {
+  test('la principal es la tabla y va primero; las tarjetas son la secundaria', () => {
+    assert.equal(DEFAULT_LIST_VIEW, 'tabla')
+    assert.deepEqual([...PARRILLA_LIST_VIEWS], ['tabla', 'tarjetas'])
+  })
+
+  test('parseListView: lo desconocido es la vista principal (la tabla)', () => {
     assert.equal(parseListView('tabla'), 'tabla')
     assert.equal(parseListView('tarjetas'), 'tarjetas')
     for (const raw of [null, undefined, '', 'Tabla', 'kanban', 1, {}]) {
-      assert.equal(parseListView(raw), 'tarjetas', String(raw))
+      assert.equal(parseListView(raw), 'tabla', String(raw))
     }
   })
 
@@ -129,15 +137,15 @@ describe('la vista elegida', () => {
       getItem: (key) => data.get(key) ?? null,
       setItem: (key, value) => void data.set(key, value),
     }
+    assert.equal(readStoredView(storage, 'banco'), 'tabla', 'sin nada guardado, la principal')
+    writeStoredView(storage, 'banco', 'tarjetas')
     assert.equal(readStoredView(storage, 'banco'), 'tarjetas')
-    writeStoredView(storage, 'banco', 'tabla')
-    assert.equal(readStoredView(storage, 'banco'), 'tabla')
-    assert.equal(readStoredView(storage, 'frases'), 'tarjetas')
+    assert.equal(readStoredView(storage, 'frases'), 'tabla', 'cada base tiene la suya')
   })
 
-  test('un valor guardado que ya no existe cae a «tarjetas»', () => {
+  test('un valor guardado que ya no existe cae a «tabla»', () => {
     const storage: StorageLike = { getItem: () => 'galeria', setItem() {} }
-    assert.equal(readStoredView(storage, 'banco'), 'tarjetas')
+    assert.equal(readStoredView(storage, 'banco'), 'tabla')
   })
 
   test('con el almacenamiento bloqueado (lanza) ni leer ni escribir rompen nada', () => {
@@ -149,12 +157,28 @@ describe('la vista elegida', () => {
         throw new DOMException('lleno', 'QuotaExceededError')
       },
     }
-    assert.equal(readStoredView(blocked, 'banco'), 'tarjetas')
-    assert.doesNotThrow(() => writeStoredView(blocked, 'banco', 'tabla'))
+    assert.equal(readStoredView(blocked, 'banco'), 'tabla')
+    assert.doesNotThrow(() => writeStoredView(blocked, 'banco', 'tarjetas'))
+  })
+
+  test('resolveListView: lo elegido en la sesión manda sobre lo guardado; sin nada, la principal', () => {
+    const storage = (value: string | null): StorageLike => ({ getItem: () => value, setItem() {} })
+    // Solo lo guardado.
+    assert.equal(resolveListView({}, storage('tarjetas'), 'banco'), 'tarjetas')
+    assert.equal(resolveListView({}, storage('tabla'), 'banco'), 'tabla')
+    // Lo elegido en la sesión gana (p. ej. el almacenamiento falló al guardarlo y sigue con el valor viejo).
+    assert.equal(resolveListView({ banco: 'tabla' }, storage('tarjetas'), 'banco'), 'tabla')
+    assert.equal(resolveListView({ banco: 'tarjetas' }, storage('tabla'), 'banco'), 'tarjetas')
+    // …y solo en SU base de datos.
+    assert.equal(resolveListView({ banco: 'tarjetas' }, storage(null), 'frases'), 'tabla')
+    // Sin nada, o con el almacenamiento bloqueado, la principal; bloqueado + elegido, lo elegido.
+    assert.equal(resolveListView({}, storage(null), 'banco'), 'tabla')
+    assert.equal(resolveListView({}, null, 'banco'), 'tabla')
+    assert.equal(resolveListView({ frases: 'tarjetas' }, null, 'frases'), 'tarjetas')
   })
 
   test('sin almacenamiento (null) tampoco', () => {
-    assert.equal(readStoredView(null, 'banco'), 'tarjetas')
-    assert.doesNotThrow(() => writeStoredView(null, 'banco', 'tabla'))
+    assert.equal(readStoredView(null, 'banco'), 'tabla')
+    assert.doesNotThrow(() => writeStoredView(null, 'banco', 'tarjetas'))
   })
 })

@@ -69,16 +69,19 @@ export function sortRows<T>(
 
 // ─────────────────────── Vista elegida (tarjetas / tabla) ───────────────────────
 
-export const PARRILLA_LIST_VIEWS = ['tarjetas', 'tabla'] as const
+/** Las dos vistas, la principal primero: es el orden del interruptor. */
+export const PARRILLA_LIST_VIEWS = ['tabla', 'tarjetas'] as const
 export type ParrillaListView = (typeof PARRILLA_LIST_VIEWS)[number]
 
 /** Las bases de datos que tienen las dos vistas: cada una recuerda la suya. */
 export type ListViewKey = 'banco' | 'frases'
 
-export const DEFAULT_LIST_VIEW: ParrillaListView = 'tarjetas'
+/** La vista principal: la que se ve al abrir el Banco o las Frases mientras nadie haya elegido
+ *  otra en este dispositivo. Las tarjetas son la secundaria. */
+export const DEFAULT_LIST_VIEW: ParrillaListView = 'tabla'
 
 /** Cualquier cosa que no sea una vista conocida (nada guardado, un valor viejo o
- *  manipulado) es la vista de siempre. */
+ *  manipulado) es la vista principal. */
 export function parseListView(raw: unknown): ParrillaListView {
   return PARRILLA_LIST_VIEWS.find((view) => view === raw) ?? DEFAULT_LIST_VIEW
 }
@@ -89,13 +92,24 @@ export const listViewStorageKey = (key: ListViewKey): string => `parrilla:vista:
  *  lanza, como hace el navegador en modo privado o con el almacenamiento bloqueado. */
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
-/** La vista guardada, o la de siempre si no hay nada o el almacenamiento falla. */
+/** La vista guardada, o la principal si no hay nada o el almacenamiento falla. */
 export function readStoredView(storage: StorageLike | null, key: ListViewKey): ParrillaListView {
   try {
     return parseListView(storage?.getItem(listViewStorageKey(key)))
   } catch {
     return DEFAULT_LIST_VIEW
   }
+}
+
+/** La vista que vale AHORA: lo elegido en esta sesión manda sobre lo guardado (si el
+ *  almacenamiento falla, la elección sigue valiendo mientras la página esté abierta); sin
+ *  ninguna de las dos, la principal. */
+export function resolveListView(
+  chosen: Partial<Record<ListViewKey, ParrillaListView>>,
+  storage: StorageLike | null,
+  key: ListViewKey
+): ParrillaListView {
+  return chosen[key] ?? readStoredView(storage, key)
 }
 
 /** Guarda la vista. Si el almacenamiento falla no pasa nada: la elección sigue

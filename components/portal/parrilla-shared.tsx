@@ -28,14 +28,15 @@ export function PlatformIcons({ platforms, className }: { platforms: Platform[];
   )
 }
 
+// La principal (la tabla) primero, como en `PARRILLA_LIST_VIEWS`.
 const LIST_VIEW_OPTIONS: { value: ParrillaListView; label: string; Icon: typeof LayoutGrid }[] = [
-  { value: 'tarjetas', label: 'Tarjetas', Icon: LayoutGrid },
   { value: 'tabla', label: 'Tabla', Icon: Table2 },
+  { value: 'tarjetas', label: 'Tarjetas', Icon: LayoutGrid },
 ]
 
 /** Interruptor de dos iconos entre las vistas de una base de datos de la parrilla
- *  (Banco de contenido y Frases): tarjetas o tabla. Mismo aspecto que las pestañas del
- *  tablero (`PillTabs`). Cada botón lleva su nombre en `aria-label` —no tiene texto
+ *  (Banco de contenido y Frases): la tabla, que es la principal y va primero, o las
+ *  tarjetas. Mismo aspecto que las pestañas del tablero (`PillTabs`). Cada botón lleva su nombre en `aria-label` —no tiene texto
  *  visible— y `aria-pressed` dice cuál está activo. Al tacto cada botón mide 44 px. */
 export function ListViewToggle({
   value,

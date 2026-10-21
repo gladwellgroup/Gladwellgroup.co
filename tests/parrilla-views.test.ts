@@ -4,6 +4,7 @@ import React from 'react'
 import { renderToString } from 'react-dom/server'
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { ParrillaBank } from '@/components/portal/parrilla-bank'
+import { ParrillaBoard } from '@/components/portal/parrilla-board'
 import { ParrillaQuotes } from '@/components/portal/parrilla-quotes'
 import { ListViewToggle, PlatformIcons } from '@/components/portal/parrilla-shared'
 import { opensRow, ParrillaTable, type ParrillaTableColumn } from '@/components/portal/parrilla-table'
@@ -111,25 +112,25 @@ function assertNoNestedButtons(html: string) {
   assert.equal(depth, 0)
 }
 
-describe('el interruptor Tarjetas / Tabla', () => {
+describe('el interruptor Tabla / Tarjetas', () => {
   const html = ssr(React.createElement(ListViewToggle, { value: 'tabla', onChange() {} }))
   const buttons = [...html.matchAll(/<button\b([^>]*)>/g)].map((m) => m[1])
 
-  test('es un grupo «Vista» con dos botones, por nombre y en este orden', () => {
+  test('es un grupo «Vista» con dos botones, por nombre y en este orden: la principal (Tabla) primero', () => {
     assert.match(html, /role="group"/)
     assert.match(html, /aria-label="Vista"/)
     assert.equal(buttons.length, 2)
-    assert.match(buttons[0], /aria-label="Tarjetas"/)
-    assert.match(buttons[1], /aria-label="Tabla"/)
+    assert.match(buttons[0], /aria-label="Tabla"/)
+    assert.match(buttons[1], /aria-label="Tarjetas"/)
   })
 
   test('aria-pressed dice cuál está activa, y solo esa', () => {
-    assert.match(buttons[0], /aria-pressed="false"/)
-    assert.match(buttons[1], /aria-pressed="true"/)
+    assert.match(buttons[0], /aria-pressed="true"/)
+    assert.match(buttons[1], /aria-pressed="false"/)
     const tarjetas = ssr(React.createElement(ListViewToggle, { value: 'tarjetas', onChange() {} }))
     const [first, second] = [...tarjetas.matchAll(/<button\b([^>]*)>/g)].map((m) => m[1])
-    assert.match(first, /aria-pressed="true"/)
-    assert.match(second, /aria-pressed="false"/)
+    assert.match(first, /aria-pressed="false"/)
+    assert.match(second, /aria-pressed="true"/)
   })
 
   test('los botones son de tipo button y miden 44 px al tacto; los íconos no se leen', () => {
@@ -349,13 +350,37 @@ describe('un clic en una fila: ¿abre el modal?', () => {
 })
 
 describe('la vista recordada, en el servidor', () => {
-  test('el servidor y la hidratación pintan «tarjetas»: lo guardado se aplica ya en el navegador', () => {
+  test('el servidor y la hidratación pintan la vista principal («tabla»): lo guardado se aplica ya en el navegador', () => {
     function Probe() {
       const [view] = useListView('banco')
       return React.createElement('span', null, view)
     }
-    assert.equal(textOf(ssr(React.createElement(Probe))), 'tarjetas')
+    assert.equal(textOf(ssr(React.createElement(Probe))), 'tabla')
   })
+})
+
+describe('al abrir el Banco o las Frases se ve la TABLA (vista principal); las tarjetas son la secundaria', () => {
+  const board = (initialView: 'banco' | 'frases') =>
+    ssr(
+      inRouter(
+        React.createElement(ParrillaBoard, {
+          posts: [post({ id: 'a', status: 'archivado', publish_date: null }), post({ id: 'b', status: 'archivado', publish_date: null })],
+          editors: [],
+          quotes: [quote(), quote({ id: 'q2', author: 'Séneca' })],
+          initialView,
+        })
+      )
+    )
+
+  for (const view of ['banco', 'frases'] as const) {
+    test(`${view}: sin nada elegido arranca en tabla, con el interruptor en «Tabla» y sin tarjetas`, () => {
+      const html = board(view)
+      assert.equal(count(html, /<table\b/g), 1)
+      assert.doesNotMatch(html, /<li\b/, 'ninguna tarjeta')
+      assert.match(html, /aria-pressed="true"[^>]*aria-label="Tabla"/)
+      assert.match(html, /aria-pressed="false"[^>]*aria-label="Tarjetas"/)
+    })
+  }
 })
 
 describe('la tabla aplica el orden al dibujar las filas', () => {

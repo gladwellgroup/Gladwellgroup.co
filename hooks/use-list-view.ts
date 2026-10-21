@@ -3,7 +3,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import {
   DEFAULT_LIST_VIEW,
-  readStoredView,
+  resolveListView,
   writeStoredView,
   type ListViewKey,
   type ParrillaListView,
@@ -32,19 +32,22 @@ function subscribe(onChange: () => void): () => void {
   }
 }
 
-/** La vista (tarjetas o tabla) de una base de datos de la parrilla, recordada en este
- *  dispositivo.
+/** La vista (tabla o tarjetas) de una base de datos de la parrilla, recordada en este
+ *  dispositivo. Sin nada guardado, la principal: la tabla.
  *
- *  El servidor y la hidratación pintan siempre «tarjetas»; el navegador aplica lo
+ *  El servidor y la hidratación pintan siempre la principal; el navegador aplica lo
  *  guardado justo después, sin aviso de desajuste de hidratación. Es la vía de
  *  `useSyncExternalStore` (la misma de `useIsClient`) y no un `useEffect` que llame a
- *  `setState`, que dispara un render en cascada. Quien eligió «tabla» verá un cambio de
- *  tarjetas a tabla al cargar: se acepta antes que mover la preferencia a una cookie
+ *  `setState`, que dispara un render en cascada.
+ *
+ *  Quien eligió «tarjetas» no ve un salto de una vista a otra: el Banco y las Frases solo se
+ *  montan al pulsar su pestaña (el tablero arranca en el Calendario), cuando la página ya se
+ *  hidrató y lo guardado ya se leyó. Por eso no hace falta mover la preferencia a una cookie
  *  que obligaría a leerla en cada página del servidor. */
 export function useListView(key: ListViewKey): [ParrillaListView, (view: ParrillaListView) => void] {
   const view = useSyncExternalStore(
     subscribe,
-    () => chosen[key] ?? readStoredView(getStorage(), key),
+    () => resolveListView(chosen, getStorage(), key),
     () => DEFAULT_LIST_VIEW
   )
 
