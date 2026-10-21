@@ -5,6 +5,7 @@ import { renderToString } from 'react-dom/server'
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { CategoryFilter, ParrillaBoard } from '@/components/portal/parrilla-board'
 import { initialFields } from '@/components/portal/parrilla-post-form'
+import { ParrillaQuoteForm } from '@/components/portal/parrilla-quote-form'
 import { ParrillaQuotes } from '@/components/portal/parrilla-quotes'
 import type { ParrillaPostSummary } from '@/lib/parrilla/posts'
 import { quoteToPostDraft, type ParrillaQuote } from '@/lib/parrilla/quotes'
@@ -32,7 +33,6 @@ function quote(overrides: Partial<ParrillaQuote> = {}): ParrillaQuote {
     author: 'Marco Aurelio',
     author_context: 'Emperador y filósofo estoico',
     source: 'Meditaciones',
-    category: 'crecer',
     used_count: 0,
     ...overrides,
   }
@@ -63,7 +63,6 @@ const render = (props: Partial<React.ComponentProps<typeof ParrillaQuotes>> = {}
     inRouter(
       React.createElement(ParrillaQuotes, {
         quotes: [],
-        total: 0,
         anyUsed: false,
         authors: [],
         editors: [],
@@ -154,9 +153,9 @@ describe('la biblioteca de frases', () => {
     const quotes = [
       quote(),
       quote({ id: 'b', author: 'Séneca', quote_text: 'No es que tengamos poco tiempo, sino que perdemos mucho.' }),
-      quote({ id: 'c', author: 'Nietzsche', author_context: null, category: null }),
+      quote({ id: 'c', author: 'Nietzsche', author_context: null }),
     ]
-    const html = render({ quotes, total: 3, authors: ['Marco Aurelio', 'Nietzsche', 'Séneca'] })
+    const html = render({ quotes, authors: ['Marco Aurelio', 'Nietzsche', 'Séneca'] })
 
     assert.equal((html.match(/<li\b/g) ?? []).length, 3)
     for (const q of quotes) {
@@ -166,13 +165,13 @@ describe('la biblioteca de frases', () => {
   })
 
   test('la frase va entre comillas y SIN cursiva (Geist solo tiene romana: el navegador la inventaría)', () => {
-    const html = render({ quotes: [quote()], total: 1 })
+    const html = render({ quotes: [quote()] })
     assert.ok(html.includes('“La felicidad de tu vida depende de la calidad de tus pensamientos.”'))
     assert.doesNotMatch(html, /\bitalic\b/)
   })
 
   test('ningún botón contiene a otro: el cuerpo de la tarjeta y «Crear contenido» son hermanos', () => {
-    const html = render({ quotes: [quote(), quote({ id: 'b' })], total: 2 })
+    const html = render({ quotes: [quote(), quote({ id: 'b' })] })
     let depth = 0
     for (const match of html.matchAll(/<(\/?)button\b/g)) {
       depth += match[1] ? -1 : 1
@@ -185,10 +184,9 @@ describe('la biblioteca de frases', () => {
   })
 
   test('todas las tarjetas miden lo mismo: los bloques de alto fijo están aunque falte el dato', () => {
-    // Una completa y otra sin «quién fue», sin categoría y sin usos.
+    // Una completa y otra sin «quién fue» y sin usos.
     const html = render({
-      quotes: [quote({ used_count: 2 }), quote({ id: 'b', author_context: null, category: null, used_count: 0 })],
-      total: 2,
+      quotes: [quote({ used_count: 2 }), quote({ id: 'b', author_context: null, used_count: 0 })],
     })
     assert.equal((html.match(/flex h-24 w-full items-center justify-center/g) ?? []).length, 2, 'bloque de la frase')
     assert.equal((html.match(/h-4 w-full truncate/g) ?? []).length, 2, 'línea de «quién fue»')
@@ -200,7 +198,7 @@ describe('la biblioteca de frases', () => {
     // Sin `grid-cols-1` la columna bajo `sm` es implícita (`auto`) y crece hasta el
     // `truncate` (nowrap) más largo: en un iPhone SE un «quién fue» largo llevó la
     // tarjeta a 569 px dentro de un contenedor de 293 y se salía de la pantalla.
-    const html = render({ quotes: [quote()], total: 1 })
+    const html = render({ quotes: [quote()] })
     const ul = /<ul\b[^>]*aria-label="Frases"[^>]*class="([^"]*)"/.exec(html)?.[1] ?? ''
     assert.match(ul, /\bgrid-cols-1\b/)
     assert.match(ul, /\bsm:grid-cols-2\b/)
@@ -209,25 +207,47 @@ describe('la biblioteca de frases', () => {
     assert.match(html, /class="flex w-full min-w-0 flex-col overflow-hidden/)
   })
 
-  test('los chips: categoría con su nombre y «Usada ×N» solo si se usó', () => {
-    const html = render({ quotes: [quote({ used_count: 2 }), quote({ id: 'b', used_count: 0 })], total: 2 })
+  test('el chip «Usada ×N» solo aparece si se usó, y la tarjeta ya no lleva categoría', () => {
+    const html = render({ quotes: [quote({ used_count: 2 }), quote({ id: 'b', used_count: 0 })] })
     assert.equal((html.match(/Usada ×2/g) ?? []).length, 1)
     assert.doesNotMatch(html, /Usada ×0/)
-    assert.equal((html.match(/>Crecer</g) ?? []).length, 2)
+    // La categoría se elige al construir la publicación: ninguna de las seis sale en la tarjeta.
+    for (const nombre of ['Crecer', 'Conectar', 'Construir', 'Aprender', 'Roots', 'Comunidad']) {
+      assert.doesNotMatch(textOf(html), new RegExp(`\\b${nombre}\\b`), nombre)
+    }
   })
 
   test('«Sin usar» solo aparece si alguna frase de la biblioteca ya se usó', () => {
     const quotes = [quote({ used_count: 1 }), quote({ id: 'b' }), quote({ id: 'c' })]
-    assert.doesNotMatch(textOf(render({ quotes, total: 3, anyUsed: false })), /Sin usar/)
+    assert.doesNotMatch(textOf(render({ quotes, anyUsed: false })), /Sin usar/)
 
-    const html = render({ quotes, total: 3, anyUsed: true })
+    const html = render({ quotes, anyUsed: true })
     assert.match(textOf(html), /Sin usar 2/, 'el contador son las frases sin usar')
     assert.match(html, /aria-pressed="false"/)
   })
 
   test('la tarjeta no pinta fechas (Node y Safari las formatean distinto)', () => {
-    const html = render({ quotes: [quote()], total: 1 })
+    const html = render({ quotes: [quote()] })
     assert.doesNotMatch(textOf(html), /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b\d{1,2}:\d{2}\b|\b[ap]\.\s?m\./i)
+  })
+})
+
+describe('el formulario de frases ya no pide categoría', () => {
+  const labels = (html: string) => [...html.matchAll(/<label\b[^>]*>([\s\S]*?)<\/label>/g)].map((m) => textOf(m[1]))
+
+  test('crear: frase, referente, quién fue y fuente, y nada más', () => {
+    const html = ssr(inRouter(React.createElement(ParrillaQuoteForm, { quote: null, authors: [], onClose() {} })))
+    assert.deepEqual(labels(html), ['Frase', 'Referente', 'Quién fue (opcional)', 'Fuente (opcional)'])
+    assert.doesNotMatch(html, /<select\b/, 'no queda ningún selector')
+    assert.doesNotMatch(textOf(html), /Categoría|Sin categoría/)
+    assert.match(textOf(html), /Guardar frase/)
+  })
+
+  test('editar: los mismos cuatro campos, con «Eliminar frase»', () => {
+    const html = ssr(inRouter(React.createElement(ParrillaQuoteForm, { quote: quote(), authors: ['Marco Aurelio'], onClose() {} })))
+    assert.deepEqual(labels(html), ['Frase', 'Referente', 'Quién fue (opcional)', 'Fuente (opcional)'])
+    assert.doesNotMatch(html, /<select\b/)
+    assert.match(textOf(html), /Eliminar frase/)
   })
 })
 
@@ -254,14 +274,14 @@ describe('«Crear contenido» prellena la publicación nueva', () => {
     })
   })
 
-  test('con borrador: título, copy y categoría de la frase; fechas, estado y plataformas siguen siendo los de siempre', () => {
+  test('con borrador: título y copy de la frase; la categoría queda sin elegir; fechas, estado y plataformas siguen siendo los de siempre', () => {
     const fields = initialFields(null, '2026-10-20', undefined, draft)
     assert.equal(fields.title, 'Frase de Marco Aurelio')
     assert.equal(
       fields.caption,
       '“La felicidad de tu vida depende de la calidad de tus pensamientos.”\n\n— Marco Aurelio'
     )
-    assert.equal(fields.category, 'crecer')
+    assert.equal(fields.category, null, 'la categoría se elige al construir la publicación')
 
     assert.equal(fields.status, 'idea')
     assert.equal(fields.production_date, '2026-10-20')
@@ -269,11 +289,6 @@ describe('«Crear contenido» prellena la publicación nueva', () => {
     assert.deepEqual(fields.platforms, [])
     assert.equal(fields.format, null)
     assert.equal(fields.copy_text, null)
-  })
-
-  test('una frase sin categoría no inventa una', () => {
-    const fields = initialFields(null, '2026-10-20', undefined, quoteToPostDraft(quote({ category: null })))
-    assert.equal(fields.category, null)
   })
 
   test('enviada al Banco (archivado) sigue sin fecha de publicación', () => {
@@ -289,6 +304,45 @@ describe('«Crear contenido» prellena la publicación nueva', () => {
     assert.equal(fields.title, 'Título guardado')
     assert.equal(fields.category, 'roots')
     assert.equal(fields.caption, null)
+  })
+})
+
+describe('filtros del tablero según la pestaña', () => {
+  // Dos piezas del calendario y dos del Banco, cada par con dos categorías distintas.
+  const posts = [
+    post({ id: 'a', status: 'archivado', publish_date: null, category: 'crecer', platforms: ['instagram'] }),
+    post({ id: 'b', status: 'archivado', publish_date: null, category: 'conectar', platforms: ['linkedin'] }),
+    post({ id: 'c', category: 'crecer', platforms: ['instagram'] }),
+    post({ id: 'd', category: 'conectar', platforms: ['linkedin'] }),
+  ]
+  const board = (initialView: 'calendario' | 'banco' | 'frases') =>
+    textOf(
+      ssr(
+        inRouter(
+          React.createElement(ParrillaBoard, {
+            posts,
+            editors: [],
+            quotes: [quote(), quote({ id: 'q2', author: 'Séneca' })],
+            initialView,
+          })
+        )
+      )
+    )
+
+  test('Calendario y Banco traen el filtro de categoría, con su conteo', () => {
+    for (const view of ['calendario', 'banco'] as const) {
+      const text = board(view)
+      assert.match(text, /Crecer 1/, view)
+      assert.match(text, /Conectar 1/, view)
+    }
+  })
+
+  test('Frases NO: las frases no tienen categoría ni plataforma, y las de las publicaciones no se cuelan', () => {
+    const text = board('frases')
+    assert.doesNotMatch(text, /Crecer|Conectar|Todas|Instagram|LinkedIn/)
+    // …pero sí lo suyo: el buscador de la biblioteca y «Nueva frase».
+    assert.match(text, /Nueva frase/)
+    assert.match(text, /Frases 2/)
   })
 })
 
@@ -319,7 +373,7 @@ describe('filtro de categoría', () => {
   })
 
   test('con un filtro ACTIVO la fila se queda aunque ya no haya piezas de esa categoría: así se puede quitar', () => {
-    // La única frase de «Aprender» se borró o cambió de categoría: solo queda «Crecer».
+    // La única pieza de «Aprender» se borró o cambió de categoría: solo queda «Crecer».
     // Antes la fila desaparecía, el filtro seguía puesto y la lista quedaba vacía sin salida.
     const { chips } = view(of('crecer', 'crecer', 'crecer'), 'aprender')
     assert.deepEqual(chips, [

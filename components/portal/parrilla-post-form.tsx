@@ -74,7 +74,7 @@ function todayIso(): string {
 
 /** Punto de partida del formulario. En edición solo se conoce el resumen del
  *  calendario: Guion, Copy y portada llegan con el detalle. Al crear, `draft` (p.
- *  ej. una frase de la pestaña «Frases») prellena título, copy y categoría, y nada
+ *  ej. una frase de la pestaña «Frases») prellena título y copy, y nada
  *  más: las fechas y el estado siguen saliendo de `defaultDate` / `defaultStatus`.
  *  Exportada para probarla sin dibujar el formulario. */
 export function initialFields(
@@ -116,7 +116,7 @@ export function initialFields(
     publish_date: isArchived(status) ? null : day,
     status,
     format: null,
-    category: draft?.category ?? null,
+    category: null,
     talent: null,
     inspiration_url: null,
     hidden_sections: [],

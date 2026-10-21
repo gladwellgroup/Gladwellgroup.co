@@ -8,7 +8,7 @@ import { ParrillaPostDialog } from '@/components/portal/parrilla-post-dialog'
 import { ParrillaQuoteDialog } from '@/components/portal/parrilla-quote-dialog'
 import { ListViewToggle } from '@/components/portal/parrilla-shared'
 import { ParrillaTable, type ParrillaTableColumn } from '@/components/portal/parrilla-table'
-import { PARRILLA_CATEGORY_LABELS, type ParrillaEditor } from '@/lib/parrilla/posts'
+import type { ParrillaEditor } from '@/lib/parrilla/posts'
 import type { ParrillaListView } from '@/lib/parrilla/table'
 import {
   normalizeSearch,
@@ -18,12 +18,10 @@ import {
 } from '@/lib/parrilla/quotes'
 
 interface ParrillaQuotesProps {
-  /** Las frases que pasaron el filtro de categoría del tablero, en el orden del
-   *  servidor (más recientes primero). */
+  /** Todas las frases de la biblioteca, en el orden del servidor (más recientes
+   *  primero). El tablero no las filtra (no tienen plataforma ni categoría): el buscador
+   *  y «Sin usar» son de esta lista. */
   quotes: ParrillaQuote[]
-  /** Cuántas hay en total, sin filtros: distingue "la biblioteca está vacía" de
-   *  "ninguna coincide con el filtro". */
-  total: number
   /** Si alguna frase de la biblioteca ya se usó. Sin ninguna usada, «Sin usar»
    *  sería lo mismo que «todas» y el filtro solo estorbaría. */
   anyUsed: boolean
@@ -37,8 +35,8 @@ interface ParrillaQuotesProps {
 
 /** Biblioteca de frases de referentes históricos: la materia prima de las
  *  publicaciones. Cada tarjeta se abre para editar la frase y trae su propio
- *  «Crear contenido», que abre «Nueva publicación» ya prellenada (título, copy y
- *  categoría) y guarda de qué frase nació, para poder marcarla «Usada».
+ *  «Crear contenido», que abre «Nueva publicación» ya prellenada (título y copy; la
+ *  categoría se elige ahí) y guarda de qué frase nació, para poder marcarla «Usada».
  *
  *  Mismo criterio que el Banco: una sola superficie, tarjetas de la MISMA altura
  *  (la frase ocupa un bloque fijo de 4 líneas, el resto de las líneas tiene alto
@@ -50,11 +48,10 @@ interface ParrillaQuotesProps {
  *  sintetizaría) y sin fechas (Node y Safari las formatean distinto).
  *
  *  Tiene dos vistas de la misma lista: tarjetas y tabla. La tabla recibe lo que el
- *  buscador, «Sin usar» y la categoría dejaron, y trae su propio «Crear contenido» en
- *  cada fila, así que hace lo mismo que las tarjetas. */
+ *  buscador y «Sin usar» dejaron, y trae su propio «Crear contenido» en cada fila, así
+ *  que hace lo mismo que las tarjetas. */
 export function ParrillaQuotes({
   quotes,
-  total,
   anyUsed,
   authors,
   editors,
@@ -68,6 +65,7 @@ export function ParrillaQuotes({
   const [sourceQuote, setSourceQuote] = useState<ParrillaQuote | null>(null)
   const [postDialogOpen, setPostDialogOpen] = useState(false)
 
+  const hasQuotes = quotes.length > 0
   const normalizedQuery = normalizeSearch(query)
 
   const visible = useMemo(
@@ -125,31 +123,19 @@ export function ParrillaQuotes({
     {
       key: 'fuente',
       label: 'Fuente',
-      // La menos importante: se oculta cuando la tabla no tiene ~1180 px, para que «Crear
+      // La menos importante: se oculta cuando la tabla no tiene ~1060 px, para que «Crear
       // contenido» (la última columna) no quede fuera de pantalla en un iPad horizontal. El
       // umbral sale de los anchos tope de las columnas; medido en WebKit con datos de peor caso:
-      // 976 px sin Fuente (caben en los 1016 de un iPad Air horizontal) y 1128 con ella. Si se
-      // añade o ensancha una columna, volver a medir (AGENTS.md → «Tablas»).
-      className: 'hidden @min-[1180px]:table-cell',
+      // 880 px sin Fuente (caben de sobra en los 1016 de un iPad Air horizontal) y 1032 con
+      // ella (de ahí los 1060). Si se añade, quita o ensancha una columna, volver a medir
+      // (AGENTS.md → «Tablas»).
+      className: 'hidden @min-[1060px]:table-cell',
       sortValue: (quote) => quote.source,
       cell: (quote) => (
         <span className="line-clamp-2 w-32 whitespace-normal break-words" title={quote.source ?? undefined}>
           {quote.source || '—'}
         </span>
       ),
-    },
-    {
-      key: 'categoria',
-      label: 'Categoría',
-      sortValue: (quote) => (quote.category ? PARRILLA_CATEGORY_LABELS[quote.category] : null),
-      cell: (quote) =>
-        quote.category ? (
-          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] leading-none">
-            {PARRILLA_CATEGORY_LABELS[quote.category]}
-          </span>
-        ) : (
-          '—'
-        ),
     },
     {
       key: 'uso',
@@ -206,7 +192,7 @@ export function ParrillaQuotes({
     <>
       <BrandCard padding="sm" border="solid" className="touch-manipulation space-y-4">
         <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-2 sm:flex-row">
-          {total > 0 && (
+          {hasQuotes && (
             <div className="relative w-full sm:flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -222,7 +208,7 @@ export function ParrillaQuotes({
           {/* En un teléfono el buscador ocupa su fila y el interruptor comparte la de
               abajo con «Nueva frase»; desde `sm` todo va en una sola fila. */}
           <div className="flex shrink-0 items-center gap-2">
-            {total > 0 && <ListViewToggle value={view} onChange={onViewChange} />}
+            {hasQuotes && <ListViewToggle value={view} onChange={onViewChange} />}
             <BrandButton type="button" size="sm" className="w-auto shrink-0" onClick={openCreate}>
               <Plus className="size-4" />
               Nueva frase
@@ -250,7 +236,7 @@ export function ParrillaQuotes({
 
         {visible.length === 0 ? (
           <p className="px-2 py-8 text-center text-sm text-muted-foreground">
-            {total === 0
+            {!hasQuotes
               ? 'Aún no hay frases. Guarda una con «Nueva frase»: queda aquí como materia prima para tus publicaciones.'
               : query.trim()
                 ? `Ninguna frase coincide con "${query.trim()}".`
@@ -298,11 +284,6 @@ export function ParrillaQuotes({
                       {quote.author_context}
                     </span>
                     <span className="flex h-6 items-center justify-center gap-1.5 text-[11px] leading-none text-muted-foreground">
-                      {quote.category && (
-                        <span className="rounded-full border border-border px-2 py-0.5">
-                          {PARRILLA_CATEGORY_LABELS[quote.category]}
-                        </span>
-                      )}
                       {quote.used_count > 0 && (
                         // Chip neutro: el cian y el violeta a 11 px no pasan AA en
                         // tema claro; el color queda para los estados activos.

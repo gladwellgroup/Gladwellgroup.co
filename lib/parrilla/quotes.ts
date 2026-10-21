@@ -6,9 +6,14 @@
 // Solo `import type` de la app (y `blankToNull` de rules.ts, que es puro): el
 // cliente incluye este módulo en su bundle y las pruebas lo cargan sin resolver
 // nada del resto.
+//
+// Las frases NO llevan categoría: se elige al construir la publicación («Crear contenido» no
+// la prellena). La columna `category` de `parrilla_quotes` (20260920) ya no se lee ni se
+// escribe, pero sigue en la base —nullable y con su CHECK— para no perder lo que ya estaba
+// guardado; una migración nueva puede quitarla (y con ella `parrilla_quotes_category_check`
+// de CONSTRAINT_MESSAGES en mutations.ts).
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { ParrillaCategory } from '@/lib/parrilla/posts'
 import { blankToNull, type PostDraft } from '@/lib/parrilla/rules'
 
 // Los mismos números que los CHECK de supabase/migrations/20260920_parrilla_frases.sql:
@@ -28,7 +33,6 @@ export const QUOTE_EDITABLE_KEYS = [
   'author',
   'author_context',
   'source',
-  'category',
 ] as const
 export type QuoteEditableKey = (typeof QUOTE_EDITABLE_KEYS)[number]
 
@@ -46,8 +50,6 @@ export interface QuoteFields {
   /** Obra, discurso o enlace de donde sale. Muchas frases famosas se atribuyen
    *  mal: conviene citar la fuente. */
   source: string | null
-  /** La misma lista de categorías de las publicaciones. */
-  category: ParrillaCategory | null
 }
 
 export interface ParrillaQuote extends QuoteFields {
@@ -124,17 +126,15 @@ export function distinctAuthors(quotes: readonly Pick<ParrillaQuote, 'author'>[]
 
 // ─────────────────────── De la frase a la publicación ───────────────────────
 
-/** Lo que «Crear contenido» prellena en la publicación nueva: el título, el copy
- *  del post (la frase entre comillas y el referente en su línea) y la categoría.
- *  Las comillas son las de `quoteBlock` (lib/deliverables/html-blocks.ts). */
-export function quoteToPostDraft(
-  quote: Pick<ParrillaQuote, 'quote_text' | 'author' | 'category'>
-): PostDraft {
+/** Lo que «Crear contenido» prellena en la publicación nueva: el título y el copy del
+ *  post (la frase entre comillas y el referente en su línea). La categoría NO se prellena:
+ *  se elige al construir la publicación. Las comillas son las de `quoteBlock`
+ *  (lib/deliverables/html-blocks.ts). */
+export function quoteToPostDraft(quote: Pick<ParrillaQuote, 'quote_text' | 'author'>): PostDraft {
   const author = quote.author.trim()
   return {
     title: `Frase de ${author}`,
     caption: `“${quote.quote_text.trim()}”\n\n— ${author}`,
-    category: quote.category,
   }
 }
 
@@ -148,7 +148,6 @@ export function normalizeQuoteFields(fields: QuoteFields): QuoteFields {
     author: fields.author.trim(),
     author_context: blankToNull(fields.author_context),
     source: blankToNull(fields.source),
-    category: fields.category,
   }
 }
 

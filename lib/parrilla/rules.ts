@@ -40,10 +40,10 @@ export type EditableFields = Omit<ParrillaPost, 'id' | 'updated_at'>
 export type PostPatch = Partial<EditableFields>
 
 /** Lo único que otra pantalla puede prellenar al CREAR una pieza (hoy, la
- *  biblioteca de frases): título, copy y categoría. Estrecho a propósito: así
- *  nadie prellena fechas ni estado y rompe «archivada ⇒ sin fecha de
- *  publicación». */
-export type PostDraft = Partial<Pick<EditableFields, 'title' | 'caption' | 'category'>>
+ *  biblioteca de frases): título y copy. Estrecho a propósito: así nadie prellena
+ *  fechas ni estado y rompe «archivada ⇒ sin fecha de publicación», y la categoría se
+ *  elige siempre al construir la publicación. */
+export type PostDraft = Partial<Pick<EditableFields, 'title' | 'caption'>>
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

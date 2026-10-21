@@ -203,6 +203,10 @@ const quoteAuthor = z
 // Todas las columnas editables, sin defaults a propósito (igual que
 // `parrillaPostShape`): el PATCH deriva de aquí con `.partial()`. Un test
 // compara estas claves con QUOTE_EDITABLE_KEYS (lib/parrilla/quotes.ts).
+//
+// Las frases no llevan categoría (se elige al crear la publicación). Una `category` que llegue
+// de una pestaña abierta con la versión anterior se ignora: zod descarta las claves
+// desconocidas, así que ni falla ni se guarda.
 export const parrillaQuoteShape = {
   quote_text: quoteText,
   author: quoteAuthor,
@@ -224,8 +228,6 @@ export const parrillaQuoteShape = {
       )
       .nullish()
   ),
-  // `null` = «Sin categoría»; omitirlo deja la columna como estaba en un PATCH.
-  category: parrillaCategorySchema.nullish(),
 }
 
 // Un cuerpo que no es un objeto (`"hola"`, `5`, `null`, `[]`) llegaba a la persona con el

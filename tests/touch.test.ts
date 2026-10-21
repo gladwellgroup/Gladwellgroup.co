@@ -102,8 +102,10 @@ describe('pestaña «Frases» de la parrilla', () => {
     assert.match(form, /text-red-700[^"]*dark:text-red-400/)
   })
 
-  test('los campos del formulario son los del branding (modal-field: 16 px al tacto, sin zoom en Safari)', () => {
-    assert.match(form, /<select[\s\S]*?className="modal-field"/)
+  test('los campos del formulario son los del branding (BrandField/BrandTextarea: 16 px al tacto, sin zoom en Safari)', () => {
+    assert.match(form, /<BrandTextarea[\s\S]*?label="Frase"/)
+    assert.equal((form.match(/<BrandField\b/g) ?? []).length, 3, 'referente, quién fue y fuente')
+    assert.doesNotMatch(form, /<select\b/, 'las frases ya no llevan categoría: no queda ningún selector nativo')
     assert.doesNotMatch(form, /maxLength=/, 'un maxLength truncaría en silencio una frase pegada')
   })
 })

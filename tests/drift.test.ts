@@ -187,15 +187,13 @@ describe('las frases del código coinciden con el esquema de SQL', () => {
     assert.ok(SQL.some((sql) => new RegExp(POSTS_CATEGORY_CHECK.source, 'i').test(sql)))
   })
 
-  test('categorías de frases ↔ CHECK de parrilla_quotes.category', () => {
-    const match =
-      /constraint\s+parrilla_quotes_category_check\s+check\s*\(\s*category\s+in\s*\(([^)]*)\)\s*\)/i.exec(QUOTES_SQL)
-    assert.ok(match, 'No encontré el CHECK de categoría de parrilla_quotes')
-    assert.deepEqual(
-      sorted(PARRILLA_CATEGORIES),
-      sorted(quoted(match[1])),
-      'Las frases usan las categorías de la parrilla: si cambia PARRILLA_CATEGORIES hace falta una migración para parrilla_quotes también'
-    )
+  test('la columna `category` de parrilla_quotes sigue en la base pero el código ya no la usa', () => {
+    // Las frases no llevan categoría (se elige al crear la publicación). La columna se dejó, nullable,
+    // para no perder lo ya guardado. Cuando una migración la quite, este test falla: quitar entonces
+    // `parrilla_quotes_category_check` de CONSTRAINT_MESSAGES (mutations.ts) y bajar a 4 el conteo de
+    // CHECK de «cada CHECK de frases tiene mensaje propio».
+    assert.ok(quotesColumns().includes('category'), 'la migración 20260920 ya no tiene la columna category')
+    assert.ok(!(QUOTE_COLUMNS as readonly string[]).includes('category'))
   })
 
   test('las columnas que lee la lista existen en parrilla_quotes', () => {

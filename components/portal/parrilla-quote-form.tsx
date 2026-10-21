@@ -7,11 +7,6 @@ import { BrandButton } from '@/components/brand/brand-button'
 import { BrandField, BrandTextarea } from '@/components/brand/brand-field'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
 import {
-  PARRILLA_CATEGORIES,
-  PARRILLA_CATEGORY_LABELS,
-  type ParrillaCategory,
-} from '@/lib/parrilla/posts'
-import {
   QUOTE_TEXT_MAX,
   charLength,
   diffQuote,
@@ -35,7 +30,6 @@ function initialFields(quote: ParrillaQuote | null): QuoteFields {
     author: quote?.author ?? '',
     author_context: quote?.author_context ?? null,
     source: quote?.source ?? null,
-    category: quote?.category ?? null,
   }
 }
 
@@ -71,7 +65,7 @@ interface ParrillaQuoteFormProps {
  *
  *  Al editar manda solo lo que cambió (`diffQuote`), así no pisa lo que otra
  *  persona guardó en otros campos. No hay token de concurrencia ni fusión: son
- *  cinco campos cortos y, si dos personas editan el MISMO a la vez, gana la última
+ *  cuatro campos cortos y, si dos personas editan el MISMO a la vez, gana la última
  *  escritura (lib/parrilla/quote-mutations.ts). */
 export function ParrillaQuoteForm({ quote, authors, onClose }: ParrillaQuoteFormProps) {
   const router = useRouter()
@@ -242,27 +236,6 @@ export function ParrillaQuoteForm({ quote, authors, onClose }: ParrillaQuoteForm
             <p className="text-center text-xs text-muted-foreground">
               Muchas frases famosas se atribuyen mal. Cita la fuente cuando la tengas.
             </p>
-          </div>
-
-          <div className="flex flex-col items-center gap-1.5 text-center">
-            <label htmlFor="quote-category" className="modal-label">
-              Categoría
-            </label>
-            <select
-              id="quote-category"
-              value={form.category ?? ''}
-              onChange={(e) =>
-                setField('category', (e.target.value || null) as ParrillaCategory | null)
-              }
-              className="modal-field"
-            >
-              <option value="">Sin categoría</option>
-              {PARRILLA_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {PARRILLA_CATEGORY_LABELS[category]}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 

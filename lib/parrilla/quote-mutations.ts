@@ -3,7 +3,7 @@
 // un mensaje claro, y los errores de Supabase pasan por el mismo `failure`.
 //
 // A diferencia de las publicaciones, aquí NO hay token de concurrencia ni
-// fusión de tres vías: una frase son cinco campos cortos y el formulario manda
+// fusión de tres vías: una frase son cuatro campos cortos y el formulario manda
 // solo lo que cambió, así que dos personas solo se pisan si editan el MISMO
 // campo a la vez (gana la última escritura). Lo que sí se atiende es que otra
 // persona haya borrado la frase mientras tanto: 404.
@@ -31,7 +31,6 @@ export async function createQuote(
     author: input.author,
     author_context: input.author_context ?? null,
     source: input.source ?? null,
-    category: input.category ?? null,
   })
 
   const { data, error } = await sb

@@ -30,7 +30,6 @@ function quote(overrides: Partial<ParrillaQuote> = {}): ParrillaQuote {
     author: 'Marco Aurelio',
     author_context: 'Emperador y filósofo estoico',
     source: 'Meditaciones',
-    category: 'crecer',
     used_count: 0,
     ...overrides,
   }
@@ -43,7 +42,6 @@ function fields(overrides: Partial<QuoteFields> = {}): QuoteFields {
     author: q.author,
     author_context: q.author_context,
     source: q.source,
-    category: q.category,
     ...overrides,
   }
 }
@@ -121,16 +119,15 @@ describe('distinctAuthors', () => {
 })
 
 describe('quoteToPostDraft', () => {
-  test('título, copy con la frase entre comillas y el referente, y la categoría', () => {
+  test('título y copy con la frase entre comillas y el referente', () => {
     assert.deepEqual(quoteToPostDraft(quote()), {
       title: 'Frase de Marco Aurelio',
       caption: '“La felicidad de tu vida depende de la calidad de tus pensamientos.”\n\n— Marco Aurelio',
-      category: 'crecer',
     })
   })
 
-  test('una frase sin categoría deja la categoría en null (no la inventa)', () => {
-    assert.equal(quoteToPostDraft(quote({ category: null })).category, null)
+  test('NO prellena la categoría: se elige al construir la publicación', () => {
+    assert.equal('category' in quoteToPostDraft(quote()), false)
   })
 
   test('recorta los espacios de la frase y del referente', () => {
@@ -139,8 +136,8 @@ describe('quoteToPostDraft', () => {
     assert.equal(draft.caption, '“Una frase”\n\n— Séneca')
   })
 
-  test('solo prellena título, copy y categoría: nunca fechas ni estado', () => {
-    assert.deepEqual(Object.keys(quoteToPostDraft(quote())).sort(), ['caption', 'category', 'title'])
+  test('solo prellena título y copy: nunca fechas, estado ni categoría', () => {
+    assert.deepEqual(Object.keys(quoteToPostDraft(quote())).sort(), ['caption', 'title'])
   })
 
   test('el título cumple el mínimo de 3 caracteres de la publicación', () => {
@@ -152,9 +149,9 @@ describe('normalizeQuoteFields', () => {
   test('recorta y deja un único NULL para «vacío» en los opcionales', () => {
     assert.deepEqual(
       normalizeQuoteFields(
-        fields({ quote_text: '  Una frase  ', author: ' Séneca ', author_context: '   ', source: '', category: null })
+        fields({ quote_text: '  Una frase  ', author: ' Séneca ', author_context: '   ', source: '' })
       ),
-      { quote_text: 'Una frase', author: 'Séneca', author_context: null, source: null, category: null }
+      { quote_text: 'Una frase', author: 'Séneca', author_context: null, source: null }
     )
   })
 
@@ -162,7 +159,6 @@ describe('normalizeQuoteFields', () => {
     const normalized = normalizeQuoteFields(fields({ author_context: ' Filósofo ', source: ' Cartas a Lucilio ' }))
     assert.equal(normalized.author_context, 'Filósofo')
     assert.equal(normalized.source, 'Cartas a Lucilio')
-    assert.equal(normalized.category, 'crecer')
   })
 })
 
@@ -183,16 +179,23 @@ describe('diffQuote', () => {
   })
 
   test('vaciar un opcional se manda como null (limpia la columna)', () => {
-    assert.deepEqual(diffQuote(fields(), fields({ source: '', category: null })), {
+    assert.deepEqual(diffQuote(fields(), fields({ source: '', author_context: '  ' })), {
       source: null,
-      category: null,
+      author_context: null,
     })
   })
 
   test('varios cambios a la vez', () => {
-    const patch = diffQuote(fields(), fields({ author: 'Séneca', category: 'roots' }))
-    assert.deepEqual(patch, { author: 'Séneca', category: 'roots' })
+    const patch = diffQuote(fields(), fields({ author: 'Séneca', source: 'Cartas a Lucilio' }))
+    assert.deepEqual(patch, { author: 'Séneca', source: 'Cartas a Lucilio' })
   })
+})
+
+test('las frases no llevan categoría: ni se edita ni la pide la lista (la columna sigue en la base, sin uso)', () => {
+  // La categoría se elige al construir la publicación. Si alguien la vuelve a pedir aquí, que sea
+  // una decisión: este test falla para que se note.
+  assert.ok(!(QUOTE_EDITABLE_KEYS as readonly string[]).includes('category'))
+  assert.ok(!(QUOTE_COLUMNS as readonly string[]).includes('category'))
 })
 
 test('QUOTE_EDITABLE_KEYS coincide con las columnas del schema de frases', () => {
@@ -236,8 +239,8 @@ function listFake(reply: Reply) {
 
 describe('loadParrillaQuotes', () => {
   const row = (over: Record<string, unknown> = {}) => {
-    const { id, quote_text, author, author_context, source, category } = quote()
-    return { id, quote_text, author, author_context, source, category, used: [{ count: 0 }], ...over }
+    const { id, quote_text, author, author_context, source } = quote()
+    return { id, quote_text, author, author_context, source, used: [{ count: 0 }], ...over }
   }
 
   test('pide la tabla de frases con las columnas de la lista y el conteo de usos, de la más reciente a la más antigua', async () => {

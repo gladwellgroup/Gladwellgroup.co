@@ -638,7 +638,7 @@ describe('createQuote', () => {
     const fake = fakeSupabase([{ data: { id: 'frase-id' } }])
     const out = await createQuote(
       fake.client,
-      { ...input, author_context: '   ', source: ' Meditaciones ', category: 'crecer' },
+      { ...input, author_context: '   ', source: ' Meditaciones ' },
       USER
     )
 
@@ -649,7 +649,6 @@ describe('createQuote', () => {
       author: 'Marco Aurelio',
       author_context: null,
       source: 'Meditaciones',
-      category: 'crecer',
       created_by: USER,
     })
   })
@@ -667,7 +666,8 @@ describe('createQuote', () => {
     const row = fake.callsTo('insert')[0].args[0] as Record<string, unknown>
     assert.equal(row.author_context, null)
     assert.equal(row.source, null)
-    assert.equal(row.category, null)
+    // La frase ya no lleva categoría: la columna de la base queda sin escribir.
+    assert.equal('category' in row, false)
   })
 
   test('un CHECK de la base es 400, con el mensaje de esa restricción', async () => {
@@ -711,7 +711,7 @@ describe('updateQuote', () => {
 
   test('escribe solo las claves que llegan; null limpia un opcional', async () => {
     const fake = fakeSupabase([{ data: { id: ID } }])
-    const out = await updateQuote(fake.client, ID, { author: 'Séneca', source: null, category: undefined })
+    const out = await updateQuote(fake.client, ID, { author: 'Séneca', source: null })
 
     assert.deepEqual(out, { ok: true })
     assert.deepEqual(fake.callsTo('update')[0].args[0], { author: 'Séneca', source: null })
@@ -725,11 +725,11 @@ describe('updateQuote', () => {
 
   test('un CHECK de la base es 400 con su mensaje; otro error usa el de la ruta', async () => {
     const check = fakeSupabase([
-      { data: null, error: { code: '23514', message: 'violates check constraint "parrilla_quotes_category_check"' } },
+      { data: null, error: { code: '23514', message: 'violates check constraint "parrilla_quotes_source_check"' } },
     ])
-    const a = await updateQuote(check.client, ID, { category: 'crecer' })
+    const a = await updateQuote(check.client, ID, { source: 'x' })
     assert.equal(a.ok === false && a.status, 400)
-    assert.match(a.ok === false ? a.error : '', /^La categoría no es válida/)
+    assert.match(a.ok === false ? a.error : '', /^La fuente no puede pasar de 300 caracteres/)
 
     const other = await updateQuote(fakeSupabase([{ data: null, error: { code: '57014' } }]).client, ID, { author: 'x' })
     assert.deepEqual(other, { ok: false, status: 500, error: 'No se pudo actualizar la frase' })

@@ -59,7 +59,6 @@ function quote(overrides: Partial<ParrillaQuote> = {}): ParrillaQuote {
     author: 'Marco Aurelio',
     author_context: 'Emperador y filósofo estoico',
     source: 'Meditaciones',
-    category: 'crecer',
     used_count: 0,
     ...overrides,
   }
@@ -84,7 +83,6 @@ const renderQuotes = (props: Partial<React.ComponentProps<typeof ParrillaQuotes>
     inRouter(
       React.createElement(ParrillaQuotes, {
         quotes: [],
-        total: 0,
         anyUsed: false,
         authors: [],
         editors: [],
@@ -255,12 +253,11 @@ describe('Banco de contenido en vista «Tarjetas»', () => {
 describe('Frases en vista «Tabla»', () => {
   const quotes = [
     quote({ id: 'a' }),
-    quote({ id: 'b', author: 'Séneca', author_context: null, source: null, category: null, used_count: 2 }),
+    quote({ id: 'b', author: 'Séneca', author_context: null, source: null, used_count: 2 }),
     quote({ id: 'c', author: 'Nietzsche' }),
   ]
   const html = renderQuotes({
     quotes,
-    total: 3,
     anyUsed: true,
     authors: ['Marco Aurelio', 'Nietzsche', 'Séneca'],
   })
@@ -276,9 +273,9 @@ describe('Frases en vista «Tabla»', () => {
     const cols = headers(html)
     assert.deepEqual(
       cols.map((c) => c.text),
-      ['Frase', 'Referente', 'Quién fue', 'Fuente', 'Categoría', 'Uso', 'Acciones']
+      ['Frase', 'Referente', 'Quién fue', 'Fuente', 'Uso', 'Acciones']
     )
-    const actions = cols[6]
+    const actions = cols[5]
     assert.match(actions.html, /sr-only/)
     assert.doesNotMatch(actions.html, /<button\b/, 'una columna de acciones no se ordena')
   })
@@ -301,9 +298,10 @@ describe('Frases en vista «Tabla»', () => {
     assert.doesNotMatch(textOf(html), /Usada ×0/)
   })
 
-  test('sin «quién fue», fuente o categoría se ve «—»', () => {
+  test('sin «quién fue» o fuente se ve «—»; las frases ya no tienen columna de categoría', () => {
     const row = html.split('<tr').find((r) => r.includes('Séneca')) ?? ''
-    assert.ok(count(row, /—/g) >= 3)
+    assert.ok(count(row, /—/g) >= 2)
+    assert.doesNotMatch(textOf(html), /Categoría/)
   })
 
   test('no pinta fechas (Node y Safari las escriben distinto)', () => {
@@ -312,7 +310,7 @@ describe('Frases en vista «Tabla»', () => {
 
   test('el interruptor marca «Tabla»; sin frases no hay interruptor ni tabla', () => {
     assert.match(html, /aria-pressed="true"[^>]*aria-label="Tabla"/)
-    const empty = renderQuotes({ quotes: [], total: 0 })
+    const empty = renderQuotes({ quotes: [] })
     assert.doesNotMatch(empty, /aria-label="Vista"/)
     assert.doesNotMatch(empty, /<table\b/)
     assert.match(textOf(empty), /Aún no hay frases/)
@@ -466,7 +464,6 @@ describe('un valor largo no estira la tabla', () => {
   const fuente = largo(300, 'Fuente')
   const frases = renderQuotes({
     quotes: [quote({ id: 'a', author: referente, author_context: contexto, source: fuente })],
-    total: 1,
     anyUsed: false,
   })
 
@@ -501,14 +498,14 @@ describe('un valor largo no estira la tabla', () => {
 })
 
 describe('«Fuente» se oculta cuando la tabla es estrecha, para que «Crear contenido» quede a la vista', () => {
-  const html = renderQuotes({ quotes: [quote({ id: 'a' })], total: 1, anyUsed: false })
-  const ocultaPorContenedor = /\bhidden\b[^"]*@min-\[1180px\]:table-cell/
+  const html = renderQuotes({ quotes: [quote({ id: 'a' })], anyUsed: false })
+  const ocultaPorContenedor = /\bhidden\b[^"]*@min-\[1060px\]:table-cell/
 
   test('la tabla es un contenedor de consultas: la decisión es por SU ancho, no el de la pantalla', () => {
     assert.match(html, /<div class="@container [^"]*overflow-x-auto/)
   })
 
-  test('el encabezado y la celda de «Fuente» llevan `hidden @min-[1180px]:table-cell`', () => {
+  test('el encabezado y la celda de «Fuente» llevan `hidden @min-[1060px]:table-cell`', () => {
     const th = headers(html).find((c) => c.text === 'Fuente')
     assert.ok(th)
     assert.match(th.attrs, ocultaPorContenedor)

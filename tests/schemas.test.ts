@@ -386,7 +386,6 @@ describe('frases: crear (POST)', () => {
     if (result.success) {
       assert.equal(result.data.author_context ?? null, null)
       assert.equal(result.data.source ?? null, null)
-      assert.equal(result.data.category ?? null, null)
     }
   })
 
@@ -396,7 +395,6 @@ describe('frases: crear (POST)', () => {
       author: ' Séneca ',
       author_context: '   ',
       source: '',
-      category: null,
     })
     assert.equal(result.success, true)
     if (result.success) {
@@ -405,7 +403,6 @@ describe('frases: crear (POST)', () => {
         author: 'Séneca',
         author_context: null,
         source: null,
-        category: null,
       })
     }
   })
@@ -415,13 +412,11 @@ describe('frases: crear (POST)', () => {
       ...frase,
       author_context: ' Emperador y filósofo estoico ',
       source: ' Meditaciones, libro V ',
-      category: 'crecer',
     })
     assert.equal(result.success, true)
     if (result.success) {
       assert.equal(result.data.author_context, 'Emperador y filósofo estoico')
       assert.equal(result.data.source, 'Meditaciones, libro V')
-      assert.equal(result.data.category, 'crecer')
     }
   })
 
@@ -475,17 +470,13 @@ describe('frases: crear (POST)', () => {
     assert.equal(firstError(parrillaQuoteSchema.safeParse({ quote_text: 5, author: 'Séneca' })), 'La frase no es válida')
   })
 
-  test('categoría: null y omitida valen; una desconocida o retirada se rechaza', () => {
-    for (const category of [null, undefined, 'crecer', 'conectar', 'construir', 'aprender', 'roots', 'comunidad']) {
-      assert.equal(parrillaQuoteSchema.safeParse({ ...frase, category }).success, true, String(category))
+  test('las frases no llevan categoría: una `category` que llegue (pestaña abierta con la versión anterior) se ignora, ni falla ni se guarda', () => {
+    for (const category of [null, undefined, 'crecer', 'valor', 'Crecer', '']) {
+      const result = parrillaQuoteSchema.safeParse({ ...frase, category })
+      assert.equal(result.success, true, String(category))
+      if (result.success) assert.equal('category' in result.data, false, String(category))
     }
-    for (const category of ['valor', 'prospeccion', 'Crecer', '']) {
-      assert.equal(
-        firstError(parrillaQuoteSchema.safeParse({ ...frase, category })),
-        'Categoría no válida. Recarga la página e inténtalo de nuevo.',
-        category
-      )
-    }
+    assert.equal('category' in parrillaQuoteShape, false)
   })
 
   test('un cuerpo que no es un objeto se rechaza en español, no con el «Expected object» de zod', () => {
@@ -528,9 +519,9 @@ describe('frases: editar (PATCH)', () => {
   })
 
   test('null (o el texto en blanco) limpia los opcionales', () => {
-    const result = parrillaQuotePatchSchema.safeParse({ source: null, author_context: '  ', category: null })
+    const result = parrillaQuotePatchSchema.safeParse({ source: null, author_context: '  ' })
     assert.equal(result.success, true)
-    if (result.success) assert.deepEqual(result.data, { source: null, author_context: null, category: null })
+    if (result.success) assert.deepEqual(result.data, { source: null, author_context: null })
   })
 
   test('los mismos límites y mensajes que al crear; omitir un campo no lo vuelve «vacío»', () => {
@@ -542,10 +533,16 @@ describe('frases: editar (PATCH)', () => {
       firstError(parrillaQuotePatchSchema.safeParse({ source: 's'.repeat(QUOTE_SOURCE_MAX + 1) })),
       `La fuente no puede pasar de ${QUOTE_SOURCE_MAX} caracteres`
     )
-    assert.equal(
-      firstError(parrillaQuotePatchSchema.safeParse({ category: 'valor' })),
-      'Categoría no válida. Recarga la página e inténtalo de nuevo.'
-    )
+  })
+
+  test('un parche que solo trae `category` (pestaña vieja) es «nada que guardar»: se ignora el campo, no se rompe', () => {
+    for (const category of ['crecer', 'valor', null]) {
+      assert.equal(firstError(parrillaQuotePatchSchema.safeParse({ category })), 'No hay nada que guardar', String(category))
+    }
+    // …y si trae otro campo, ese se guarda y la categoría se descarta.
+    const result = parrillaQuotePatchSchema.safeParse({ author: 'Séneca', category: 'roots' })
+    assert.equal(result.success, true)
+    if (result.success) assert.deepEqual(result.data, { author: 'Séneca' })
   })
 
   test('descarta lo que no es editable', () => {

@@ -177,7 +177,7 @@ function PlatformFilter({
 
 /** Single-select: a diferencia de plataformas, cada post tiene como mucho
  *  una categoría — no tiene sentido "coincide con varias" acá. Solo lee
- *  `category`, así que sirve igual para las publicaciones que para las frases.
+ *  `category`. Las frases no la tienen: se elige al crear la publicación.
  *
  *  La fila se oculta con menos de dos categorías (un solo chip no filtra nada)…
  *  salvo que haya un filtro ACTIVO: si la última pieza de esa categoría se borra o
@@ -237,19 +237,24 @@ interface ParrillaBoardProps {
   editors: ParrillaEditor[]
   /** La biblioteca de frases de referentes históricos (pestaña «Frases»). */
   quotes: ParrillaQuote[]
+  /** La pestaña con la que arranca; por defecto, el Calendario. Hoy nadie la pasa: existe para
+   *  poder probar con `renderToString` qué filtros trae cada pestaña (un clic no se puede
+   *  simular sin navegador). */
+  initialView?: BoardView
 }
 
-type BoardView = 'calendario' | 'banco' | 'frases'
+export type BoardView = 'calendario' | 'banco' | 'frases'
 
 /** Orquesta el calendario (con sus dos vistas, producción / publicación), el
  *  Banco de contenido, la biblioteca de frases y los filtros por plataforma y
- *  categoría, que aplican a la pestaña activa. ParrillaCalendar, ParrillaBank y
+ *  categoría, que aplican al Calendario y al Banco. ParrillaCalendar, ParrillaBank y
  *  ParrillaQuotes siguen siendo "tontos": solo dibujan lo que les pasen. Lo
  *  archivado vive en el Banco y no en el calendario: no tiene fecha de
- *  publicación. Las frases no tienen plataforma, así que en esa pestaña solo
- *  aplica el filtro de categoría. */
-export function ParrillaBoard({ posts, editors, quotes }: ParrillaBoardProps) {
-  const [view, setView] = useState<BoardView>('calendario')
+ *  publicación. Las frases no tienen plataforma ni categoría (la categoría se elige
+ *  al crear la publicación), así que en esa pestaña no hay filtros del tablero: solo
+ *  el buscador y «Sin usar» de la propia lista. */
+export function ParrillaBoard({ posts, editors, quotes, initialView = 'calendario' }: ParrillaBoardProps) {
+  const [view, setView] = useState<BoardView>(initialView)
   const [dateField, setDateField] = useState<ParrillaDateField>('publish_date')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilterValue>('todas')
@@ -277,10 +282,6 @@ export function ParrillaBoard({ posts, editors, quotes }: ParrillaBoardProps) {
     return platformFiltered.filter((p) => p.category === categoryFilter)
   }, [platformFiltered, categoryFilter])
 
-  const filteredQuotes = useMemo(() => {
-    if (categoryFilter === 'todas') return quotes
-    return quotes.filter((q) => q.category === categoryFilter)
-  }, [quotes, categoryFilter])
   const authors = useMemo(() => distinctAuthors(quotes), [quotes])
   const anyQuoteUsed = useMemo(() => quotes.some((q) => q.used_count > 0), [quotes])
 
@@ -327,11 +328,9 @@ export function ParrillaBoard({ posts, editors, quotes }: ParrillaBoardProps) {
           onClear={() => setSelectedPlatforms([])}
         />
       )}
-      <CategoryFilter
-        items={view === 'frases' ? quotes : platformFiltered}
-        value={categoryFilter}
-        onChange={setCategoryFilter}
-      />
+      {view !== 'frases' && (
+        <CategoryFilter items={platformFiltered} value={categoryFilter} onChange={setCategoryFilter} />
+      )}
       {view === 'calendario' ? (
         <ParrillaCalendar posts={filteredPosts} dateField={dateField} editors={editors} />
       ) : view === 'banco' ? (
@@ -344,8 +343,7 @@ export function ParrillaBoard({ posts, editors, quotes }: ParrillaBoardProps) {
         />
       ) : (
         <ParrillaQuotes
-          quotes={filteredQuotes}
-          total={quotes.length}
+          quotes={quotes}
           anyUsed={anyQuoteUsed}
           authors={authors}
           editors={editors}
