@@ -1,18 +1,22 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { ExternalLink, Plus, Search } from 'lucide-react'
 import { BrandButton } from '@/components/brand/brand-button'
 import { BrandCard } from '@/components/brand/brand-card'
 import { ParrillaPostDialog } from '@/components/portal/parrilla-post-dialog'
-import { PlatformIcons } from '@/components/portal/parrilla-shared'
+import { ListViewToggle, PlatformIcons } from '@/components/portal/parrilla-shared'
+import { ParrillaTable, type ParrillaTableColumn } from '@/components/portal/parrilla-table'
 import { parseDateOnly } from '@/lib/date'
 import {
   PARRILLA_CATEGORY_LABELS,
   PARRILLA_FORMAT_LABELS,
+  PLATFORM_LABELS,
   type ParrillaEditor,
   type ParrillaPostSummary,
 } from '@/lib/parrilla/posts'
+import { isHttpUrl } from '@/lib/parrilla/rules'
+import type { ParrillaListView } from '@/lib/parrilla/table'
 
 interface ParrillaBankProps {
   /** Las piezas archivadas que pasaron los filtros del tablero. */
@@ -21,6 +25,9 @@ interface ParrillaBankProps {
    *  vacío" de "ninguna coincide con el filtro". */
   total: number
   editors: ParrillaEditor[]
+  /** Cómo se ven las ideas: tarjetas o tabla. La elige y recuerda el tablero. */
+  view: ParrillaListView
+  onViewChange: (view: ParrillaListView) => void
 }
 
 function formatDate(dateKey: string): string {
@@ -38,8 +45,10 @@ function formatDate(dateKey: string): string {
  *  cambia su estado: el modal pide de nuevo la fecha de publicación.
  *
  *  Una sola superficie con filas de la misma altura (mismo criterio que la
- *  agenda del calendario), con el alto táctil de 44 px de las filas. */
-export function ParrillaBank({ posts, total, editors }: ParrillaBankProps) {
+ *  agenda del calendario), con el alto táctil de 44 px de las filas. Tiene dos
+ *  vistas de la misma lista (tarjetas y tabla): la tabla recibe lo que el buscador y
+ *  los filtros dejaron, igual que las tarjetas. */
+export function ParrillaBank({ posts, total, editors, view, onViewChange }: ParrillaBankProps) {
   const [query, setQuery] = useState('')
   const [editingPost, setEditingPost] = useState<ParrillaPostSummary | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -54,6 +63,116 @@ export function ParrillaBank({ posts, total, editors }: ParrillaBankProps) {
     // texto ISO, se ordena igual como texto.
     return [...matches].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   }, [posts, query])
+
+  const editorNames = useMemo(() => new Map(editors.map((e) => [e.id, e.nombre])), [editors])
+
+  function editorsOf(post: ParrillaPostSummary): string {
+    return post.editor_ids
+      .map((id) => editorNames.get(id))
+      .filter((name): name is string => Boolean(name))
+      .join(', ')
+  }
+
+  // Las propiedades de una idea, una columna cada una. «Editor(es)» se resuelve por id
+  // (`editor_ids` es un arreglo plano, sin FK); una persona que ya no es editora no
+  // aparece. Sin estado (en el Banco siempre es «Archivado») ni hora de edición (una
+  // hora local se escribe distinto en Node y en Safari).
+  const columns: ParrillaTableColumn<ParrillaPostSummary>[] = [
+    {
+      key: 'idea',
+      label: 'Idea',
+      primary: true,
+      sortValue: (post) => post.title,
+      cell: (post) => (
+        <span className="line-clamp-2 w-52 break-words font-medium text-foreground">{post.title}</span>
+      ),
+    },
+    {
+      key: 'redes',
+      label: 'Redes',
+      sortValue: (post) => post.platforms.map((p) => PLATFORM_LABELS[p]).join(' '),
+      cell: (post) =>
+        post.platforms.length > 0 ? (
+          <PlatformIcons platforms={post.platforms} className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          '—'
+        ),
+    },
+    {
+      key: 'categoria',
+      label: 'Categoría',
+      sortValue: (post) => (post.category ? PARRILLA_CATEGORY_LABELS[post.category] : null),
+      cell: (post) =>
+        post.category ? (
+          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] leading-none">
+            {PARRILLA_CATEGORY_LABELS[post.category]}
+          </span>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      key: 'formato',
+      label: 'Formato',
+      sortValue: (post) => (post.format ? PARRILLA_FORMAT_LABELS[post.format] : null),
+      cell: (post) => (post.format ? PARRILLA_FORMAT_LABELS[post.format] : '—'),
+    },
+    {
+      key: 'talento',
+      label: 'Talento',
+      sortValue: (post) => post.talent,
+      // Texto libre SIN tope de largo (ni en zod ni en SQL): ancho tope y dos líneas, o un
+      // talento largo ensanchaba toda la tabla (+191 px con 90 caracteres).
+      cell: (post) =>
+        post.talent ? (
+          <span className="line-clamp-2 max-w-28 whitespace-normal break-words" title={post.talent}>
+            {post.talent}
+          </span>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      key: 'editores',
+      label: 'Editor(es)',
+      sortValue: (post) => editorsOf(post),
+      cell: (post) => {
+        const names = editorsOf(post)
+        return names ? (
+          <span className="line-clamp-2 max-w-28 whitespace-normal break-words" title={names}>
+            {names}
+          </span>
+        ) : (
+          '—'
+        )
+      },
+    },
+    {
+      key: 'inspiracion',
+      label: 'Inspiración',
+      cell: (post) =>
+        isHttpUrl(post.inspiration_url) ? (
+          <a
+            href={post.inspiration_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Abrir la inspiración de ${post.title} (se abre en una pestaña nueva)`}
+            className="inline-flex size-6 items-center justify-center rounded-full transition-colors hover:bg-muted/60 hover:text-foreground active:bg-muted/60 pointer-coarse:size-11"
+          >
+            <ExternalLink className="size-4" aria-hidden="true" />
+          </a>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      key: 'produccion',
+      label: 'Producción',
+      // Fecha sin hora ('2026-10-27'): como texto ISO se ordena igual que como fecha.
+      sortValue: (post) => post.production_date,
+      cell: (post) => formatDate(post.production_date),
+    },
+  ]
 
   function openPost(post: ParrillaPostSummary) {
     setEditingPost(post)
@@ -82,10 +201,15 @@ export function ParrillaBank({ posts, total, editors }: ParrillaBankProps) {
               />
             </div>
           )}
-          <BrandButton type="button" size="sm" className="w-auto shrink-0" onClick={openCreate}>
-            <Plus className="size-4" />
-            Nueva idea
-          </BrandButton>
+          {/* En un teléfono el buscador ocupa su fila y el interruptor comparte la de
+              abajo con «Nueva idea»; desde `sm` todo va en una sola fila. */}
+          <div className="flex shrink-0 items-center gap-2">
+            {total > 0 && <ListViewToggle value={view} onChange={onViewChange} />}
+            <BrandButton type="button" size="sm" className="w-auto shrink-0" onClick={openCreate}>
+              <Plus className="size-4" />
+              Nueva idea
+            </BrandButton>
+          </div>
         </div>
 
         {visible.length === 0 ? (
@@ -96,6 +220,14 @@ export function ParrillaBank({ posts, total, editors }: ParrillaBankProps) {
                 ? `Ninguna idea coincide con "${query.trim()}".`
                 : 'Ninguna idea archivada coincide con los filtros.'}
           </p>
+        ) : view === 'tabla' ? (
+          <ParrillaTable
+            columns={columns}
+            rows={visible}
+            getRowId={(post) => post.id}
+            onOpen={openPost}
+            caption="Ideas del Banco de contenido"
+          />
         ) : (
           // `flex` en cada `li`: el botón se estira a la altura de la fila de la
           // cuadrícula; sin él, dos ideas vecinas con títulos de 1 y 2 líneas

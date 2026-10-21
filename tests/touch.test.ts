@@ -107,3 +107,38 @@ describe('pestaña «Frases» de la parrilla', () => {
     assert.doesNotMatch(form, /maxLength=/, 'un maxLength truncaría en silencio una frase pegada')
   })
 })
+
+describe('vista «Tabla» del Banco de contenido y de las Frases', () => {
+  const table = read('components/portal/parrilla-table.tsx')
+  const shared = read('components/portal/parrilla-shared.tsx')
+
+  test('el encabezado y la celda principal miden 44 px al tacto, y el interruptor de vista también', () => {
+    assert.ok((table.match(/pointer-coarse:min-h-11/g) ?? []).length >= 2, 'faltan el botón del encabezado y el de la celda principal')
+    assert.match(shared, /pointer-coarse:size-11/, 'falta el interruptor Tarjetas / Tabla')
+  })
+
+  test('`hover:` no existe al tacto: la fila, el encabezado y el interruptor dan feedback con `active:`', () => {
+    assert.match(table, /active:bg-muted\/60/, 'falta el feedback al pulsar la fila')
+    assert.match(table, /hover:text-foreground active:text-foreground/, 'falta en el encabezado')
+    assert.match(shared, /hover:text-foreground active:text-foreground/, 'falta en el interruptor')
+  })
+
+  test('no usa vh, ni dibuja su propio overlay, ni columna fija (sticky dentro de una tarjeta .glass)', () => {
+    assert.doesNotMatch(table, /\b\d+vh\b/)
+    assert.doesNotMatch(table, /\bfixed\b[^"'`]*\binset-0\b/)
+    assert.doesNotMatch(table, /\bsticky\b/)
+  })
+
+  test('si no cabe, se desplaza DENTRO de su contenedor: la página no se ensancha', () => {
+    assert.match(table, /min-w-0 overflow-x-auto/)
+  })
+
+  test('no formatea fechas: Node y Safari no las escriben igual', () => {
+    assert.doesNotMatch(table, /toLocale|Intl\.DateTimeFormat/)
+    assert.doesNotMatch(read('components/portal/parrilla-quotes.tsx'), /toLocale|Intl\.DateTimeFormat/)
+  })
+
+  test('el orden de las filas se hace con `Intl.Collator` en español, no con `<` (sin tildes ni mayúsculas)', () => {
+    assert.match(read('lib/parrilla/table.ts'), /new Intl\.Collator\('es'/)
+  })
+})

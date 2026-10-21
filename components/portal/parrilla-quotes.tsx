@@ -6,7 +6,10 @@ import { BrandButton } from '@/components/brand/brand-button'
 import { BrandCard } from '@/components/brand/brand-card'
 import { ParrillaPostDialog } from '@/components/portal/parrilla-post-dialog'
 import { ParrillaQuoteDialog } from '@/components/portal/parrilla-quote-dialog'
+import { ListViewToggle } from '@/components/portal/parrilla-shared'
+import { ParrillaTable, type ParrillaTableColumn } from '@/components/portal/parrilla-table'
 import { PARRILLA_CATEGORY_LABELS, type ParrillaEditor } from '@/lib/parrilla/posts'
+import type { ParrillaListView } from '@/lib/parrilla/table'
 import {
   normalizeSearch,
   quoteMatches,
@@ -27,6 +30,9 @@ interface ParrillaQuotesProps {
   /** Los referentes que ya existen, para sugerirlos al escribir uno nuevo. */
   authors: string[]
   editors: ParrillaEditor[]
+  /** Cómo se ven las frases: tarjetas o tabla. La elige y recuerda el tablero. */
+  view: ParrillaListView
+  onViewChange: (view: ParrillaListView) => void
 }
 
 /** Biblioteca de frases de referentes históricos: la materia prima de las
@@ -41,8 +47,20 @@ interface ParrillaQuotesProps {
  *  La tarjeta es un `div` con dos botones HERMANOS —editar y «Crear contenido»—:
  *  un botón dentro de otro no es HTML válido y en Safari el toque se va al
  *  equivocado. Sin cursiva (Geist solo tiene romana: el navegador la
- *  sintetizaría) y sin fechas (Node y Safari las formatean distinto). */
-export function ParrillaQuotes({ quotes, total, anyUsed, authors, editors }: ParrillaQuotesProps) {
+ *  sintetizaría) y sin fechas (Node y Safari las formatean distinto).
+ *
+ *  Tiene dos vistas de la misma lista: tarjetas y tabla. La tabla recibe lo que el
+ *  buscador, «Sin usar» y la categoría dejaron, y trae su propio «Crear contenido» en
+ *  cada fila, así que hace lo mismo que las tarjetas. */
+export function ParrillaQuotes({
+  quotes,
+  total,
+  anyUsed,
+  authors,
+  editors,
+  view,
+  onViewChange,
+}: ParrillaQuotesProps) {
   const [query, setQuery] = useState('')
   const [onlyUnused, setOnlyUnused] = useState(false)
   const [editingQuote, setEditingQuote] = useState<ParrillaQuote | null>(null)
@@ -60,6 +78,114 @@ export function ParrillaQuotes({ quotes, total, anyUsed, authors, editors }: Par
     [quotes, onlyUnused, normalizedQuery]
   )
   const unusedCount = useMemo(() => quotes.filter((quote) => quote.used_count === 0).length, [quotes])
+
+  // Las propiedades de una frase, una columna cada una. La frase abre la edición; el
+  // botón de la última columna crea la publicación (por eso la fila lo ignora al
+  // hacer clic: ver `opensRow`).
+  const columns: ParrillaTableColumn<ParrillaQuote>[] = [
+    {
+      key: 'frase',
+      label: 'Frase',
+      primary: true,
+      sortValue: (quote) => quote.quote_text,
+      cell: (quote) => (
+        <span className="line-clamp-2 w-72 whitespace-pre-line break-words font-medium text-foreground">
+          “{quote.quote_text}”
+        </span>
+      ),
+    },
+    {
+      key: 'referente',
+      label: 'Referente',
+      sortValue: (quote) => quote.author,
+      // El referente permite hasta 120 caracteres: con tope y dos líneas (+657 px sin él).
+      cell: (quote) => (
+        <span
+          className="line-clamp-2 max-w-32 whitespace-normal break-words font-semibold text-foreground"
+          title={quote.author}
+        >
+          {quote.author}
+        </span>
+      ),
+    },
+    {
+      key: 'quien-fue',
+      label: 'Quién fue',
+      sortValue: (quote) => quote.author_context,
+      // Dos líneas de ancho fijo y no `truncate`: «quién fue» se sigue leyendo casi entero.
+      cell: (quote) => (
+        <span
+          className="line-clamp-2 w-32 whitespace-normal break-words"
+          title={quote.author_context ?? undefined}
+        >
+          {quote.author_context || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'fuente',
+      label: 'Fuente',
+      // La menos importante: se oculta cuando la tabla no tiene ~1180 px, para que «Crear
+      // contenido» (la última columna) no quede fuera de pantalla en un iPad horizontal. El
+      // umbral sale de los anchos tope de las columnas; medido en WebKit con datos de peor caso:
+      // 976 px sin Fuente (caben en los 1016 de un iPad Air horizontal) y 1128 con ella. Si se
+      // añade o ensancha una columna, volver a medir (AGENTS.md → «Tablas»).
+      className: 'hidden @min-[1180px]:table-cell',
+      sortValue: (quote) => quote.source,
+      cell: (quote) => (
+        <span className="line-clamp-2 w-32 whitespace-normal break-words" title={quote.source ?? undefined}>
+          {quote.source || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'categoria',
+      label: 'Categoría',
+      sortValue: (quote) => (quote.category ? PARRILLA_CATEGORY_LABELS[quote.category] : null),
+      cell: (quote) =>
+        quote.category ? (
+          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] leading-none">
+            {PARRILLA_CATEGORY_LABELS[quote.category]}
+          </span>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      key: 'uso',
+      label: 'Uso',
+      sortValue: (quote) => quote.used_count,
+      cell: (quote) =>
+        quote.used_count > 0 ? (
+          // Chip neutro, como en la tarjeta: el cian y el violeta a 11 px no pasan AA en
+          // tema claro.
+          <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] leading-none">
+            <Check className="size-3" aria-hidden="true" />
+            Usada ×{quote.used_count}
+          </span>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      key: 'crear',
+      label: 'Acciones',
+      hideLabel: true,
+      cell: (quote) => (
+        <BrandButton
+          type="button"
+          variant="secondary"
+          size="sm"
+          // `hover:` no existe al tacto: el feedback al pulsar va en `active:`.
+          className="w-auto active:bg-accent active:text-accent-foreground"
+          aria-label={`Crear contenido con la frase de ${quote.author}`}
+          onClick={() => openCreateContent(quote)}
+        >
+          Crear contenido
+        </BrandButton>
+      ),
+    },
+  ]
 
   function openCreate() {
     setEditingQuote(null)
@@ -93,10 +219,15 @@ export function ParrillaQuotes({ quotes, total, anyUsed, authors, editors }: Par
               />
             </div>
           )}
-          <BrandButton type="button" size="sm" className="w-auto shrink-0" onClick={openCreate}>
-            <Plus className="size-4" />
-            Nueva frase
-          </BrandButton>
+          {/* En un teléfono el buscador ocupa su fila y el interruptor comparte la de
+              abajo con «Nueva frase»; desde `sm` todo va en una sola fila. */}
+          <div className="flex shrink-0 items-center gap-2">
+            {total > 0 && <ListViewToggle value={view} onChange={onViewChange} />}
+            <BrandButton type="button" size="sm" className="w-auto shrink-0" onClick={openCreate}>
+              <Plus className="size-4" />
+              Nueva frase
+            </BrandButton>
+          </div>
         </div>
 
         {anyUsed && (
@@ -125,6 +256,14 @@ export function ParrillaQuotes({ quotes, total, anyUsed, authors, editors }: Par
                 ? `Ninguna frase coincide con "${query.trim()}".`
                 : 'Ninguna frase coincide con los filtros.'}
           </p>
+        ) : view === 'tabla' ? (
+          <ParrillaTable
+            columns={columns}
+            rows={visible}
+            getRowId={(quote) => quote.id}
+            onOpen={openEdit}
+            caption="Frases de referentes"
+          />
         ) : (
           // `flex` en cada `li` y `w-full` en la tarjeta: se estira a la altura de
           // la fila de la cuadrícula. Y como cada bloque de la tarjeta tiene alto

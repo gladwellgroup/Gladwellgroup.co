@@ -5,6 +5,7 @@ import { ParrillaBank } from '@/components/portal/parrilla-bank'
 import { ParrillaCalendar } from '@/components/portal/parrilla-calendar'
 import { ParrillaQuotes } from '@/components/portal/parrilla-quotes'
 import { PLATFORM_ICONS } from '@/components/portal/parrilla-shared'
+import { useListView } from '@/hooks/use-list-view'
 import {
   DATE_FIELD_LABELS,
   PARRILLA_CATEGORIES,
@@ -252,6 +253,10 @@ export function ParrillaBoard({ posts, editors, quotes }: ParrillaBoardProps) {
   const [dateField, setDateField] = useState<ParrillaDateField>('publish_date')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilterValue>('todas')
+  // Cómo se ve cada base de datos (tarjetas o tabla). Vive aquí y no en el Banco o en las
+  // Frases porque esos se desmontan al cambiar de pestaña: así la elección no se pierde.
+  const [bankView, setBankView] = useListView('banco')
+  const [quotesView, setQuotesView] = useListView('frases')
 
   const { scheduled, archived } = useMemo(() => {
     const scheduled: ParrillaPostSummary[] = []
@@ -330,7 +335,13 @@ export function ParrillaBoard({ posts, editors, quotes }: ParrillaBoardProps) {
       {view === 'calendario' ? (
         <ParrillaCalendar posts={filteredPosts} dateField={dateField} editors={editors} />
       ) : view === 'banco' ? (
-        <ParrillaBank posts={filteredPosts} total={archived.length} editors={editors} />
+        <ParrillaBank
+          posts={filteredPosts}
+          total={archived.length}
+          editors={editors}
+          view={bankView}
+          onViewChange={setBankView}
+        />
       ) : (
         <ParrillaQuotes
           quotes={filteredQuotes}
@@ -338,6 +349,8 @@ export function ParrillaBoard({ posts, editors, quotes }: ParrillaBoardProps) {
           anyUsed={anyQuoteUsed}
           authors={authors}
           editors={editors}
+          view={quotesView}
+          onViewChange={setQuotesView}
         />
       )}
     </div>

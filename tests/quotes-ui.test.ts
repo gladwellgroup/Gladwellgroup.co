@@ -67,6 +67,8 @@ const render = (props: Partial<React.ComponentProps<typeof ParrillaQuotes>> = {}
         anyUsed: false,
         authors: [],
         editors: [],
+        view: 'tarjetas',
+        onViewChange() {},
         ...props,
       })
     )
@@ -177,8 +179,9 @@ describe('la biblioteca de frases', () => {
       assert.ok(depth <= 1, 'un <button> dentro de otro <button>: HTML inválido y toques perdidos en Safari')
     }
     assert.equal(depth, 0)
-    // Por tarjeta: el que abre la edición y «Crear contenido» (más «Nueva frase» arriba).
-    assert.equal((html.match(/<button\b/g) ?? []).length, 2 * 2 + 1)
+    // Por tarjeta: el que abre la edición y «Crear contenido» (más «Nueva frase» arriba y
+    // los dos botones del interruptor Tarjetas / Tabla).
+    assert.equal((html.match(/<button\b/g) ?? []).length, 2 * 2 + 1 + 2)
   })
 
   test('todas las tarjetas miden lo mismo: los bloques de alto fijo están aunque falte el dato', () => {
