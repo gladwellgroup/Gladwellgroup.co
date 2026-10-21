@@ -8,7 +8,7 @@ import {
   QUOTE_TEXT_MAX,
   QUOTE_TEXT_MIN,
 } from '@/lib/parrilla/quotes'
-import { EDITABLE_KEYS } from '@/lib/parrilla/rules'
+import { EDITABLE_KEYS, isHttpUrl } from '@/lib/parrilla/rules'
 import {
   parrillaPostPatchSchema,
   parrillaPostSchema,
@@ -105,6 +105,29 @@ describe('crear (POST)', () => {
     for (const inspiration_url of malos) {
       const result = parrillaPostSchema.safeParse({ ...minimo, inspiration_url })
       assert.equal(firstError(result), 'El enlace de inspiración no es válido', inspiration_url)
+    }
+  })
+
+  test('Inspiración: el schema no acepta nada que la regla compartida (isHttpUrl) rechace', () => {
+    // `isHttpUrl` es lo que decide si la interfaz dibuja un `<a href>`: si el schema dejara pasar
+    // algo que ella rechaza, el enlace se guardaría y nunca se vería como enlace.
+    const casos = [
+      'https://example.com',
+      'http://example.com/a?b=c#d',
+      'HTTPS://EXAMPLE.COM/Reel',
+      'javascript:alert(1)',
+      'https://example.com/a b',
+      'https://',
+      'ftp://example.com',
+      'example.com',
+      'https://[',
+    ]
+    for (const inspiration_url of casos) {
+      const ok = parrillaPostSchema.safeParse({ ...minimo, inspiration_url }).success
+      if (ok) assert.equal(isHttpUrl(inspiration_url), true, inspiration_url)
+    }
+    for (const bueno of ['https://example.com', 'http://example.com/a?b=c#d', 'HTTPS://EXAMPLE.COM/Reel']) {
+      assert.equal(parrillaPostSchema.safeParse({ ...minimo, inspiration_url: bueno }).success, true, bueno)
     }
   })
 

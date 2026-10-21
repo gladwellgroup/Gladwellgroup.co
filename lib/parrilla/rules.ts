@@ -49,6 +49,17 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export const isUuid = (value: string): boolean => UUID_RE.test(value)
 
+/** El enlace de inspiración: http(s) y sin espacios. Es la MISMA regla que el schema de
+ *  validación (lib/validations/parrilla.ts) y el CHECK de SQL
+ *  (`parrilla_posts_inspiration_url_check`, 20260917): `.url()` solo no basta, acepta
+ *  `javascript:alert(1)`. tests/drift.test.ts compara esta con la de SQL. */
+export const INSPIRATION_URL_RE = /^https?:\/\/\S+$/i
+
+/** Si un enlace guardado se puede dibujar como un `<a href>`. El CHECK ya impide guardar
+ *  otra cosa; esto evita que un valor extraño llegue nunca a un `href`. */
+export const isHttpUrl = (value: string | null | undefined): value is string =>
+  value != null && INSPIRATION_URL_RE.test(value)
+
 // ───────────────────────── Qué campos aplican ─────────────────────────
 
 /** Responsable en cámara solo aplica a video (nadie "sale en cámara" en un

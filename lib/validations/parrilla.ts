@@ -16,7 +16,7 @@ import {
   charLength,
   stripOuterQuotes,
 } from '@/lib/parrilla/quotes'
-import { datesInOrder, isRealDateOnly } from '@/lib/parrilla/rules'
+import { INSPIRATION_URL_RE, datesInOrder, isRealDateOnly } from '@/lib/parrilla/rules'
 
 // Los enums se derivan de las constantes de la UI, para que ninguna lista se
 // desfase de lo que el modal ofrece (el CHECK de SQL sí se mantiene a mano: una
@@ -52,7 +52,7 @@ const inspirationUrlSchema = optionalText.pipe(
     .string()
     .max(2048, INSPIRATION_URL_MESSAGE)
     .url(INSPIRATION_URL_MESSAGE)
-    .regex(/^https?:\/\/\S+$/i, INSPIRATION_URL_MESSAGE)
+    .regex(INSPIRATION_URL_RE, INSPIRATION_URL_MESSAGE)
     .nullish()
 )
 

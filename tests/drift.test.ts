@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { GUARD_COLUMNS, describeDbError } from '@/lib/parrilla/mutations'
+import { INSPIRATION_URL_RE, isHttpUrl } from '@/lib/parrilla/rules'
 import {
   QUOTE_AUTHOR_MAX,
   QUOTE_AUTHOR_MIN,
@@ -264,5 +265,60 @@ describe('las frases del código coinciden con el esquema de SQL', () => {
       const columns = list.split(',').map((column) => column.trim())
       assert.ok(!columns.includes('quote_id'), `${name} no debe pedir quote_id`)
     }
+  })
+})
+
+// El enlace de inspiración se valida en TRES sitios: el CHECK de SQL, el schema de zod y la
+// interfaz (que decide si lo dibuja como un `<a href>`). Los dos de código comparten
+// `INSPIRATION_URL_RE`; esta prueba lo ancla al CHECK de SQL, para que una regla no se afloje
+// en un lado sin que falle aquí.
+const ENLACES_BUENOS = [
+  'https://example.com',
+  'http://example.com/a?b=c#d',
+  'HTTPS://EXAMPLE.COM/Reel',
+  'https://x',
+]
+const ENLACES_MALOS = [
+  '',
+  'ftp://example.com',
+  'javascript:alert(1)',
+  'data:text/html,hi',
+  'https://',
+  'https://exa mple.com',
+  'https://example.com ',
+  ' https://example.com',
+  'https://example.com\n',
+  '//example.com',
+  'example.com',
+  'https:/example.com',
+]
+
+describe('el enlace de inspiración del código coincide con el CHECK de SQL', () => {
+  /** El `inspiration_url ~* '…'` vigente (la última migración que lo define). */
+  const sqlPattern = (() => {
+    let found: string | null = null
+    for (const sql of SQL) {
+      for (const match of sql.matchAll(/inspiration_url\s*~\*\s*'([^']+)'/gi)) found = match[1]
+    }
+    assert.ok(found, 'No encontré el CHECK de inspiration_url en supabase/migrations')
+    return found
+  })()
+  // POSIX → JavaScript: `[^[:space:]]` es `\S`.
+  const sqlRe = new RegExp(sqlPattern.replaceAll('[^[:space:]]', '\\S'), 'i')
+
+  test('el CHECK se tradujo bien (el patrón de la prueba no quedó con clases POSIX)', () => {
+    assert.doesNotMatch(sqlRe.source, /\[:/)
+  })
+
+  test('INSPIRATION_URL_RE e isHttpUrl dan el mismo veredicto que el CHECK en cada caso', () => {
+    for (const link of [...ENLACES_BUENOS, ...ENLACES_MALOS]) {
+      assert.equal(INSPIRATION_URL_RE.test(link), sqlRe.test(link), `regla ↔ SQL: ${JSON.stringify(link)}`)
+      assert.equal(isHttpUrl(link), sqlRe.test(link), `isHttpUrl ↔ SQL: ${JSON.stringify(link)}`)
+    }
+  })
+
+  test('los casos buenos son buenos y los malos malos (la prueba no compara dos reglas rotas)', () => {
+    for (const link of ENLACES_BUENOS) assert.equal(sqlRe.test(link), true, link)
+    for (const link of ENLACES_MALOS) assert.equal(sqlRe.test(link), false, JSON.stringify(link))
   })
 })
