@@ -6,6 +6,10 @@
    escribe la clase base y usa `light:` para el caso poco común, y así lo claro no se pide ni se pinta
    hasta que alguien lo activa (ver components/sections/hero-background.tsx). */
 @custom-variant light (&:is(.light *));
+/* Tablet en vertical: de 768 a 1023 px de ancho Y 501 px de alto o más. Un celular girado (844–932 px de
+   ancho, ~400 de alto) no cuenta como tablet. Lleva tope superior para no ganarle a `lg:` por el orden
+   en el CSS (ver el carrusel de components/sections/team-section.tsx). */
+@custom-variant tablet (@media (min-width: 768px) and (max-width: 1023px) and (min-height: 501px));
 
 :root {
   /* Gladwell Brand Colors - DARK MODE (default) */
