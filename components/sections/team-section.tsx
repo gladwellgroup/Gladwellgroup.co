@@ -48,36 +48,34 @@ export function TeamSection({ members = FOUNDERS }: TeamSectionProps) {
                 <article className="group text-center">
                   <div className="relative w-48 h-48 mx-auto mb-6">
                     <div className="absolute inset-0 rounded-full gladwell-gradient opacity-20 blur-md group-hover:opacity-40 transition-opacity" />
-                    <div className="relative w-full h-full rounded-full overflow-hidden p-1 bg-gradient-to-br from-[#7C3AED] to-[#06B6D4]">
-                      {/* `relative`: la foto (`fill`) se coloca respecto de este círculo y no del contenedor con el
-                          degradado; sin él pintaba también sobre el aro de 4 px y lo tapaba. */}
-                      <div className="relative w-full h-full rounded-full overflow-hidden">
-                        {founder.image ? (
-                          /* `sizes`: el círculo mide 192 px (w-48) menos el aro de 4 px por lado.
-                             `loading="eager"` + prioridad baja: en un celular (una tarjeta por vista) las
-                             fotos de las tarjetas que aún no aparecen se pedían recién al entrar, y con
-                             red lenta saltaban a mitad del deslizamiento. Son miniaturas de 9–18 KB. */
-                          <Image
-                            src={founder.image}
-                            alt={founder.name}
-                            fill
-                            sizes="184px"
-                            loading="eager"
-                            fetchPriority="low"
-                            className="object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                        ) : (
-                          /* Espacio reservado de la foto. Decorativo: el nombre ya va en el h3 de abajo. */
-                          <div
-                            aria-hidden="true"
-                            className="flex h-full w-full items-center justify-center bg-muted"
-                          >
-                            <span className="gladwell-gradient-text text-5xl font-bold tracking-wider">
-                              {initialsOf(founder.name)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                    {/* Sin aro: la foto es el círculo. `relative`: la foto (`fill`) se coloca respecto de este
+                        círculo y no del contenedor de fuera. */}
+                    <div className="relative w-full h-full rounded-full overflow-hidden">
+                      {founder.image ? (
+                        /* `sizes`: el círculo mide 192 px (w-48).
+                           `loading="eager"` + prioridad baja: en un celular (una tarjeta por vista) las
+                           fotos de las tarjetas que aún no aparecen se pedían recién al entrar, y con
+                           red lenta saltaban a mitad del deslizamiento. Son miniaturas de 9–18 KB. */
+                        <Image
+                          src={founder.image}
+                          alt={founder.name}
+                          fill
+                          sizes="192px"
+                          loading="eager"
+                          fetchPriority="low"
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        /* Espacio reservado de la foto. Decorativo: el nombre ya va en el h3 de abajo. */
+                        <div
+                          aria-hidden="true"
+                          className="flex h-full w-full items-center justify-center bg-muted"
+                        >
+                          <span className="gladwell-gradient-text text-5xl font-bold tracking-wider">
+                            {initialsOf(founder.name)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

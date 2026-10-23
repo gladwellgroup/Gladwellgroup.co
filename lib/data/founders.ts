@@ -52,6 +52,6 @@ export const FOUNDERS: Founder[] = [
     description:
       "Rol tripartito autodidacta como Growth Hacker con énfasis en el sector inmobiliario, filmmaker y desarrollador de software, emprendedor desde los 18 años e involucrado desde 2019 en el " +
       unbroken("ecosistema tech."),
-    image: "/images/jhonattan-rodriguez.jpg",
+    image: "/images/jhonattan-rodriguez-2.jpg",
   },
 ]
