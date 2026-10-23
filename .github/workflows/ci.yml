@@ -6,14 +6,27 @@ on:
   pull_request:
     branches: [main]
 
+# El job solo lee el repositorio: sin esto el GITHUB_TOKEN llevaba permisos de escritura por defecto.
+permissions:
+  contents: read
+
 jobs:
   build:
-    name: Lint & Build
+    name: Lint, test & build (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 y 24: Node 20 está obsoleto en Vercel desde el 2026-10-01 y es donde corre el sitio.
+        node: [22, 24]
+
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Valores FICTICIOS. El build no consulta la base (todas las páginas con datos son dinámicas), así que no necesita las
+      # llaves reales; antes el job exponía la llave de servicio de producción a todos los pasos, incluido `npm ci`.
+      NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.invalid
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-service-role-key
 
     steps:
       - name: Checkout
@@ -22,11 +35,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      # Solo las de producción y solo «high» o peor: las de desarrollo (eslint-config-next arrastra `braces`) no llegan al sitio.
+      - name: Audit (producción)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Lint
         run: npm run lint
