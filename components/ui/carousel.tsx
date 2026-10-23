@@ -58,14 +58,26 @@ function Carousel({
     },
     plugins,
   )
-  const [canScrollPrev, setCanScrollPrev] = React.useState(false)
-  const [canScrollNext, setCanScrollNext] = React.useState(false)
-
-  const onSelect = React.useCallback((api: CarouselApi) => {
-    if (!api) return
-    setCanScrollPrev(api.canScrollPrev())
-    setCanScrollNext(api.canScrollNext())
-  }, [])
+  // Si se puede ir atrás/adelante: lo dice embla y cambia con `select` y `reInit`. `useSyncExternalStore` y no
+  // un `useState` + `useEffect`: así no hay un render en cascada al montar. Un texto («pn») y no un objeto:
+  // React compara el snapshot por valor.
+  const subscribeScroll = React.useCallback(
+    (onChange: () => void) => {
+      if (!api) return () => {}
+      api.on('reInit', onChange).on('select', onChange)
+      return () => {
+        api.off('reInit', onChange).off('select', onChange)
+      }
+    },
+    [api],
+  )
+  const scrollState = React.useSyncExternalStore(
+    subscribeScroll,
+    () => (api ? `${api.canScrollPrev() ? 1 : 0}${api.canScrollNext() ? 1 : 0}` : '00'),
+    () => '00',
+  )
+  const canScrollPrev = scrollState[0] === '1'
+  const canScrollNext = scrollState[1] === '1'
 
   const scrollPrev = React.useCallback(() => {
     api?.scrollPrev()
@@ -92,17 +104,6 @@ function Carousel({
     if (!api || !setApi) return
     setApi(api)
   }, [api, setApi])
-
-  React.useEffect(() => {
-    if (!api) return
-    onSelect(api)
-    api.on('reInit', onSelect)
-    api.on('select', onSelect)
-
-    return () => {
-      api?.off('select', onSelect)
-    }
-  }, [api, onSelect])
 
   return (
     <CarouselContext.Provider
@@ -196,7 +197,7 @@ function CarouselPrevious({
       {...props}
     >
       <ArrowLeft />
-      <span className="sr-only">Previous slide</span>
+      <span className="sr-only">Ver anterior</span>
     </Button>
   )
 }
@@ -226,7 +227,7 @@ function CarouselNext({
       {...props}
     >
       <ArrowRight />
-      <span className="sr-only">Next slide</span>
+      <span className="sr-only">Ver siguiente</span>
     </Button>
   )
 }

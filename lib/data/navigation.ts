@@ -24,8 +24,9 @@ export const FOOTER_NAV_LINKS: NavLink[] = [
 /** Numeric scroll indicators in the hero (right side) */
 export const HERO_INDICATORS = [
   { num: "01", href: "#inicio" },
-  { num: "02", href: "#comunidad" },
+  { num: "02", href: "#presentacion" },
   { num: "03", href: "#pilares" },
-  { num: "04", href: "#galeria" },
-  { num: "05", href: "#equipo" },
+  { num: "04", href: "#comunidad" },
+  { num: "05", href: "#galeria" },
+  { num: "06", href: "#equipo" },
 ]

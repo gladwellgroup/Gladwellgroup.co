@@ -1,8 +1,9 @@
 import { Navbar } from "@/components/layout/navbar"
 import { HeroSection } from "@/components/sections/hero-section"
 import { HeroBackground } from "@/components/sections/hero-background"
-import { VideoSection } from "@/components/sections/video-section"
+import { PresentationSection } from "@/components/sections/presentation-section"
 import { PillarsSection } from "@/components/sections/pillars-section"
+import { VideoSection } from "@/components/sections/video-section"
 import { GallerySection } from "@/components/sections/gallery-section"
 import { TeamSection } from "@/components/sections/team-section"
 import { Footer } from "@/components/layout/footer"
@@ -18,8 +19,9 @@ export default function Home() {
           <HeroBackground />
         </HeroSection>
         <ContentBackground>
-          <VideoSection />
+          <PresentationSection />
           <PillarsSection />
+          <VideoSection />
           <GallerySection />
           <TeamSection />
         </ContentBackground>

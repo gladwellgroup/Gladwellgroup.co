@@ -126,6 +126,18 @@ describe('landing: equipo base', () => {
     })
   })
 
+  test('la foto se ancla al círculo interior y no al contenedor del aro: si no, lo tapa', () => {
+    // `<Image fill>` es `position: absolute; inset: 0`, y se ancla al ancestro posicionado más cercano. Con el círculo
+    // interior sin `relative` ese era el contenedor del degradado (con `p-1`): la foto cubría los 4 px del aro.
+    const [conFoto] = cards([CON_FOTO_Y_ROL])
+    const parent = /<div class="([^"]*)"[^>]*><img\b/.exec(conFoto)
+    assert.ok(parent, 'la foto va dentro de un contenedor propio')
+    assert.match(parent[1], /(^|\s)relative(\s|$)/, 'el contenedor directo de la foto debe ser `relative`')
+    assert.match(parent[1], /(^|\s)overflow-hidden(\s|$)/, 'y recortar la foto al círculo')
+    // El aro es el contenedor de fuera: el degradado con el relleno que deja ver su borde.
+    assert.match(conFoto, /class="[^"]*\bp-1\b[^"]*bg-gradient-to-br/, 'el aro (degradado con `p-1`) sigue rodeando a la foto')
+  })
+
   test('cada foto declarada existe en public/ (una ruta mal escrita sería una imagen rota)', () => {
     for (const person of FOUNDERS) {
       if (!person.image) continue

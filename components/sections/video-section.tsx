@@ -1,70 +1,27 @@
-"use client"
-
-import { useState } from "react"
-import { Play } from "lucide-react"
-import localFont from "next/font/local"
-import { SectionDivider, SectionHeader } from "@/components/shared"
+import { SectionCaption, SectionDivider, SectionHeader } from "@/components/shared"
+import { VideoFacade } from "@/components/shared/video-facade"
 
 const VIDEO_ID = "eckoiS-sRNQ"
 
-// Playfair Display solo se usa en este párrafo de la landing: se declara aquí y
-// no en el layout raíz, para que el portal no la descargue en cada página. Un
-// solo peso (400) y sin precarga: es texto bajo el pliegue.
-const playfair = localFont({
-  src: "../../app/fonts/PlayfairDisplay-latin.woff2",
-  variable: "--font-playfair",
-  weight: "400",
-  display: "swap",
-  preload: false,
-  adjustFontFallback: "Times New Roman",
-})
-
 export function VideoSection() {
-  const [isPlaying, setIsPlaying] = useState(false)
-
   return (
     <section id="comunidad" className="relative py-24 scroll-mt-24">
       <SectionDivider />
 
       <div className="container mx-auto px-6">
-        <SectionHeader eyebrow="Nuestra Comunidad" title="Conoce más de Gladwell" />
+        <SectionHeader eyebrow="Nuestra Comunidad" title="Inspirados en Malcolm Gladwell" />
 
-        <div className="relative max-w-5xl mx-auto aspect-video rounded-2xl overflow-hidden group glass-gradient gladwell-border-gradient">
-          {!isPlaying ? (
-            <>
-              <div
-                className="absolute inset-0 bg-cover bg-center"
-                style={{
-                  backgroundImage: `url('https://img.youtube.com/vi/${VIDEO_ID}/maxresdefault.jpg')`,
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent group-hover:from-black/70 transition-colors" />
+        <VideoFacade
+          videoId={VIDEO_ID}
+          title="Video de la comunidad Gladwell"
+          playLabel="Reproducir video de la comunidad Gladwell"
+          poster="maxresdefault"
+        />
 
-              <button
-                onClick={() => setIsPlaying(true)}
-                className="absolute inset-0 flex items-center justify-center"
-                aria-label="Reproducir video de la comunidad Gladwell"
-              >
-                <div className="w-20 h-20 md:w-24 md:h-24 rounded-full glass-strong flex items-center justify-center group-hover:scale-110 transition-transform gladwell-border-gradient">
-                  <Play className="w-8 h-8 md:w-10 md:h-10 text-white ml-1" aria-hidden="true" />
-                </div>
-              </button>
-            </>
-          ) : (
-            <iframe
-              className="absolute inset-0 w-full h-full"
-              src={`https://www.youtube-nocookie.com/embed/${VIDEO_ID}?autoplay=1&rel=0&modestbranding=1`}
-              title="Video de la comunidad Gladwell"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          )}
-        </div>
-
-        <p className={`${playfair.variable} mx-auto mt-8 max-w-3xl text-center font-(family-name:--font-playfair) text-xl leading-relaxed text-muted-foreground text-balance md:text-2xl lg:text-[1.75rem] lg:leading-relaxed`}>
-          Somos una comunidad de apasionados por la estrategia, unidos por la educación y los
-          negocios.
-        </p>
+        <SectionCaption>
+          Se necesitan aproximadamente 10,000 horas de práctica deliberada de una actividad para
+          alcanzar el nivel global.
+        </SectionCaption>
       </div>
     </section>
   )

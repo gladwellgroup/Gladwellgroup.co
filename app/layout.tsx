@@ -11,9 +11,9 @@ import './globals.css'
 // en vez de pedirlas a Google: el build ya no depende de que Google Fonts
 // responda (falló una vez por eso) y la página no hace pedidos a terceros.
 // Aquí va SOLO lo que usa toda la app: Geist, variable (100–900), subconjunto
-// latino. Playfair Display se declara en la landing (video-section.tsx), la
-// única que la usa, para que el portal no la precargue; y Geist Mono se retiró:
-// solo la usaba el cronómetro de audio, que ahora usa la mono del sistema.
+// latino. Playfair Display (solo la usaba un párrafo de la landing, que ahora usa
+// Geist) y Geist Mono (solo la usaba el cronómetro de audio, que ahora usa la
+// mono del sistema) se retiraron.
 const geist = localFont({
   src: './fonts/Geist-latin.woff2',
   variable: '--font-geist',

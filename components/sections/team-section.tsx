@@ -49,7 +49,9 @@ export function TeamSection({ members = FOUNDERS }: TeamSectionProps) {
                   <div className="relative w-48 h-48 mx-auto mb-6">
                     <div className="absolute inset-0 rounded-full gladwell-gradient opacity-20 blur-md group-hover:opacity-40 transition-opacity" />
                     <div className="relative w-full h-full rounded-full overflow-hidden p-1 bg-gradient-to-br from-[#7C3AED] to-[#06B6D4]">
-                      <div className="w-full h-full rounded-full overflow-hidden">
+                      {/* `relative`: la foto (`fill`) se coloca respecto de este círculo y no del contenedor con el
+                          degradado; sin él pintaba también sobre el aro de 4 px y lo tapaba. */}
+                      <div className="relative w-full h-full rounded-full overflow-hidden">
                         {founder.image ? (
                           /* `sizes`: el círculo mide 192 px (w-48) menos el aro de 4 px por lado.
                              `loading="eager"` + prioridad baja: en un celular (una tarjeta por vista) las

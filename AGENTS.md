@@ -29,10 +29,10 @@ app/
 
 components/
   layout/               navbar, footer, content-background
-  sections/             hero, video, pillars, gallery, team
+  sections/             hero, presentation, pillars, video, gallery, team
   modals/               walking-list-modal, pillar-modal
   providers/            theme-provider, walking-list-provider
-  shared/               Section, SectionDivider, SectionHeader
+  shared/               Section, SectionCaption, SectionDivider, SectionHeader, VideoFacade
   ui/                   shadcn (button, carousel, sheet, dialog)
 
 lib/
@@ -42,6 +42,7 @@ lib/
     founders.ts         tipo Founder + array FOUNDERS
     concepts.ts         tipo Concept + array CONCEPTS
     navigation.ts       NAV_LINKS, FOOTER_NAV_LINKS, HERO_INDICATORS
+  youtube.ts            miniatura y reproductor de un video de YouTube (valida el id)
   supabase/server.ts    getSupabaseServer() — lazy init
   validations/          zod schemas
 
@@ -58,11 +59,19 @@ public/
 
 ### Añadir una nueva sección
 
-1. Crear `components/sections/nombre-section.tsx`.
-2. Envolver con `<Section id="..." withDivider>` desde `@/components/shared`.
-3. Usar `<SectionHeader eyebrow="..." title="..." />` para el encabezado.
-4. Exportar el componente e importarlo en `app/page.tsx`.
+1. Crear `components/sections/nombre-section.tsx`, como componente de servidor siempre que se pueda: lo que necesita
+   estado en el navegador va en un hijo pequeño (como `VideoFacade`), no en toda la sección.
+2. Abrir con `<section id="..." className="relative py-24 scroll-mt-24">` y `<SectionDivider />`, y encabezar con
+   `<SectionHeader eyebrow="..." title="..." />` (los dos vienen de `@/components/shared`). Así lo hacen todas las secciones y
+   `tests/landing-sections.test.ts` lee ese `id`; el `<Section>` compartido existe, pero ninguna sección lo usa.
+3. Exportarlo e importarlo en `app/page.tsx`, en el lugar donde debe aparecer.
+4. Añadir su número en `HERO_INDICATORS` (`lib/data/navigation.ts`), en el mismo orden que la página: la prueba anterior falla si
+   no coinciden. Un enlace en la barra superior es aparte (`NAV_LINKS`).
 5. Si hay datos de contenido (>5 ítems), extraerlos a `lib/data/nombre.ts`.
+6. Un video de YouTube va con `VideoFacade` (`components/shared/video-facade.tsx`): hasta el clic solo carga la miniatura.
+   Comprobar antes que esa miniatura exista: `maxresdefault` solo la tienen los videos subidos en HD (si no, `sddefault`).
+   El texto bajo el video va en `SectionCaption` (16 px en el celular, 20 desde `md` y 24 desde `lg`): a 16 px en escritorio
+   casi no se leía.
 
 ### Añadir un nuevo pilar
 

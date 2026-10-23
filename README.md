@@ -95,10 +95,10 @@ app/
 
 components/
   layout/    navbar.tsx  footer.tsx  content-background.tsx
-  sections/  hero  video  pillars  gallery  team
+  sections/  hero  presentation  pillars  video  gallery  team
   modals/    walking-list-modal  pillar-modal  (shadcn Dialog)
   providers/ theme-provider  walking-list-provider
-  shared/    Section  SectionDivider  SectionHeader
+  shared/    Section  SectionCaption  SectionDivider  SectionHeader  VideoFacade
   ui/        button  carousel  sheet  dialog  (shadcn mínimo)
 
 lib/
@@ -110,6 +110,7 @@ lib/
     navigation.ts                NAV_LINKS, FOOTER_NAV_LINKS, HERO_INDICATORS
   supabase/server.ts             getSupabaseServer() — lazy init
   validations/walking-list.ts    schema Zod del formulario
+  youtube.ts                     miniatura y reproductor de un video de YouTube (valida el id)
 
 public/
   brand/gladwell-logo-wordmark.png   fuente de favicon y OG (wordmark oficial)

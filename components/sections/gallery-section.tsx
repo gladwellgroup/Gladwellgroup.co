@@ -24,12 +24,17 @@ export function GallerySection() {
         <SectionHeader eyebrow="Desde nuestra fundación" title="Conceptos que nos definen" />
 
         <Carousel
+          aria-label="Conceptos que nos definen"
           opts={{ align: "start", loop: true }}
           className="w-full max-w-6xl mx-auto"
         >
           <CarouselContent className="-ml-4">
             {CONCEPTS.map((concept, index) => (
-              <CarouselItem key={index} className="pl-4 md:basis-1/2 lg:basis-1/3">
+              <CarouselItem
+                key={index}
+                aria-label={`${index + 1} de ${CONCEPTS.length}`}
+                className="pl-4 md:basis-1/2 lg:basis-1/3"
+              >
                 <div className="relative group">
                   <div className="relative aspect-[3/4] rounded-2xl overflow-hidden glass gladwell-border-gradient">
                     {/* `sizes` = ancho real de la tarjeta (carrusel de max-w-6xl: 1, 2 o 3 por vista). */}
