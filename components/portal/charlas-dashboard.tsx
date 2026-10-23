@@ -13,7 +13,7 @@ import {
   CHARLA_TITLE_MIN,
   type CharlaListItem,
 } from '@/lib/charlas/types'
-import { parseDateOnly, toDateKey } from '@/lib/date'
+import { parseDateOnly, todayKey } from '@/lib/date'
 
 /** Listado de Charlas Catárticas: lo que importa de cada una es su nombre, su
  *  fecha y cuánta gente asistió, así que cada fila lo dice de un vistazo. */
@@ -35,8 +35,8 @@ export function CharlasDashboard({
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  // Día local, no `toISOString()`: de noche en Colombia el día UTC ya es mañana.
-  const [sessionDate, setSessionDate] = useState(() => toDateKey(new Date()))
+  // Hoy en hora de Bogotá, no `toISOString()`: de noche en Colombia el día UTC ya es mañana.
+  const [sessionDate, setSessionDate] = useState(todayKey)
   const [searchQuery, setSearchQuery] = useState('')
 
   const filtered = useMemo(() => {

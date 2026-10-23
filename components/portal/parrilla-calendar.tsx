@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { parseDateOnly } from '@/lib/date'
+import { currentMonthStart, parseDateOnly, toDateKey, todayKey } from '@/lib/date'
 import {
   DATE_FIELD_LABELS,
   PARRILLA_CATEGORY_LABELS,
@@ -74,13 +74,6 @@ function CategoryLine({ category }: { category: ParrillaPostSummary['category'] 
       )}
     </span>
   )
-}
-
-function toDateKey(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
 }
 
 function isSameMonth(a: Date, b: Date): boolean {
@@ -147,10 +140,9 @@ interface ParrillaCalendarProps {
  *    selector de fecha de esa hoja. */
 export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendarProps) {
   const router = useRouter()
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const now = new Date()
-    return new Date(now.getFullYear(), now.getMonth(), 1)
-  })
+  // El mes de HOY en hora de Bogotá, no el del servidor (UTC): el último día del mes por la noche el servidor ya
+  // estaba en el mes siguiente y la página se hidrataba con otro mes.
+  const [currentMonth, setCurrentMonth] = useState(currentMonthStart)
   // Solo la fecha, no una copia de sus posts — así la hoja siempre muestra el
   // estado actual de `posts` en vez de una foto tomada al abrirla. La fecha
   // NO se borra al cerrar: el contenido debe seguir ahí durante la animación
@@ -188,7 +180,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
   const dayPanelPosts = dayPanelDate ? postsByDate.get(toDateKey(dayPanelDate)) ?? [] : []
 
   const grid = useMemo(() => getMonthGrid(currentMonth), [currentMonth])
-  const todayKey = toDateKey(new Date())
+  const today = todayKey()
   const monthLabel = currentMonth.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
 
   const agendaGroups = useMemo(() => {
@@ -215,8 +207,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
   }
 
   function goToday() {
-    const now = new Date()
-    setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+    setCurrentMonth(currentMonthStart())
     setNotice(null)
   }
 
@@ -382,7 +373,7 @@ export function ParrillaCalendar({ posts, dateField, editors }: ParrillaCalendar
               const key = toDateKey(date)
               const dayPosts = postsByDate.get(key) ?? []
               const inCurrentMonth = isSameMonth(date, currentMonth)
-              const isToday = key === todayKey
+              const isToday = key === today
               const visible = dayPosts.slice(0, MAX_VISIBLE_PER_DAY)
               const overflow = dayPosts.length - visible.length
               const isDropTarget = dropTargetKey === key

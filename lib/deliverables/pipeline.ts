@@ -1,4 +1,4 @@
-import { parseDateOnly } from '@/lib/date'
+import { daysBetweenKeys, todayKey } from '@/lib/date'
 
 /** Ciclo de vida de una sesión, compartido por Terapia y Education. Vive en un
  *  solo sitio porque lo consumen el dashboard y los dos listados: si cada uno
@@ -66,20 +66,15 @@ export function bucketSession(session: PipelineSession): PipelineBucket {
   return session.status === 'generado' ? 'generado' : 'borrador'
 }
 
-/** Compara contra el inicio del día local. `session_date` es una columna
- *  `date` sin hora: una sesión de hoy NO es futura. */
+/** Compara contra el día de HOY en la zona de la plataforma (ver `todayKey`). `session_date` es una columna
+ *  `date` sin hora: una sesión de hoy NO es futura. Las claves «YYYY-MM-DD» se ordenan igual como texto. */
 function isFutureDate(dateStr: string): boolean {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return parseDateOnly(dateStr).getTime() > today.getTime()
+  return dateStr > todayKey()
 }
 
 /** Días completos desde la fecha de la sesión. 0 si es hoy o futura. */
 export function daysSinceSession(dateStr: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const diff = today.getTime() - parseDateOnly(dateStr).getTime()
-  return diff <= 0 ? 0 : Math.floor(diff / 86_400_000)
+  return Math.max(0, daysBetweenKeys(dateStr, todayKey()))
 }
 
 /** A partir de aquí una sesión sin entregar deja de ser "en curso" y pasa a

@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { CHARLA_DOTS, bucketCharla } from '@/lib/charlas/status'
 import { bucketSession, type PipelineBucket } from '@/lib/deliverables/pipeline'
-import { parseDateOnly, toDateKey } from '@/lib/date'
+import { currentMonthStart, parseDateOnly, toDateKey, todayKey } from '@/lib/date'
 import type { CalendarSession } from '@/lib/deliverables/sessions'
 import { PROGRAMA_LABEL, sessionHref } from '@/lib/encuentros/programas'
 
@@ -80,10 +80,8 @@ export function SessionsCalendar({
   sessions: CalendarSession[]
   basePath: string
 }) {
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const now = new Date()
-    return new Date(now.getFullYear(), now.getMonth(), 1)
-  })
+  // El mes de HOY en hora de Bogotá, no el del servidor (UTC): ver `todayKey` en lib/date.ts.
+  const [currentMonth, setCurrentMonth] = useState(currentMonthStart)
   // Los datos del día y su apertura van por separado: al cerrar, el Dialog anima su
   // salida con el contenido todavía a la vista en vez de vaciarse de golpe.
   const [dayPanel, setDayPanel] = useState<{
@@ -103,7 +101,7 @@ export function SessionsCalendar({
   }, [sessions])
 
   const grid = useMemo(() => getMonthGrid(currentMonth), [currentMonth])
-  const todayKey = toDateKey(new Date())
+  const today = todayKey()
   const monthLabel = currentMonth.toLocaleDateString('es-CO', {
     month: 'long',
     year: 'numeric',
@@ -137,8 +135,7 @@ export function SessionsCalendar({
   }
 
   function goToday() {
-    const now = new Date()
-    setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+    setCurrentMonth(currentMonthStart())
     setDayPanelOpen(false)
   }
 
@@ -203,7 +200,7 @@ export function SessionsCalendar({
             const key = toDateKey(date)
             const daySessions = sessionsByDate.get(key) ?? []
             const inCurrentMonth = isSameMonth(date, currentMonth)
-            const isToday = key === todayKey
+            const isToday = key === today
             const visible = daySessions.slice(0, MAX_VISIBLE_PER_DAY)
             const overflow = daySessions.length - visible.length
 

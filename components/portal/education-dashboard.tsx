@@ -14,7 +14,7 @@ import { PipelineBadge } from '@/components/portal/pipeline-badge'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandField } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
-import { parseDateOnly } from '@/lib/date'
+import { parseDateOnly, todayKey } from '@/lib/date'
 
 interface Session {
   id: string
@@ -57,9 +57,8 @@ export function EducationDashboard({
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  const [sessionDate, setSessionDate] = useState(
-    new Date().toISOString().split('T')[0]
-  )
+  // Hoy en hora de Bogotá, no `toISOString()`: de noche en Colombia el día UTC ya es mañana.
+  const [sessionDate, setSessionDate] = useState(todayKey)
   const [adminId, setAdminId] = useState(currentUserId)
   const [searchQuery, setSearchQuery] = useState('')
 

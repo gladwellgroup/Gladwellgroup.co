@@ -11,6 +11,7 @@ import { ParrillaMediaUpload } from '@/components/portal/parrilla-media-upload'
 import { ToggleableSection } from '@/components/portal/parrilla-section'
 import { TeamPicker } from '@/components/portal/team-picker'
 import { Skeleton } from '@/components/ui/skeleton'
+import { todayKey } from '@/lib/date'
 import {
   PARRILLA_CATEGORIES,
   PARRILLA_CATEGORY_LABELS,
@@ -64,14 +65,6 @@ const FIELD_LABELS: Record<EditableKey, string> = {
   category: 'Categoría',
 }
 
-function todayIso(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
 /** Punto de partida del formulario. En edición solo se conoce el resumen del
  *  calendario: Guion, Copy y portada llegan con el detalle. Al crear, `draft` (p.
  *  ej. una frase de la pestaña «Frases») prellena título y copy, y nada
@@ -107,7 +100,7 @@ export function initialFields(
   // normal es producir y publicar el mismo día salvo que se ajuste a mano. Una
   // idea nueva del Banco (estado inicial archivado) nace sin fecha de
   // publicación, como cualquier pieza archivada.
-  const day = defaultDate ?? todayIso()
+  const day = defaultDate ?? todayKey()
   const status = defaultStatus ?? 'idea'
   return {
     title: draft?.title ?? '',

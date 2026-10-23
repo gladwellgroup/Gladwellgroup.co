@@ -1,4 +1,4 @@
-import { toDateKey } from '@/lib/date'
+import { todayKey } from '@/lib/date'
 
 /** Una charla no tiene entregable ni estado que alguien mueva a mano: solo
  *  está por ocurrir o ya ocurrió, y eso se deduce de la fecha. Por eso no usa
@@ -31,5 +31,5 @@ export const CHARLA_DOTS: Record<CharlaBucket, string> = {
  *  pasa a borrador el mismo día —ya hay algo que preparar—, por eso no comparten
  *  la regla. Las fechas «YYYY-MM-DD» se ordenan igual como texto. */
 export function bucketCharla(sessionDate: string): CharlaBucket {
-  return sessionDate >= toDateKey(new Date()) ? 'programada' : 'realizada'
+  return sessionDate >= todayKey() ? 'programada' : 'realizada'
 }
