@@ -62,6 +62,8 @@ alter table public.walking_list_leads enable row level security;
 
 Si la tabla ya existe, aplica la migración en `supabase/migrations/20250603_walking_list_whatsapp.sql`.
 
+> **Este bloque es la única definición de la tabla base en el repo** (ninguna migración de `supabase/migrations/` la crea). Las columnas que el CRM usa y que NO están arriba las añaden después las migraciones: `status` y `assigned_to` (`20250707_leads_delegation.sql`) y `contact_status` (`20260808_walking_list_contact_status.sql` y `…_descalificado.sql`). Para comprobar lo que hay de verdad en una base: `select column_name, data_type from information_schema.columns where table_name = 'walking_list_leads' order by ordinal_position;`
+
 ### 4. Iniciar servidor de desarrollo
 
 ```bash

@@ -126,6 +126,7 @@ Roles en inglés en código y DB; UI en español.
 
 **Límites:**
 
+- Su base fija es mínima (perfil, directorio, leer y publicar contenido): CRM, Encuentros, Parrilla y calendario se los otorga el super admin por persona (ver §5.2).
 - No crea otros super admins ni admins de comunidad.
 - No elimina usuarios globalmente.
 - No configura el mensaje semanal de la landing (solo super admin).
@@ -194,29 +195,62 @@ Flujo para que todos los asistentes aprueben el entregable antes de publicarlo. 
 
 ---
 
-## 5. Matriz de permisos v1
+## 5. Matriz de permisos
 
-| Módulo / acción | super_admin | community_admin | community_member |
-|-----------------|:-----------:|:---------------:|:----------------:|
-| Auth — invitar usuarios | sí | no | no |
-| Auth — login (email / magic / Google) | sí | sí | sí |
-| Perfil propio | sí | sí | sí |
-| Perfil linktree público/privado | propio | propio | sí |
-| Ver perfiles de integrantes | sí | sí | sí |
-| CRM — ver todos los leads | sí | no | no |
-| CRM — ver leads delegados | sí | sí | no |
-| CRM — delegar leads | sí | no | no |
-| Gestión integrantes | sí | parcial | no |
-| Eliminar usuarios | sí | no | no |
-| Crear admins de comunidad | sí | no | no |
-| Contenido comunidad — publicar | sí | sí | no |
-| Contenido comunidad — consumir | sí | sí | sí |
-| Eventos principales — crear | sí | no | no |
-| Terapia — capturar inputs | sí | sí | no |
-| Terapia — generar PDF (IA) | sí | sí | no |
-| Terapia — recibir PDF | sí | sí | si invitado |
-| Landing — mensaje semanal | sí | no | no |
-| Configuración global | sí | no | no |
+> **La fuente de verdad es el código** (`lib/permissions/roles.ts`, `matrix.ts` y `modules.ts`). Las tablas de esta sección las comprueba `tests/permissions-doc.test.ts`: al añadir o quitar un permiso, un módulo o un rol, o al cambiar lo que alguien recibe, la prueba falla hasta que se actualicen.
+
+### 5.1 Permisos y quién los tiene
+
+- `super_admin` tiene todos.
+- `community_admin` y `community_member` traen una **base fija** pequeña («sí»). Lo demás se otorga **por persona** con los módulos de §5.2 («módulo»). Hoy el panel de usuarios solo los asigna a administradores de comunidad: para el integrante, todo lo que no es base es «no».
+- **Reservado** quiere decir que el permiso existe en la matriz, pero ninguna pantalla ni ruta lo comprueba todavía.
+
+| Permiso | Qué permite | super_admin | community_admin | community_member |
+|---------|-------------|:-----------:|:---------------:|:----------------:|
+| `users:invite` | Invitar usuarios nuevos. **Reservado**: el alta de cuentas hoy va por `users:create_admin`. | sí | no | no |
+| `users:create_admin` | Crear cuentas, editar su cargo y módulos y restablecer contraseñas (`/super/usuarios`). | sí | no | no |
+| `users:delete` | Eliminar usuarios de la plataforma. **Reservado**: todavía no hay pantalla. | sí | no | no |
+| `users:list` | Ver la lista de usuarios (`/super/usuarios`). | sí | no | no |
+| `profile:edit_own` | Editar el perfil propio. **Reservado**: `/perfil` solo exige sesión. | sí | sí | sí |
+| `profile:view_members` | Ver el directorio de integrantes (`/comunidad/directorio`). | sí | sí | sí |
+| `leads:read_all` | Ver todos los leads: CRM global (`/super/crm`). | sí | no | no |
+| `leads:read_delegated` | Ver los leads delegados a sí mismo (`/admin/leads`). | sí | módulo | no |
+| `leads:delegate` | Delegar un lead a un administrador de comunidad. | sí | no | no |
+| `leads:update_status` | Cambiar el estado de contacto de un lead. | sí | módulo | no |
+| `therapy:create` | Crear y editar sesiones de Terapia Organizacional y sus entregables. | sí | módulo | no |
+| `therapy:deliver` | Entregar (aprobar y enviar) el entregable de Terapia. **Reservado**: hoy la aprobación depende de ser el moderador o un coadministrador de esa sesión. | sí | módulo | no |
+| `therapy:read_own` | Ver las propias terapias. **Reservado**: ninguna pantalla lo comprueba todavía. | sí | sí | sí |
+| `education:create` | Crear y editar sesiones de Education y sus entregables. | sí | módulo | no |
+| `education:deliver` | Entregar (aprobar y enviar) el entregable de Education. **Reservado**: hoy la aprobación depende de ser el moderador o un coadministrador de esa sesión. | sí | módulo | no |
+| `charlas:manage` | Crear y gestionar Charlas Catárticas: nombre, foto y asistencia por QR. | sí | módulo | no |
+| `content:publish` | Publicar y gestionar el contenido de la comunidad (`/admin/contenido`); también abre `/admin/integrantes`. | sí | sí | no |
+| `content:read` | Consumir el contenido de la comunidad (`/comunidad/contenido`). | sí | sí | sí |
+| `events:create` | Crear eventos principales (`/super/eventos`). | sí | no | no |
+| `landing:weekly_message` | Publicar el mensaje semanal de la landing (`/super/landing-mensaje`). | sí | no | no |
+| `config:global` | Configuración global. **Reservado**: todavía no hay pantalla. | sí | no | no |
+| `parrilla:manage` | Gestionar la Parrilla de contenido y las Frases (`/admin/parrilla`, `/api/parrilla`). | sí | módulo | no |
+| `sessions:read_community` | Ver el calendario de todas las sesiones de la comunidad y abrir el detalle de cualquiera en modo lectura. | sí | módulo | no |
+| `sessions:delegate_admin` | Designar coadministradores de una sesión concreta (Terapia o Education). | sí | no | no |
+
+### 5.2 Módulos que se otorgan por persona
+
+El super administrador los activa o los quita por persona en `/super/usuarios` (tabla `profile_module_grants`). Las claves son las que están guardadas en la base: renombrarlas dejaría sin acceso a quien ya lo tiene, así que el panel solo cambia la etiqueta.
+
+| Módulo (clave) | Etiqueta en el panel | Permisos que concede |
+|----------------|----------------------|----------------------|
+| `crm` | CRM / Leads | `leads:read_delegated`, `leads:update_status` |
+| `entregables_terapia` | Encuentros · Terapia | `therapy:create`, `therapy:deliver`, `sessions:read_community` |
+| `entregables_educacion` | Encuentros · Educación | `education:create`, `education:deliver`, `sessions:read_community` |
+| `charlas` | Encuentros · Charlas Catárticas | `charlas:manage`, `sessions:read_community` |
+| `parrilla` | Parrilla de contenido | `parrilla:manage` |
+| `calendario_sesiones` | Calendario de sesiones | `sessions:read_community` |
+
+### 5.3 Límites que conviene conocer
+
+- **Los módulos los hace cumplir la aplicación** (páginas y rutas del servidor, que usan la llave `service_role`). Las políticas RLS de la base distinguen por **rol**, no por módulo: son defensa en profundidad frente a la llave pública, no el reparto fino.
+- **`/audio/[id]` es público** (sin sesión): lo abre quien tenga el enlace que viaja en el entregable. La dirección lleva el identificador de la sesión (no se adivina) y no se indexa, pero no hay un token aparte.
+- **Una sesión revocada se sigue viendo hasta que vence su token** (hasta 1 h): las páginas verifican la firma del token en local (`getClaims()`). Las rutas de API que escriben vuelven a validarla contra Supabase Auth.
+- **Hay listas sin tope** (Parrilla, Encuentros, Usuarios): con miles de filas habría que paginarlas, como ya se hizo en el CRM.
 
 ---
 
