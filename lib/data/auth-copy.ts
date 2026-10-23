@@ -24,4 +24,19 @@ export const AUTH_LOGIN_COPY = {
   errorInvalid: 'Correo o contraseña incorrectos.',
   errorGeneric: 'No pudimos iniciar sesión. Intenta de nuevo.',
   errorMagic: 'No pudimos enviar el enlace. Intenta de nuevo.',
+  errorGoogle: 'No pudimos conectar con Google. Intenta de nuevo.',
 } as const
+
+/** Los avisos que otras partes del sitio dejan en la URL del login (`/login?error=…`): `auth` lo pone el retorno de
+ *  Google / del enlace por correo (app/api/auth/callback) y `perfil` el cierre de una cuenta sin perfil
+ *  (app/api/auth/signout). */
+const AUTH_QUERY_ERRORS = {
+  auth: 'No pudimos validar tu acceso. Pide un enlace nuevo o ingresa con tu contraseña.',
+  perfil:
+    'Tu cuenta no tiene un perfil en el portal. Pide a un administrador de Gladwell que te envíe una invitación.',
+} as const
+
+/** El texto para el `?error=` de la URL, o null si no es uno de los conocidos (cualquier otro valor se ignora). */
+export function authQueryError(code: string | null): string | null {
+  return code === 'auth' || code === 'perfil' ? AUTH_QUERY_ERRORS[code] : null
+}

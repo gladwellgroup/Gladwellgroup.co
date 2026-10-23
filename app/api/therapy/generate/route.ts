@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { archivedSessionError } from '@/lib/deliverables/archived'
 import { generateDeliverableSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { startGeneration } from '@/lib/deliverables/claim'
+import { must } from '@/lib/supabase/must'
 
 export const maxDuration = 60
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -48,21 +50,24 @@ export async function POST(request: NextRequest) {
 
   const archived = archivedSessionError(access.session.status)
   if (archived) {
-    return NextResponse.json({ error: archived }, { status: 403 })
+    return NextResponse.json({ error: archived }, { status: 409 })
   }
 
   if (access.session.status === 'entregado') {
     return NextResponse.json(
       { error: 'El entregable ya fue enviado. Puedes verlo y editarlo, pero no regenerarlo con IA.' },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
-  const { data: inputs } = await supabase
-    .from('therapy_session_inputs')
-    .select('reto_problema, recomendaciones_incomodas, foto_sesion_url')
-    .eq('session_id', session_id)
-    .single()
+  const inputs = must(
+    await supabase
+      .from('therapy_session_inputs')
+      .select('reto_problema, recomendaciones_incomodas, foto_sesion_url')
+      .eq('session_id', session_id)
+      .single(),
+    'therapy_session_inputs'
+  )
 
   if (!inputs) {
     return NextResponse.json(
@@ -88,27 +93,25 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: deliverable, error: upsertError } = await supabase
-    .from('therapy_deliverables')
-    .upsert(
-      {
-        session_id,
-        generated_by: user.id,
-        processing_status: 'generando',
-        problema_recordatorio: reto,
-        resumen_audio: '',
-        recomendaciones_incomodas: recomendaciones,
-        content_html: null,
-        pdf_url: null,
-        generated_at: new Date().toISOString(),
-      },
-      { onConflict: 'session_id' }
-    )
-    .select('id')
-    .single()
+  // Sin pisar una síntesis que sigue viva (antes era un upsert incondicional: reiniciaba la generación en curso y
+  // borraba el resumen del audio).
+  const started = await startGeneration(supabase, 'therapy_deliverables', session_id, {
+    generated_by: user.id,
+    problema_recordatorio: reto,
+    resumen_audio: '',
+    recomendaciones_incomodas: recomendaciones,
+    content_html: null,
+    pdf_url: null,
+  })
 
-  if (upsertError || !deliverable) {
-    console.error('[therapy/generate] upsert error:', upsertError)
+  if (started.status === 'busy') {
+    return NextResponse.json(
+      { error: 'Ya se está generando el entregable de esta sesión. Espera a que termine.' },
+      { status: 409 }
+    )
+  }
+
+  if (started.status === 'error') {
     return NextResponse.json(
       { error: 'No se pudo iniciar el entregable' },
       { status: 500 }
@@ -118,10 +121,10 @@ export async function POST(request: NextRequest) {
   // Client will call /api/therapy/deliverables/process from the editor.
   return NextResponse.json(
     {
-      id: deliverable.id,
+      id: started.id,
       session_id,
       processing_status: 'generando',
     },
     { status: 201 }
   )
-}
+})

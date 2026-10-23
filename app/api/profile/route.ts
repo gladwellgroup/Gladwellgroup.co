@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { logError } from '@/lib/log'
 
 // Autoservicio: cualquier persona autenticada edita su propia foto, sin
 // permiso especial. Allowlist explícito de columnas — nunca acepta
@@ -11,11 +13,10 @@ const updateProfileSchema = z.object({
   avatar_url: z.string().url().nullable(),
 })
 
-export async function PATCH(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const PATCH = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -38,9 +39,9 @@ export async function PATCH(request: NextRequest) {
     .eq('id', user.id)
 
   if (error) {
-    console.error('[api/profile] update error:', error)
+    logError('[api/profile] update error', error)
     return NextResponse.json({ error: 'No se pudo actualizar el perfil' }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })
-}
+})

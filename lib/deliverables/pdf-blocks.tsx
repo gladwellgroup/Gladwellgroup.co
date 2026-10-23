@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import sharp from 'sharp'
 import { Image, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { readLimited } from '@/lib/http/read-limited'
+import { isProjectStorageUrl } from '@/lib/storage/hosts'
 
 /** Piezas compartidas por los PDF de los dos programas de entregables:
  *  paleta, geometría de página, estimación de alto y los bloques de contenido.
@@ -100,11 +102,18 @@ export function estimateBulletsHeight(
   return height
 }
 
+/** Lo máximo que se espera a la foto para medirla: si no llega, se usa un alto fijo y el PDF sigue. */
+const PHOTO_FETCH_TIMEOUT_MS = 10_000
+/** Y lo máximo que se descarga de ella. */
+const PHOTO_MAX_BYTES = 20 * 1024 * 1024
+
 export async function getPhotoDisplayHeight(url: string): Promise<number> {
+  // Solo se miden fotos del Storage del proyecto (el servidor no debe pedir cualquier dirección que lleve una fila vieja).
+  if (!isProjectStorageUrl(url)) return 220
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, { signal: AbortSignal.timeout(PHOTO_FETCH_TIMEOUT_MS) })
     if (!res.ok) return 220
-    const buffer = Buffer.from(await res.arrayBuffer())
+    const buffer = Buffer.from(await readLimited(res, PHOTO_MAX_BYTES))
     const { width, height } = await sharp(buffer).metadata()
     if (!width || !height) return 220
     return Math.min(MAX_PHOTO_HEIGHT, CONTENT_WIDTH * (height / width))

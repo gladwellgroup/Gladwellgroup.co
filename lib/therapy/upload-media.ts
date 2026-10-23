@@ -1,6 +1,7 @@
 'use client'
 
 import { getSupabaseBrowser } from '@/lib/supabase/browser'
+import { logError } from '@/lib/log'
 
 export const MAX_MEDIA_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -49,7 +50,7 @@ export async function uploadTherapyMedia({
   })
 
   if (error) {
-    console.error('[uploadTherapyMedia] Storage error:', error)
+    logError('[uploadTherapyMedia] Storage error', error)
     throw new Error('Error al subir el archivo')
   }
 

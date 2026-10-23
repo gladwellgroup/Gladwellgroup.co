@@ -6,6 +6,7 @@ import {
   type EducationContent,
   type EducationTool,
 } from '@/lib/education/deliverable-template'
+import { logError } from '@/lib/log'
 
 const BUCKET = 'education-media'
 
@@ -52,7 +53,7 @@ export async function uploadEducationPdf(params: {
   })
 
   if (error) {
-    console.error('[uploadEducationPdf]', error)
+    logError('[uploadEducationPdf]', error)
     throw new Error('No se pudo subir el PDF')
   }
 

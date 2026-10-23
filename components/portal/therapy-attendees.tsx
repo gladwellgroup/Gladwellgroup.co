@@ -5,11 +5,32 @@ import { useRouter } from 'next/navigation'
 import { RefreshCw, Upload, X } from 'lucide-react'
 import { BrandButton } from '@/components/brand/brand-button'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
+import { useIsClient } from '@/hooks/use-is-client'
+import { APP_TIME_ZONE } from '@/lib/date'
 import { parseAttendeesCsv, type ParsedAttendees } from '@/lib/deliverables/csv'
 import {
   ATTENDEE_STATUS_COLORS,
   ATTENDEE_STATUS_LABELS,
 } from '@/lib/deliverables/status'
+
+/** La hora la escribe el navegador, no el servidor: Node y Safari no formatean igual «2:42 p. m.» y la página
+ *  se hidrataba con el error #418 (ver `useIsClient`). Va en la zona de la plataforma, no en la de quien mira.
+ *  El ancho mínimo de la celda evita que la columna salte cuando aparece el texto. */
+function RegisteredTime({ iso }: { iso: string }) {
+  const isClient = useIsClient()
+
+  return (
+    <time dateTime={iso} className="tabular-nums">
+      {isClient
+        ? new Date(iso).toLocaleTimeString('es-CO', {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: APP_TIME_ZONE,
+          })
+        : ''}
+    </time>
+  )
+}
 
 export interface TherapyAttendeeData {
   id: string
@@ -247,7 +268,7 @@ export function TherapyAttendees({
           type="button"
           onClick={() => startRefresh(() => router.refresh())}
           disabled={isRefreshing}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 pointer-coarse:min-h-11"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           {isRefreshing ? 'Actualizando…' : 'Actualizar lista'}
@@ -288,11 +309,8 @@ export function TherapyAttendees({
                   <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                     {hideContact ? <span className="italic">Oculto</span> : attendee.correo}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                    {new Date(attendee.created_at).toLocaleTimeString('es-CO', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                  <td className="min-w-[5.5rem] whitespace-nowrap px-3 py-2 text-muted-foreground">
+                    <RegisteredTime iso={attendee.created_at} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <span
@@ -321,7 +339,7 @@ export function TherapyAttendees({
                       <button
                         type="button"
                         onClick={() => setConfirmDelete(attendee)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-11"
                         aria-label={`Eliminar a ${attendee.nombre}`}
                       >
                         <X className="h-4 w-4" />

@@ -1,8 +1,9 @@
 import type { User } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { loadSessionUser } from '@/lib/auth/session-user'
+import { ACCESS_UNAVAILABLE_MESSAGE } from '@/lib/auth/unavailable'
 import { parseDateOnly } from '@/lib/date'
-import { resolvePermissionsFromGrants } from '@/lib/permissions/resolve'
-import type { Role } from '@/lib/permissions/roles'
+import { isQueryFailure } from '@/lib/supabase/must'
 
 export type DeliverableAccess = {
   allowed: boolean
@@ -22,25 +23,33 @@ export type DeliverableAccess = {
   statusCode?: number
 }
 
+/** La base no contestó: no se sabe si la persona puede entrar ni si la sesión existe. */
+function unavailable(): DeliverableAccess {
+  return {
+    allowed: false,
+    isModeratorOrSuper: false,
+    isCreatorModeratorOrSuper: false,
+    role: null,
+    session: null,
+    error: ACCESS_UNAVAILABLE_MESSAGE,
+    statusCode: 503,
+  }
+}
+
 export async function resolveDeliverableAccess(
   supabase: SupabaseClient,
   user: User,
   sessionId: string
 ): Promise<DeliverableAccess> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
-    .eq('id', user.id)
-    .single()
-
-  const permissions = profile
-    ? resolvePermissionsFromGrants(profile.role as Role, profile.profile_module_grants)
-    : []
+  const lookup = await loadSessionUser(supabase, user.id)
+  // Una consulta caída NO es «Sin permisos» ni «Sesión no encontrada»: 503, reintentable.
+  if (lookup.status === 'error') return unavailable()
+  const profile = lookup.status === 'ok' ? lookup.user : null
 
   // 'therapy:create' es el permiso que otorga el módulo Encuentros ·
   // Terapia — revocarlo debe cortar el acceso real a estas rutas, no solo
   // el ítem del menú (antes esto solo miraba el rol a secas).
-  if (!profile || !permissions.includes('therapy:create')) {
+  if (!profile || !profile.permissions.includes('therapy:create')) {
     return {
       allowed: false,
       isModeratorOrSuper: false,
@@ -52,13 +61,15 @@ export async function resolveDeliverableAccess(
     }
   }
 
-  const { data: sessionRow } = await supabase
+  const { data: sessionRow, error: sessionError } = await supabase
     .from('therapy_sessions')
     .select(
       'id, title, session_date, moderator_id, status, created_by, co_admin_ids, invitados ( nombre )'
     )
     .eq('id', sessionId)
-    .single()
+    .maybeSingle()
+
+  if (isQueryFailure(sessionError)) return unavailable()
 
   if (!sessionRow) {
     return {

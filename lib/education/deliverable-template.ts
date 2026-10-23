@@ -1,4 +1,5 @@
 import { firstName } from '@/lib/deliverables/names'
+import { normalizeHttpUrl } from '@/lib/url'
 import {
   BODY,
   HAIRLINE,
@@ -71,8 +72,10 @@ function toolsHtml(tools: EducationTool[]): string {
   const items = valid
     .map((tool) => {
       const nombre = escapeHtml(tool.nombre.trim())
-      const titulo = tool.url?.trim()
-        ? `<a href="${escapeHtml(tool.url.trim())}" style="color:${PURPLE};font-weight:700;text-decoration:none;">${nombre}</a>`
+      // Solo http(s): un `javascript:` en el campo de la herramienta se ejecutaba al hacer clic en el correo.
+      const href = normalizeHttpUrl(tool.url)
+      const titulo = href
+        ? `<a href="${escapeHtml(href)}" style="color:${PURPLE};font-weight:700;text-decoration:none;">${nombre}</a>`
         : `<span style="color:${INK};font-weight:700;">${nombre}</span>`
 
       const descripcion = tool.descripcion?.trim()

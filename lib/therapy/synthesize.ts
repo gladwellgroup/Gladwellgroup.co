@@ -5,6 +5,16 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import ffmpegPath from 'ffmpeg-static'
 import { chatJson, toLines } from '@/lib/ai/openai-json'
+import { BodyTooLargeError, readLimited } from '@/lib/http/read-limited'
+import { isProjectStorageUrl } from '@/lib/storage/hosts'
+import {
+  AUDIO_DOWNLOAD_TIMEOUT_MS,
+  ExternalTimeoutError,
+  FFMPEG_TIMEOUT_MS,
+  WHISPER_TIMEOUT_MS,
+  withTimeout,
+} from '@/lib/ai/timeout'
+import { logError } from '@/lib/log'
 
 const execFileAsync = promisify(execFile)
 
@@ -63,21 +73,23 @@ async function transcribeFile(
     form.append('prompt', contextPrompt)
   }
 
-  const whisperRes = await fetch(
-    'https://api.openai.com/v1/audio/transcriptions',
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-    }
-  )
-
-  const whisperData = await whisperRes.json()
-  if (!whisperRes.ok) {
-    throw new Error(
-      whisperData.error?.message ?? 'Error al transcribir el audio'
+  const whisperData = await withTimeout('La transcripción del audio', WHISPER_TIMEOUT_MS, async (signal) => {
+    const whisperRes = await fetch(
+      'https://api.openai.com/v1/audio/transcriptions',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+        signal,
+      }
     )
-  }
+
+    const body = await whisperRes.json()
+    if (!whisperRes.ok) {
+      throw new Error(body.error?.message ?? 'Error al transcribir el audio')
+    }
+    return body
+  })
 
   return (whisperData.text as string)?.trim() ?? ''
 }
@@ -92,19 +104,24 @@ async function splitAudioIntoChunks(
   if (!ffmpegPath) throw new Error('ffmpeg no disponible')
 
   const pattern = path.join(outputDir, `chunk_%03d.${ext}`)
-  await execFileAsync(ffmpegPath, [
-    '-i',
-    inputPath,
-    '-f',
-    'segment',
-    '-segment_time',
-    String(CHUNK_SEGMENT_SECONDS),
-    '-c',
-    'copy',
-    '-reset_timestamps',
-    '1',
-    pattern,
-  ])
+  await execFileAsync(
+    ffmpegPath,
+    [
+      '-i',
+      inputPath,
+      '-f',
+      'segment',
+      '-segment_time',
+      String(CHUNK_SEGMENT_SECONDS),
+      '-c',
+      'copy',
+      '-reset_timestamps',
+      '1',
+      pattern,
+    ],
+    // Si ffmpeg se queda colgado se mata y el llamador cae a transcribir el archivo completo.
+    { timeout: FFMPEG_TIMEOUT_MS }
+  )
 
   const files = await readdir(outputDir)
   return files
@@ -120,28 +137,43 @@ export async function transcribeAudio(
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY no configurada')
 
-  const audioRes = await fetch(audioUrl)
-  if (!audioRes.ok) {
-    throw new Error('No se pudo descargar el audio desde Storage')
+  // Defensa en profundidad: los esquemas ya solo aceptan Storage del proyecto, pero una fila vieja pudo guardarse antes.
+  if (!isProjectStorageUrl(audioUrl)) {
+    throw new Error('El audio debe estar subido al portal para poder transcribirlo')
   }
 
-  const contentLength = Number(audioRes.headers.get('content-length') ?? 0)
-  if (contentLength > WHISPER_MAX_BYTES) {
-    throw new Error(
-      'El audio supera el límite de 25 MB para transcripción automática'
-    )
-  }
+  const { arrayBuffer, contentType } = await withTimeout(
+    'La descarga del audio',
+    AUDIO_DOWNLOAD_TIMEOUT_MS,
+    async (signal) => {
+      const audioRes = await fetch(audioUrl, { signal })
+      if (!audioRes.ok) {
+        throw new Error('No se pudo descargar el audio desde Storage')
+      }
 
-  const arrayBuffer = await audioRes.arrayBuffer()
-  if (arrayBuffer.byteLength > WHISPER_MAX_BYTES) {
-    throw new Error(
-      'El audio supera el límite de 25 MB para transcripción automática'
-    )
-  }
+      const contentLength = Number(audioRes.headers.get('content-length') ?? 0)
+      if (contentLength > WHISPER_MAX_BYTES) {
+        throw new Error(
+          'El audio supera el límite de 25 MB para transcripción automática'
+        )
+      }
 
-  const contentType =
-    audioRes.headers.get('content-type')?.split(';')[0]?.trim() ||
-    'audio/webm'
+      // Se corta la descarga al pasar el límite: `arrayBuffer()` bajaba todo (y content-length puede faltar o mentir).
+      const bytes = await readLimited(audioRes, WHISPER_MAX_BYTES).catch((error) => {
+        if (error instanceof BodyTooLargeError) {
+          throw new Error('El audio supera el límite de 25 MB para transcripción automática')
+        }
+        throw error
+      })
+
+      return {
+        arrayBuffer: bytes,
+        contentType:
+          audioRes.headers.get('content-type')?.split(';')[0]?.trim() ||
+          'audio/webm',
+      }
+    }
+  )
   const ext = extFromContentType(contentType)
 
   const workDir = await mkdtemp(path.join(os.tmpdir(), 'gladwell-audio-'))
@@ -165,10 +197,13 @@ export async function transcribeAudio(
           return await transcribeFile(chunkPaths[0], contentType, ext, contextPrompt)
         }
       } catch (err) {
+        // Whisper no contestó a tiempo: repetirlo con el archivo completo gastaría los segundos que quedan para
+        // la síntesis (las rutas mueren a los 300 s). Se avisa y se sigue sin transcripción.
+        if (err instanceof ExternalTimeoutError) throw err
         // El corte con ffmpeg falló (formato inesperado, binario no
         // disponible, etc.) — no perder la transcripción por eso, se cae al
         // camino de transcribir el archivo completo de una sola vez.
-        console.error('[transcribeAudio] chunking falló, usando fallback:', err)
+        logError('[transcribeAudio] chunking falló, usando fallback', err)
       }
     }
 

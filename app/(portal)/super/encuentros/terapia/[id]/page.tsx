@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { SessionDetailForm } from '@/components/portal/session-detail-form'
 import { resolvePermissionsFromGrants, type Role } from '@/lib/permissions'
 
@@ -14,7 +15,7 @@ export default async function SuperEntregableDetailPage({
   const { id } = await params
   const supabase = getSupabaseServer()
 
-  const [{ data }, { data: communityAdmins }] = await Promise.all([
+  const [sessionResult, adminsResult] = await Promise.all([
     supabase
       .from('therapy_sessions')
       .select(`
@@ -39,7 +40,10 @@ export default async function SuperEntregableDetailPage({
       .order('nombre'),
   ])
 
+  // Sin filas o un id que no es UUID: `must` devuelve null → 404; un fallo real lanza (pantalla de error).
+  const data = must(sessionResult, 'Sesión de Terapia')
   if (!data) notFound()
+  const communityAdmins = must(adminsResult, 'Administradores de comunidad')
 
   // Solo ofrecer como coadministrador a quien la API ya aceptaría — sin
   // esto el selector deja marcar a cualquier community_admin y el PATCH

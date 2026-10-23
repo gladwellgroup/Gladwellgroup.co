@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { archivedSessionError } from '@/lib/deliverables/archived'
 import { deliverableSessionSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
 import { toDeliverableContent } from '@/lib/therapy/deliverable-render'
 import { buildDeliverableHtmlFor } from '@/lib/therapy/deliverable-template'
 import { sendPersonalizedBatch, type BatchRecipient } from '@/lib/deliverables/send-batch'
+import { SEND_IN_PROGRESS_MESSAGE } from '@/lib/deliverables/idempotency'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
 
 // Envía en lotes de 100 con pausas entre lotes: mismo presupuesto que la
 // ruta de aprobación, no los 60s de una ruta de un solo correo.
@@ -20,11 +23,10 @@ export const runtime = 'nodejs'
  *  /approve queda bloqueado — reenviar solo a los QR pendientes necesita una
  *  vía que no toque el correo grupal ni el estado de la sesión. Reutiliza el
  *  pdf_url ya subido: no genera un PDF nuevo. */
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
 
   const archived = archivedSessionError(access.session.status)
   if (archived) {
-    return NextResponse.json({ error: archived }, { status: 403 })
+    return NextResponse.json({ error: archived }, { status: 409 })
   }
 
   const resendKey = process.env.RESEND_API_KEY
@@ -76,13 +78,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: deliverable } = await supabase
-    .from('therapy_deliverables')
-    .select(
-      'problema_recordatorio, resumen_audio, recomendaciones_incomodas, pdf_url'
-    )
-    .eq('session_id', session_id)
-    .single()
+  const deliverable = must(
+    await supabase
+      .from('therapy_deliverables')
+      .select(
+        'problema_recordatorio, resumen_audio, recomendaciones_incomodas, pdf_url'
+      )
+      .eq('session_id', session_id)
+      .single(),
+    'therapy_deliverables'
+  )
 
   if (!deliverable || !deliverable.pdf_url) {
     return NextResponse.json(
@@ -91,12 +96,15 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: qrAttendees } = await supabase
-    .from('therapy_session_attendees')
-    .select('id, nombre, correo')
-    .eq('session_id', session_id)
-    .neq('email_status', 'enviado')
-    .order('created_at', { ascending: true })
+  const qrAttendees = must(
+    await supabase
+      .from('therapy_session_attendees')
+      .select('id, nombre, correo')
+      .eq('session_id', session_id)
+      .neq('email_status', 'enviado')
+      .order('created_at', { ascending: true }),
+    'therapy_session_attendees'
+  )
 
   const attendees = (qrAttendees ?? []) as BatchRecipient[]
 
@@ -120,6 +128,8 @@ export async function POST(request: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(1),
   ])
+  const inputs = must(inputsRes, 'therapy_session_inputs')
+  const audios = must(audiosRes, 'therapy_session_audios')
 
   const content = toDeliverableContent({
     sessionId: session_id,
@@ -128,24 +138,29 @@ export async function POST(request: NextRequest) {
     problemaRecordatorio: deliverable.problema_recordatorio ?? '',
     resumenAudio: deliverable.resumen_audio ?? '',
     recomendacionesIncomodas: deliverable.recomendaciones_incomodas ?? '',
-    fotoSesionUrl: inputsRes.data?.foto_sesion_url,
-    audioUrl: audiosRes.data?.[0]?.audio_url,
+    fotoSesionUrl: inputs?.foto_sesion_url,
+    audioUrl: audios?.[0]?.audio_url,
     invitadoNombre: access.session.invitadoNombre,
-    fraseTexto: inputsRes.data?.frase_texto,
-    fraseAutor: inputsRes.data?.frase_autor,
+    fraseTexto: inputs?.frase_texto,
+    fraseAutor: inputs?.frase_autor,
     pdfUrl: deliverable.pdf_url,
   })
 
   const resend = new Resend(resendKey)
-  const { sent, failed } = await sendPersonalizedBatch({
+  const { sent, failed, skipped } = await sendPersonalizedBatch({
     supabase,
     tableName: 'therapy_session_attendees',
     resend,
     fromEmail,
     subject: `Entregable Gladwell — ${access.session.title}`,
     recipients: attendees,
+    idempotencyScope: session_id,
     buildHtml: (attendee) => buildDeliverableHtmlFor(content, attendee.nombre),
   })
 
+  if (sent === 0 && failed.length === 0 && skipped > 0) {
+    return NextResponse.json({ error: SEND_IN_PROGRESS_MESSAGE }, { status: 409 })
+  }
+
   return NextResponse.json({ ok: true, sent, failed: failed.length })
-}
+})

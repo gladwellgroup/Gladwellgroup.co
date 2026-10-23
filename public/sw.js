@@ -33,7 +33,7 @@ function isImageRequest(pathname) {
 }
 
 // Todo lo que cuelga de (portal) + la API — nunca se cachea, aunque eso
-// signifique repetir el patrón de rutas que ya vive en middleware.ts: acá
+// signifique repetir el patrón de rutas que ya vive en proxy.ts: acá
 // el costo de un falso negativo (no cachear algo público por error) es
 // mucho menor que el de un falso positivo (servir datos de otro usuario).
 function isAuthenticatedRoute(pathname) {

@@ -55,7 +55,7 @@ export function EducationToolFields({
             <button
               type="button"
               onClick={() => setConfirmIndex(index)}
-              className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive pointer-coarse:top-2 pointer-coarse:right-2 pointer-coarse:size-11"
               aria-label={`Eliminar herramienta ${index + 1}`}
             >
               <X className="h-4 w-4" />
@@ -102,7 +102,7 @@ export function EducationToolFields({
         <button
           type="button"
           onClick={addTool}
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:min-h-11"
         >
           <Plus className="h-4 w-4" />
           Agregar herramienta

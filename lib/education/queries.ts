@@ -1,4 +1,5 @@
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import type { Role } from '@/lib/permissions/roles'
 
 /** Los árboles /admin y /super comparten esta consulta y su basePath. Antes
@@ -14,7 +15,7 @@ import type { Role } from '@/lib/permissions/roles'
 export async function listEducationSessions(includeAdmins: boolean = true) {
   const supabase = getSupabaseServer()
 
-  const [{ data: sessions }, { data: admins }] = await Promise.all([
+  const [sessionsResult, adminsResult] = await Promise.all([
     supabase
       .from('education_sessions')
       .select('*, education_session_inputs ( ponente_nombre )')
@@ -25,8 +26,10 @@ export async function listEducationSessions(includeAdmins: boolean = true) {
           .select('id, nombre, correo')
           .in('role', ['super_admin', 'community_admin'])
           .order('nombre')
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
   ])
+  const sessions = must(sessionsResult, 'Sesiones de Education')
+  const admins = must(adminsResult, 'Administradores de comunidad')
 
   // supabase-js tipa las relaciones embebidas como arrays; en runtime una
   // relación to-one (session_id UNIQUE) vuelve objeto|null.
@@ -39,10 +42,11 @@ export async function listEducationSessions(includeAdmins: boolean = true) {
 export async function getEducationSession(id: string) {
   const supabase = getSupabaseServer()
 
-  const { data } = await supabase
-    .from('education_sessions')
-    .select(
-      `
+  const data = must(
+    await supabase
+      .from('education_sessions')
+      .select(
+        `
       id, title, session_date, admin_id, status, created_by, co_admin_ids,
       education_session_inputs (
         ponente_nombre, ponente_rol, ponente_foto_url, ponente_red_social,
@@ -58,11 +62,13 @@ export async function getEducationSession(id: string) {
       ),
       session_attendance_links ( token, expires_at )
     `
-    )
-    .eq('id', id)
-    .order('orden', { referencedTable: 'education_tools' })
-    .order('created_at', { referencedTable: 'education_attendees' })
-    .single()
+      )
+      .eq('id', id)
+      .order('orden', { referencedTable: 'education_tools' })
+      .order('created_at', { referencedTable: 'education_attendees' })
+      .single(),
+    'Sesión de Education'
+  )
 
   if (!data) return null
 

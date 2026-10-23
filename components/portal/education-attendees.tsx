@@ -247,7 +247,7 @@ export function EducationAttendees({
           type="button"
           onClick={() => startRefresh(() => router.refresh())}
           disabled={isRefreshing}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 pointer-coarse:min-h-11"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           {isRefreshing ? 'Actualizando…' : 'Actualizar lista'}
@@ -312,7 +312,7 @@ export function EducationAttendees({
                       <button
                         type="button"
                         onClick={() => setConfirmDelete(attendee)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-11"
                         aria-label={`Eliminar a ${attendee.nombre}`}
                       >
                         <X className="h-4 w-4" />

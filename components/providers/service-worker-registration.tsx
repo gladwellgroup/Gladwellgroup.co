@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { logError } from '@/lib/log'
 
 /** Se monta solo en producción (ver app/layout.tsx) — un service worker en
  *  `next dev` pelea con el hot-reload y hace parecer roto un cambio que en
@@ -9,7 +10,7 @@ export function ServiceWorkerRegistration() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
     navigator.serviceWorker.register('/sw.js').catch((error) => {
-      console.error('[sw] registration failed:', error)
+      logError('[sw] registration failed', error)
     })
   }, [])
 

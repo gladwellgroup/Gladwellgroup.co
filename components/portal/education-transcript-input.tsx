@@ -92,7 +92,7 @@ export function EducationTranscriptInput({
           <button
             type="button"
             onClick={() => textFileRef.current?.click()}
-            className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:min-h-11"
           >
             <FileText className="h-4 w-4" />
             Subir archivo .txt, .vtt o .srt
@@ -132,7 +132,7 @@ export function EducationTranscriptInput({
               <button
                 type="button"
                 onClick={() => setConfirmClearAudio(true)}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-11"
                 aria-label="Quitar audio"
               >
                 <X className="h-4 w-4" />
@@ -145,7 +145,7 @@ export function EducationTranscriptInput({
               type="button"
               onClick={() => audioFileRef.current?.click()}
               disabled={uploading}
-              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50 pointer-coarse:min-h-11"
             >
               <Upload className="h-4 w-4" />
               {uploading ? 'Subiendo...' : 'Subir audio de la sesión'}

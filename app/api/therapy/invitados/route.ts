@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { invitadoSchema } from '@/lib/validations/therapy'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { logError } from '@/lib/log'
 
-export async function GET(request: NextRequest) {
+export const GET = withApiErrors(async (request: NextRequest) => {
   const auth = await requireApiPermission('therapy:create')
   if (!auth.ok) return auth.response
   const { user, role } = auth
@@ -28,14 +30,14 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query
 
   if (error) {
-    console.error('[invitados] GET error:', error)
+    logError('[invitados] GET error', error)
     return NextResponse.json({ error: 'No se pudo buscar invitados' }, { status: 500 })
   }
 
   return NextResponse.json(data ?? [])
-}
+})
 
-export async function POST(request: NextRequest) {
+export const POST = withApiErrors(async (request: NextRequest) => {
   const auth = await requireApiPermission('therapy:create')
   if (!auth.ok) return auth.response
   const { user } = auth
@@ -64,9 +66,9 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) {
-    console.error('[invitados] POST error:', error)
+    logError('[invitados] POST error', error)
     return NextResponse.json({ error: 'No se pudo crear el invitado' }, { status: 500 })
   }
 
   return NextResponse.json(data, { status: 201 })
-}
+})

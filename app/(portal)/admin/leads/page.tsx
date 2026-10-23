@@ -1,16 +1,21 @@
 import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
+import { LEAD_SELECT, POSTGREST_MAX_ROWS, type CrmLead } from '@/lib/crm/leads'
 import { CrmLeadsTable } from '@/components/portal/crm-leads-table'
 
 export default async function AdminLeadsPage() {
   const user = await requirePermission('leads:read_delegated')
   const supabase = getSupabaseServer()
 
-  const { data: leads } = await supabase
-    .from('walking_list_leads')
-    .select('*')
-    .eq('assigned_to', user.id)
-    .order('created_at', { ascending: false })
+  const leads = must(
+    await supabase
+      .from('walking_list_leads')
+      .select(LEAD_SELECT)
+      .eq('assigned_to', user.id)
+      .order('created_at', { ascending: false }),
+    'Mis leads'
+  )
 
   return (
     <div className="space-y-6">
@@ -23,7 +28,9 @@ export default async function AdminLeadsPage() {
         </p>
       </div>
       <CrmLeadsTable
-        leads={leads ?? []}
+        // El select se arma con una lista de columnas: supabase-js no resuelve su tipo en compilación.
+        leads={(leads ?? []) as unknown as CrmLead[]}
+        truncated={(leads?.length ?? 0) >= POSTGREST_MAX_ROWS}
         admins={[]}
         currentUserId={user.id}
         canDelegate={false}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { educationSessionRefSchema } from '@/lib/validations/education'
 import { resolveEducationAccess } from '@/lib/education/session-access'
 import { loadEducationContentSource } from '@/lib/education/content'
@@ -9,15 +9,16 @@ import {
   toEducationContent,
   uploadEducationPdf,
 } from '@/lib/education/deliverable-render'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 60
 export const runtime = 'nodejs'
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       content: toEducationContent(source),
     })
   } catch (err) {
-    console.error('[education/pdf] error:', err)
+    logError('[education/pdf] error', err)
     return NextResponse.json(
       { error: 'No se pudo generar el PDF' },
       { status: 500 }
@@ -70,4 +71,4 @@ export async function POST(request: NextRequest) {
     .eq('session_id', session_id)
 
   return NextResponse.json({ pdf_url: pdfUrl })
-}
+})

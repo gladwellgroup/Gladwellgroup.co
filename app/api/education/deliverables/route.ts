@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { patchEducationDeliverableSchema } from '@/lib/validations/education'
 import { resolveEducationAccess } from '@/lib/education/session-access'
 import { loadEducationContentSource } from '@/lib/education/content'
 import { rebuildEducationHtml } from '@/lib/education/deliverable-render'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { logError } from '@/lib/log'
 
-export async function PATCH(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const PATCH = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -41,7 +42,7 @@ export async function PATCH(request: NextRequest) {
   if (access.session.status === 'entregado') {
     return NextResponse.json(
       { error: 'El entregable ya fue enviado y no se puede editar' },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -51,7 +52,7 @@ export async function PATCH(request: NextRequest) {
     .eq('session_id', session_id)
 
   if (updateError) {
-    console.error('[education/deliverables] update error:', updateError)
+    logError('[education/deliverables] update error', updateError)
     return NextResponse.json(
       { error: 'No se pudo guardar el entregable' },
       { status: 500 }
@@ -69,4 +70,4 @@ export async function PATCH(request: NextRequest) {
     .eq('session_id', session_id)
 
   return NextResponse.json({ success: true, content_html: contentHtml })
-}
+})

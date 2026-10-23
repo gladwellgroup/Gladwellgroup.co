@@ -3,7 +3,7 @@
 // reglas puras en un solo lugar — las usan el formulario, la lista y el
 // servidor — más el loader de la lista.
 //
-// Solo `import type` de la app (y `blankToNull` de rules.ts, que es puro): el
+// Solo `import type` de la app (y `blankToNull` de rules.ts y `must` de supabase/must.ts, que son puros): el
 // cliente incluye este módulo en su bundle y las pruebas lo cargan sin resolver
 // nada del resto.
 //
@@ -15,6 +15,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { blankToNull, type PostDraft } from '@/lib/parrilla/rules'
+import { must } from '@/lib/supabase/must'
 
 // Los mismos números que los CHECK de supabase/migrations/20260920_parrilla_frases.sql:
 // tests/drift.test.ts los compara con el SQL.
@@ -193,15 +194,16 @@ function embeddedCount(value: unknown): number {
  *  listado de publicaciones (PARRILLA_LIST_COLUMNS) no se toca — con una columna
  *  sin migrar el calendario se vería vacío. */
 export async function loadParrillaQuotes(supabase: SupabaseClient): Promise<ParrillaQuote[]> {
-  const { data, error } = await supabase
-    .from('parrilla_quotes')
-    .select(`${QUOTE_COLUMNS.join(', ')}, used:parrilla_posts(count)`)
-    .order('created_at', { ascending: false })
-    .order('id')
-
-  // Igual que con las publicaciones: sin este log, una migración sin aplicar se
-  // ve como una biblioteca vacía, sin rastro de por qué.
-  if (error) console.error('[parrilla] No se pudieron cargar las frases:', error)
+  // Igual que con las publicaciones: sin `must`, una migración sin aplicar o un tope de tiempo se veía como una
+  // biblioteca vacía, sin rastro de por qué.
+  const data = must(
+    await supabase
+      .from('parrilla_quotes')
+      .select(`${QUOTE_COLUMNS.join(', ')}, used:parrilla_posts(count)`)
+      .order('created_at', { ascending: false })
+      .order('id'),
+    'Frases de la parrilla'
+  )
 
   // `unknown` en medio: el tipo del `select` con plantilla no se resuelve en
   // tiempo de compilación (el cliente no tiene tipos generados).

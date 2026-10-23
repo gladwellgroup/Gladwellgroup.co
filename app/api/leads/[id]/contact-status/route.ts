@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 const contactStatusSchema = z.object({
   contact_status: z.enum([
@@ -12,10 +15,10 @@ const contactStatusSchema = z.object({
   ]),
 })
 
-export async function PATCH(
+export const PATCH = withApiErrors(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id: leadId } = await params
 
   const auth = await requireApiPermission('leads:update_status')
@@ -39,11 +42,14 @@ export async function PATCH(
     )
   }
 
-  const { data: lead } = await supabase
-    .from('walking_list_leads')
-    .select('assigned_to')
-    .eq('id', leadId)
-    .single()
+  const lead = must(
+    await supabase
+      .from('walking_list_leads')
+      .select('assigned_to')
+      .eq('id', leadId)
+      .single(),
+    'walking_list_leads'
+  )
 
   if (!lead) {
     return NextResponse.json({ error: 'Lead no encontrado' }, { status: 404 })
@@ -64,7 +70,7 @@ export async function PATCH(
     .eq('id', leadId)
 
   if (error) {
-    console.error('[contact-status] Supabase error:', error)
+    logError('[contact-status] Supabase error', error)
     return NextResponse.json(
       { error: 'No se pudo actualizar el estado' },
       { status: 500 }
@@ -72,4 +78,4 @@ export async function PATCH(
   }
 
   return NextResponse.json({ success: true })
-}
+})

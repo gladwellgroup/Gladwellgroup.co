@@ -4,12 +4,13 @@ import { requireApiPermission } from '@/lib/auth/api'
 import { parrillaQuotePatchSchema } from '@/lib/validations/parrilla'
 import { deleteQuote, updateQuote } from '@/lib/parrilla/quote-mutations'
 import { respond } from '@/lib/parrilla/http'
+import { withApiErrors } from '@/lib/api/with-errors'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
 /** Recibe solo los campos que cambiaron. Sin token de concurrencia: gana la
  *  última escritura de cada campo (ver lib/parrilla/quote-mutations.ts). */
-export async function PATCH(request: NextRequest, { params }: RouteContext) {
+export const PATCH = withApiErrors(async (request: NextRequest, { params }: RouteContext) => {
   const { id } = await params
   const auth = await requireApiPermission('parrilla:manage')
   if (!auth.ok) return auth.response
@@ -30,12 +31,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   }
 
   return respond(await updateQuote(getSupabaseServer(), id, result.data))
-}
+})
 
-export async function DELETE(_request: NextRequest, { params }: RouteContext) {
+export const DELETE = withApiErrors(async (_request: NextRequest, { params }: RouteContext) => {
   const { id } = await params
   const auth = await requireApiPermission('parrilla:manage')
   if (!auth.ok) return auth.response
 
   return respond(await deleteQuote(getSupabaseServer(), id))
-}
+})

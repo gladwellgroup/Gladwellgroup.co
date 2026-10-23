@@ -3,6 +3,9 @@ import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { resolvePermissionsFromGrants, type Role } from '@/lib/permissions'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 const delegateSchema = z.object({
   // null = sin delegar, el lead vuelve a quedar en manos del
@@ -10,15 +13,14 @@ const delegateSchema = z.object({
   assigned_to: z.string().uuid('ID de administrador inválido').nullable(),
 })
 
-export async function PATCH(
+export const PATCH = withApiErrors(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id: leadId } = await params
 
   const auth = await requireApiPermission('leads:delegate')
   if (!auth.ok) return auth.response
-  const { user } = auth
 
   const supabase = getSupabaseServer()
 
@@ -44,11 +46,14 @@ export async function PATCH(
   if (assigned_to !== null) {
     // Rol correcto no basta: sin el módulo CRM otorgado, quedaría delegado a
     // alguien que no puede ver el lead en /admin/leads.
-    const { data: targetAdmin } = await supabase
-      .from('profiles')
-      .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
-      .eq('id', assigned_to)
-      .single()
+    const targetAdmin = must(
+      await supabase
+        .from('profiles')
+        .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
+        .eq('id', assigned_to)
+        .single(),
+      'profiles'
+    )
 
     const targetPermissions = targetAdmin
       ? resolvePermissionsFromGrants(targetAdmin.role as Role, targetAdmin.profile_module_grants)
@@ -66,11 +71,14 @@ export async function PATCH(
     }
   }
 
-  const { data: currentLead } = await supabase
-    .from('walking_list_leads')
-    .select('status')
-    .eq('id', leadId)
-    .single()
+  const currentLead = must(
+    await supabase
+      .from('walking_list_leads')
+      .select('status')
+      .eq('id', leadId)
+      .single(),
+    'walking_list_leads'
+  )
 
   if (!currentLead) {
     return NextResponse.json({ error: 'Lead no encontrado' }, { status: 404 })
@@ -94,7 +102,7 @@ export async function PATCH(
     .eq('id', leadId)
 
   if (error) {
-    console.error('[delegate] Supabase error:', error)
+    logError('[delegate] Supabase error', error)
     return NextResponse.json(
       { error: 'No se pudo delegar el lead' },
       { status: 500 }
@@ -102,4 +110,4 @@ export async function PATCH(
   }
 
   return NextResponse.json({ success: true })
-}
+})

@@ -1,4 +1,5 @@
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandButton } from '@/components/brand/brand-button'
 import { AttendanceForm } from './attendance-form'
@@ -29,18 +30,23 @@ export default async function AttendancePage({
   const { token } = await params
   const supabase = getSupabaseServer()
 
-  const { data: link } = await supabase
-    .from('session_attendance_links')
-    .select(
-      `
+  // `must`: si la base no contesta, quien escanea el QR en vivo ve la pantalla de error con «Reintentar», no
+  // «Enlace no válido» (que le hacía pensar que el QR estaba mal).
+  const link = must(
+    await supabase
+      .from('session_attendance_links')
+      .select(
+        `
       token, expires_at,
       therapy_sessions ( title ),
       education_sessions ( title ),
       charlas ( title, photo_url )
     `
-    )
-    .eq('token', token)
-    .maybeSingle()
+      )
+      .eq('token', token)
+      .maybeSingle(),
+    'Enlace de asistencia'
+  )
 
   if (!link) {
     return (

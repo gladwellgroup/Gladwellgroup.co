@@ -29,6 +29,7 @@ import {
   type PostPatch,
 } from '@/lib/parrilla/rules'
 import type { ParrillaPostInput } from '@/lib/validations/parrilla'
+import { logError } from '@/lib/log'
 
 const BUCKET = 'parrilla-media'
 
@@ -225,7 +226,7 @@ export function storagePathFromUrl(url: string): string | null {
 /** Un error de Supabase como fallo de escritura: se loguea y se traduce a un
  *  mensaje claro. Compartido con quote-mutations.ts. */
 export function failure(error: DbError, fallback: string): MutationFailure {
-  console.error('[parrilla] Supabase error:', error)
+  logError('[parrilla] Supabase error', error)
   return {
     ok: false,
     status: error.code === '23514' ? 400 : 500,
@@ -240,7 +241,7 @@ async function removeCover(sb: SupabaseClient, url: string): Promise<void> {
   const { error } = await sb.storage.from(BUCKET).remove([path])
   // No fatal: la publicación ya quedó guardada (o borrada); un archivo huérfano
   // no rompe nada y no vale la pena revertir la escritura por esto.
-  if (error) console.error('[parrilla] Storage cleanup error:', error)
+  if (error) logError('[parrilla] Storage cleanup error', error)
 }
 
 /** Crea la publicación con todos sus campos normalizados. */

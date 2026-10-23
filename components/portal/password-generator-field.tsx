@@ -41,7 +41,7 @@ export function PasswordGeneratorField({
               onChange(generatePassword())
               setVisible(true)
             }}
-            className="inline-flex items-center gap-1 text-xs font-medium text-[#A78BFA] transition-colors hover:text-[#7C3AED]"
+            className="inline-flex items-center gap-1 text-xs font-medium text-[#A78BFA] transition-colors hover:text-[#7C3AED] pointer-coarse:min-h-11"
           >
             <RefreshCw className="size-3" />
             Generar
@@ -57,13 +57,13 @@ export function PasswordGeneratorField({
           minLength={8}
           required={required}
           autoComplete={autoComplete}
-          className={cn('modal-field pr-9')}
+          className={cn('modal-field pr-9 pointer-coarse:pr-11')}
         />
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-          className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+          className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground pointer-coarse:w-11"
         >
           {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>

@@ -5,18 +5,19 @@ import * as React from "react"
 // el riel de sidebar fijo solo para pantallas de laptop/monitor en adelante.
 const MOBILE_BREAKPOINT = 1024
 
+function subscribe(onChange: () => void) {
+  const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+  mql.addEventListener("change", onChange)
+  return () => mql.removeEventListener("change", onChange)
+}
+
+const getSnapshot = () => window.innerWidth < MOBILE_BREAKPOINT
+
+// El servidor no conoce la pantalla: escritorio. El navegador corrige tras hidratar.
+const getServerSnapshot = () => false
+
+/** `useSyncExternalStore` y no un `useState` + `useEffect`: el ancho de la ventana es un valor externo, y así no hay un
+ *  render extra en cascada al montar. */
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
-
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
-
-  return !!isMobile
+  return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }

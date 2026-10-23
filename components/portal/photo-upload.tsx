@@ -151,7 +151,7 @@ export function PhotoUpload({
                 <button
                   type="button"
                   onClick={() => setConfirmClear(true)}
-                  className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70"
+                  className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/70 active:bg-black/70 pointer-coarse:size-11"
                   aria-label="Eliminar foto"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -165,6 +165,7 @@ export function PhotoUpload({
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}
               disabled={disabled || busy}
+              aria-label={label}
               className="flex aspect-square w-32 items-center justify-center rounded-full border-2 border-dashed border-border bg-muted/20 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
             >
               <ImagePlus className="h-8 w-8" />
@@ -175,7 +176,7 @@ export function PhotoUpload({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled || busy}
-              className="text-sm font-medium text-[#A78BFA] transition-colors hover:text-[#7C3AED] disabled:pointer-events-none disabled:text-muted-foreground disabled:hover:text-muted-foreground"
+              className="text-sm font-medium text-[#A78BFA] transition-colors hover:text-[#7C3AED] disabled:pointer-events-none disabled:text-muted-foreground disabled:hover:text-muted-foreground pointer-coarse:min-h-11 pointer-coarse:px-3"
             >
               {converting ? 'Convirtiendo...' : uploading ? 'Subiendo...' : preview ? 'Cambiar foto' : label}
             </button>

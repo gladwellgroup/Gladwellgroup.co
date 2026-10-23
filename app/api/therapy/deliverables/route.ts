@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { patchDeliverableSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
 import { rebuildHtmlFromFields } from '@/lib/therapy/deliverable-render'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
-export async function PATCH(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const PATCH = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -50,13 +52,16 @@ export async function PATCH(request: NextRequest) {
     )
   }
 
-  const { data: existing } = await supabase
-    .from('therapy_deliverables')
-    .select(
-      'problema_recordatorio, resumen_audio, recomendaciones_incomodas'
-    )
-    .eq('session_id', session_id)
-    .single()
+  const existing = must(
+    await supabase
+      .from('therapy_deliverables')
+      .select(
+        'problema_recordatorio, resumen_audio, recomendaciones_incomodas'
+      )
+      .eq('session_id', session_id)
+      .single(),
+    'therapy_deliverables'
+  )
 
   if (!existing) {
     return NextResponse.json(
@@ -84,6 +89,8 @@ export async function PATCH(request: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(1),
   ])
+  const inputs = must(inputsRes, 'therapy_session_inputs')
+  const audios = must(audiosRes, 'therapy_session_audios')
 
   const contentHtml = rebuildHtmlFromFields({
     sessionId: session_id,
@@ -92,8 +99,8 @@ export async function PATCH(request: NextRequest) {
     problemaRecordatorio: nextProblema,
     resumenAudio: nextResumen,
     recomendacionesIncomodas: nextRecs,
-    fotoSesionUrl: inputsRes.data?.foto_sesion_url,
-    audioUrl: audiosRes.data?.[0]?.audio_url,
+    fotoSesionUrl: inputs?.foto_sesion_url,
+    audioUrl: audios?.[0]?.audio_url,
   })
 
   const { error } = await supabase
@@ -107,7 +114,7 @@ export async function PATCH(request: NextRequest) {
     .eq('session_id', session_id)
 
   if (error) {
-    console.error('[deliverables PATCH]', error)
+    logError('[deliverables PATCH]', error)
     return NextResponse.json(
       { error: 'No se pudo guardar' },
       { status: 500 }
@@ -115,4 +122,4 @@ export async function PATCH(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, content_html: contentHtml })
-}
+})

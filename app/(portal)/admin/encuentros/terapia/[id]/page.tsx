@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { SessionDetailForm } from '@/components/portal/session-detail-form'
 
 export default async function AdminEntregableDetailPage({
@@ -12,9 +13,11 @@ export default async function AdminEntregableDetailPage({
   const { id } = await params
   const supabase = getSupabaseServer()
 
-  const { data } = await supabase
-    .from('therapy_sessions')
-    .select(`
+  // Sin filas o un id que no es UUID: `must` devuelve null → 404; un fallo real lanza (pantalla de error).
+  const data = must(
+    await supabase
+      .from('therapy_sessions')
+      .select(`
       id, title, session_date, moderator_id, pillar, status, created_by, invitado_id, co_admin_ids,
       therapy_session_inputs ( reto_problema, recomendaciones_incomodas, foto_sesion_url, frase_texto, frase_autor ),
       therapy_session_cofounders ( id, nombre, whatsapp, correo, orden ),
@@ -24,11 +27,13 @@ export default async function AdminEntregableDetailPage({
       therapy_session_attendees ( id, nombre, correo, email_status, email_error, source, created_at ),
       session_attendance_links ( token, expires_at )
     `)
-    .eq('id', id)
-    .order('orden', { referencedTable: 'therapy_session_cofounders' })
-    .order('created_at', { referencedTable: 'therapy_session_audios' })
-    .order('created_at', { referencedTable: 'therapy_session_attendees' })
-    .single()
+      .eq('id', id)
+      .order('orden', { referencedTable: 'therapy_session_cofounders' })
+      .order('created_at', { referencedTable: 'therapy_session_audios' })
+      .order('created_at', { referencedTable: 'therapy_session_attendees' })
+      .single(),
+    'Sesión de Terapia'
+  )
 
   if (!data) notFound()
 

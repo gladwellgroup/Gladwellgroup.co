@@ -1,5 +1,6 @@
 import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { UsuariosTable, type UsuarioRow } from '@/components/portal/usuarios-table'
 import type { ModuleKey } from '@/lib/permissions/modules'
 
@@ -7,10 +8,13 @@ export default async function UsuariosPage() {
   const user = await requirePermission('users:list')
   const supabase = getSupabaseServer()
 
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, nombre, correo, role, cargo, created_at, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
-    .order('created_at', { ascending: false })
+  const profiles = must(
+    await supabase
+      .from('profiles')
+      .select('id, nombre, correo, role, cargo, created_at, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
+      .order('created_at', { ascending: false }),
+    'Usuarios'
+  )
 
   const users: UsuarioRow[] = (profiles ?? []).map((p) => ({
     id: p.id,

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { archivedSessionError } from '@/lib/deliverables/archived'
 import { educationSessionRefSchema } from '@/lib/validations/education'
 import { resolveEducationAccess } from '@/lib/education/session-access'
 import { loadEducationContentSource } from '@/lib/education/content'
 import { rebuildEducationHtml } from '@/lib/education/deliverable-render'
 import { sendPersonalizedBatch, type BatchRecipient } from '@/lib/deliverables/send-batch'
+import { SEND_IN_PROGRESS_MESSAGE } from '@/lib/deliverables/idempotency'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
 
 // Envía en lotes de 100 con pausas entre lotes: mismo presupuesto que la
 // ruta de aprobación, no los 60s de una ruta de un solo correo.
@@ -20,11 +23,10 @@ export const runtime = 'nodejs'
  *  excepción: el link de asistencia vive 24h justamente para quien se le
  *  olvidó firmar en la sesión. Reutiliza el pdf_url ya subido: no genera un
  *  PDF nuevo ni toca el estado de la sesión. */
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   const archived = archivedSessionError(access.session.status)
   if (archived) {
-    return NextResponse.json({ error: archived }, { status: 403 })
+    return NextResponse.json({ error: archived }, { status: 409 })
   }
 
   const resendKey = process.env.RESEND_API_KEY
@@ -77,12 +79,15 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: pending } = await supabase
-    .from('education_attendees')
-    .select('id, nombre, correo')
-    .eq('session_id', session_id)
-    .neq('email_status', 'enviado')
-    .order('created_at', { ascending: true })
+  const pending = must(
+    await supabase
+      .from('education_attendees')
+      .select('id, nombre, correo')
+      .eq('session_id', session_id)
+      .neq('email_status', 'enviado')
+      .order('created_at', { ascending: true }),
+    'education_attendees'
+  )
 
   const attendees = (pending ?? []) as BatchRecipient[]
 
@@ -94,16 +99,21 @@ export async function POST(request: NextRequest) {
   }
 
   const resend = new Resend(resendKey)
-  const { sent, failed } = await sendPersonalizedBatch({
+  const { sent, failed, skipped } = await sendPersonalizedBatch({
     supabase,
     tableName: 'education_attendees',
     resend,
     fromEmail,
     subject: `Gladwell Education — ${access.session.title}`,
     recipients: attendees,
+    idempotencyScope: session_id,
     buildHtml: (attendee) =>
       rebuildEducationHtml({ ...source, attendeeNombre: attendee.nombre }),
   })
 
+  if (sent === 0 && failed.length === 0 && skipped > 0) {
+    return NextResponse.json({ error: SEND_IN_PROGRESS_MESSAGE }, { status: 409 })
+  }
+
   return NextResponse.json({ ok: true, sent, failed: failed.length })
-}
+})

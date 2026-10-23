@@ -3,6 +3,7 @@
 import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
 import { Menu } from "lucide-react"
+import { useIsClient } from "@/hooks/use-is-client"
 import { useWalkingList } from "@/components/providers/walking-list-provider"
 import { NAV_LINKS } from "@/lib/data/navigation"
 import { scrollToAnchor } from "@/lib/scroll-to-anchor"
@@ -17,16 +18,16 @@ import {
 
 export function Navbar() {
   const { resolvedTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+  const mounted = useIsClient()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const { openWalkingList } = useWalkingList()
 
   useEffect(() => {
-    setMounted(true)
     const handleScroll = () => setScrolled(window.scrollY > 20)
     handleScroll()
-    window.addEventListener("scroll", handleScroll)
+    // `passive`: el oyente nunca llama a preventDefault, y así el navegador no espera a que termine para desplazar.
+    window.addEventListener("scroll", handleScroll, { passive: true })
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
@@ -92,7 +93,7 @@ export function Navbar() {
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
                 <button
-                  className={`md:hidden p-2 rounded-lg transition-colors ${
+                  className={`md:hidden p-2 pointer-coarse:p-3 rounded-lg transition-colors ${
                     onHero && isDark
                       ? "text-white hover:bg-white/10"
                       : "text-foreground hover:bg-muted/50"

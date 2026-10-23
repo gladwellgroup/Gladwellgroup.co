@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import type { CalendarSession } from '@/lib/deliverables/sessions'
 import type {
   CharlaAttendanceLink,
@@ -26,16 +27,6 @@ export const CHARLA_CALENDAR_COLUMNS = ['id', 'title', 'session_date'] as const
 
 const columns = (list: readonly string[]) => list.join(', ')
 
-/** Deja en el registro del servidor un error de lectura que NO sea «no hay tal
- *  fila». Sin esto, una migración sin aplicar o una columna mal escrita se veía
- *  como una lista vacía y nadie sabía por qué (así costó encontrar la de la
- *  parrilla). PGRST116 es un `single()` sin filas y 22P02 un id que no es uuid
- *  en la URL: los dos son un 404 normal, no un fallo. */
-function logUnexpected(scope: string, error: { code?: string; message?: string } | null) {
-  if (!error || error.code === 'PGRST116' || error.code === '22P02') return
-  console.error(`[charlas] ${scope}:`, error.code, error.message)
-}
-
 /** El primer elemento si vino como array, el valor si vino como objeto. */
 function first<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null
@@ -51,12 +42,16 @@ function embeddedCount(value: EmbeddedRow): number {
  *  pasó `sessions:read_community`, así que ve la lista completa: el título, la
  *  fecha, la foto y el número de asistentes no son datos de contacto. */
 export async function listCharlas(): Promise<CharlaListItem[]> {
-  const { data, error } = await getSupabaseServer()
-    .from('charlas')
-    .select(`${columns(CHARLA_COLUMNS)}, charla_attendees ( count )`)
-    .order('session_date', { ascending: false })
-    .order('created_at', { ascending: false })
-  logUnexpected('listCharlas', error)
+  // `must`: una migración sin aplicar, una columna mal escrita o un tope de tiempo se veía como una lista vacía y
+  // nadie sabía por qué (así costó encontrar la de la parrilla). Ahora llega a la pantalla de error.
+  const data = must(
+    await getSupabaseServer()
+      .from('charlas')
+      .select(`${columns(CHARLA_COLUMNS)}, charla_attendees ( count )`)
+      .order('session_date', { ascending: false })
+      .order('created_at', { ascending: false }),
+    'Charlas'
+  )
 
   return ((data ?? []) as EmbeddedRow[]).map((row) => ({
     id: row.id,
@@ -86,8 +81,8 @@ export async function getCharla(
     query = query.order('created_at', { referencedTable: 'charla_attendees' })
   }
 
-  const { data, error } = await query.single()
-  logUnexpected('getCharla', error)
+  // Sin filas o un id que no es UUID: `must` devuelve null y la página responde 404; un fallo real lanza.
+  const data = must(await query.single(), 'Charla')
   if (!data) return null
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,8 +117,10 @@ export async function getCharla(
 export async function loadCharlaSessions(
   supabase: SupabaseClient
 ): Promise<CalendarSession[]> {
-  const { data, error } = await supabase.from('charlas').select(columns(CHARLA_CALENDAR_COLUMNS))
-  logUnexpected('loadCharlaSessions', error)
+  const data = must(
+    await supabase.from('charlas').select(columns(CHARLA_CALENDAR_COLUMNS)),
+    'Charlas del calendario'
+  )
 
   return ((data ?? []) as EmbeddedRow[]).map((row) => ({
     id: row.id,

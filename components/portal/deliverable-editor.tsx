@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Download, ExternalLink } from 'lucide-react'
@@ -13,6 +13,9 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
+import { useDeliverableProcessing } from '@/hooks/use-deliverable-processing'
+import { useFlushOnLeave } from '@/hooks/use-flush-on-leave'
+import { useSaveQueue } from '@/hooks/use-save-queue'
 import { parseDateOnly } from '@/lib/date'
 
 export interface DeliverableEditorData {
@@ -44,7 +47,6 @@ interface DeliverableEditorProps {
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
 const DEBOUNCE_MS = 1200
-const RETRY_THRESHOLD_MS = 6 * 60 * 1000
 
 const SAVE_COPY: Record<SaveStatus, string> = {
   idle: '',
@@ -64,7 +66,6 @@ export function DeliverableEditor({
 }: DeliverableEditorProps) {
   const router = useRouter()
   const isEntregado = session.status === 'entregado'
-  const isGenerating = initial.processing_status === 'generando'
 
   const [problema, setProblema] = useState(initial.problema_recordatorio ?? '')
   const [resumen, setResumen] = useState(initial.resumen_audio ?? '')
@@ -73,9 +74,6 @@ export function DeliverableEditor({
   )
   const [contentHtml, setContentHtml] = useState(initial.content_html ?? '')
   const [pdfUrl, setPdfUrl] = useState(initial.pdf_url)
-  const [processingStatus, setProcessingStatus] = useState(
-    initial.processing_status
-  )
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
   /** Envío parcial a asistentes QR: no es un error del entregable (los
@@ -85,67 +83,97 @@ export function DeliverableEditor({
   const [approving, setApproving] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [isStuck, setIsStuck] = useState(false)
-  const [retrying, setRetrying] = useState(false)
+
+  // La síntesis (generando → procesando → listo/error): arranque, sondeo ligero y «Reintentar» (ver el gancho).
+  const {
+    status: processingStatus,
+    isBusy: isGenerating,
+    isStuck,
+    retrying,
+    retry: handleRetry,
+  } = useDeliverableProcessing({
+    sessionId: session.id,
+    initialStatus: initial.processing_status,
+    initialGeneratedAt: initial.generated_at,
+    processUrl: '/api/therapy/deliverables/process',
+    statusUrl: '/api/therapy/deliverables/status',
+    onSettled: () => router.refresh(),
+    onError: setActionError,
+  })
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isSavingRef = useRef(false)
-  const pendingRef = useRef(false)
   const isFirst = useRef(true)
+  // Un doble toque en «Confirmar envío» entra antes de que el diálogo termine de cerrarse (su animación de salida):
+  // sin esta guarda, el segundo toque mandaba el correo otra vez.
+  const approvingRef = useRef(false)
+  // Los valores recién traídos del servidor no cuentan como «cambios del usuario»: no deben disparar un autoguardado.
+  const skipAutosaveRef = useRef(false)
 
   const problemaRef = useRef(problema)
   const resumenRef = useRef(resumen)
   const recomendacionesRef = useRef(recomendaciones)
+  const saveStatusRef = useRef(saveStatus)
   useEffect(() => {
     problemaRef.current = problema
     resumenRef.current = resumen
     recomendacionesRef.current = recomendaciones
+    saveStatusRef.current = saveStatus
   })
 
-  const saveNow = useCallback(async () => {
+  /** Lo que guarda el editor ahora mismo (lo usan el autoguardado y el guardado al salir). */
+  const buildRequest = () => ({
+    url: '/api/therapy/deliverables',
+    method: 'PATCH' as const,
+    body: {
+      session_id: session.id,
+      problema_recordatorio: problemaRef.current,
+      resumen_audio: resumenRef.current,
+      recomendaciones_incomodas: recomendacionesRef.current,
+    },
+  })
+
+  /** Un guardado; la cola (useSaveQueue) lo repite mientras haya algo nuevo y nunca corre dos a la vez. */
+  const saveOnce = async () => {
     if (!canEdit) return
-    if (isSavingRef.current) {
-      pendingRef.current = true
-      return
-    }
-    isSavingRef.current = true
+    setSaveStatus('saving')
 
-    do {
-      pendingRef.current = false
-      setSaveStatus('saving')
-
-      try {
-        const res = await fetch('/api/therapy/deliverables', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: session.id,
-            problema_recordatorio: problemaRef.current,
-            resumen_audio: resumenRef.current,
-            recomendaciones_incomodas: recomendacionesRef.current,
-          }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          setSaveStatus('error')
-          setActionError(data.error ?? 'Error al guardar')
-        } else {
-          setSaveStatus('saved')
-          if (data.content_html) setContentHtml(data.content_html)
-          setActionError(null)
-        }
-      } catch {
+    try {
+      const request = buildRequest()
+      const res = await fetch(request.url, {
+        method: request.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request.body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
         setSaveStatus('error')
+        setActionError(data.error ?? 'Error al guardar')
+      } else {
+        setSaveStatus('saved')
+        if (data.content_html) setContentHtml(data.content_html)
+        setActionError(null)
       }
-    } while (pendingRef.current)
+    } catch {
+      setSaveStatus('error')
+    }
+  }
+  const saveNow = useSaveQueue(saveOnce)
 
-    isSavingRef.current = false
-  }, [canEdit, session.id])
+  // Al salir (navegar, cerrar, pasar a segundo plano) se manda lo pendiente: el temporizador del autoguardado se
+  // cancela al desmontar y el último texto se perdía sin aviso.
+  useFlushOnLeave({
+    isDirty: () => canEdit && !isGenerating && (saveStatusRef.current === 'dirty' || saveStatusRef.current === 'saving'),
+    buildRequests: () => [buildRequest()],
+  })
 
   useEffect(() => {
     if (!canEdit || isGenerating) return
     if (isFirst.current) {
       isFirst.current = false
+      return
+    }
+    if (skipAutosaveRef.current) {
+      skipAutosaveRef.current = false
       return
     }
     setSaveStatus('dirty')
@@ -158,79 +186,30 @@ export function DeliverableEditor({
     }
   }, [problema, resumen, recomendaciones, canEdit, isGenerating, saveNow])
 
-  const processStartedRef = useRef(false)
-
-  const triggerProcess = useCallback(async () => {
-    try {
-      const res = await fetch('/api/therapy/deliverables/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: session.id }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        setActionError(
-          data.error ?? 'No se pudo completar la síntesis del entregable'
-        )
-      } else {
-        setActionError(null)
-      }
-      router.refresh()
-    } catch {
-      setActionError('Error de red al sintetizar el entregable')
-      router.refresh()
-    }
-  }, [session.id, router])
-
-  // Kick off / resume processing when shell is generating
+  // Trae lo que el servidor tenga de nuevo (p. ej. la síntesis recién terminada), pero NUNCA pisa lo que se está
+  // escribiendo: antes un refresco a mitad de una edición devolvía el texto anterior.
   useEffect(() => {
-    if (processingStatus !== 'generando') {
-      processStartedRef.current = false
-      setIsStuck(false)
-      return
-    }
-    if (processStartedRef.current) return
-    processStartedRef.current = true
-
-    let cancelled = false
-
-    void triggerProcess()
-
-    const checkStuck = () => {
-      if (!initial.generated_at) return
-      const elapsed = Date.now() - new Date(initial.generated_at).getTime()
-      if (!cancelled) setIsStuck(elapsed > RETRY_THRESHOLD_MS)
-    }
-    checkStuck()
-
-    const poll = setInterval(() => {
-      if (!cancelled) {
-        checkStuck()
-        router.refresh()
-      }
-    }, 4000)
-
-    return () => {
-      cancelled = true
-      clearInterval(poll)
-    }
-  }, [processingStatus, triggerProcess, initial.generated_at, router])
-
-  async function handleRetry() {
-    setIsStuck(false)
-    setRetrying(true)
-    await triggerProcess()
-    setRetrying(false)
-  }
-
-  // Sync when server props update after refresh
-  useEffect(() => {
-    setProblema(initial.problema_recordatorio ?? '')
-    setResumen(initial.resumen_audio ?? '')
-    setRecomendaciones(initial.recomendaciones_incomodas ?? '')
+    // Sincroniza lo que llega del servidor con el borrador, y solo si no hay cambios sin guardar (`saveStatusRef`, que el
+    // compilador no puede seguir): derivado del render o con `key` se perdería lo que la persona está escribiendo.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- ver arriba
     setContentHtml(initial.content_html ?? '')
     setPdfUrl(initial.pdf_url)
-    setProcessingStatus(initial.processing_status)
+    if (saveStatusRef.current === 'dirty' || saveStatusRef.current === 'saving') return
+    const next = {
+      problema: initial.problema_recordatorio ?? '',
+      resumen: initial.resumen_audio ?? '',
+      recomendaciones: initial.recomendaciones_incomodas ?? '',
+    }
+    if (
+      next.problema !== problemaRef.current ||
+      next.resumen !== resumenRef.current ||
+      next.recomendaciones !== recomendacionesRef.current
+    ) {
+      skipAutosaveRef.current = true
+      setProblema(next.problema)
+      setResumen(next.resumen)
+      setRecomendaciones(next.recomendaciones)
+    }
   }, [initial])
 
   async function handleDownloadPdf() {
@@ -238,7 +217,7 @@ export function DeliverableEditor({
     setPdfBusy(true)
     try {
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      if (canEdit && saveStatus === 'dirty') await saveNow()
+      if (canEdit && (saveStatus === 'dirty' || saveStatus === 'saving')) await saveNow()
 
       const res = await fetch('/api/therapy/deliverables/pdf', {
         method: 'POST',
@@ -260,6 +239,8 @@ export function DeliverableEditor({
   }
 
   async function handleApprove() {
+    if (approvingRef.current) return
+    approvingRef.current = true
     setConfirmOpen(false)
     setActionError(null)
     setActionWarning(null)
@@ -289,6 +270,7 @@ export function DeliverableEditor({
     } catch {
       setActionError('Error de red al enviar')
     } finally {
+      approvingRef.current = false
       setApproving(false)
     }
   }
@@ -305,7 +287,7 @@ export function DeliverableEditor({
       <div className="flex flex-col items-center text-center gap-1">
         <Link
           href={`${basePath}/${session.id}`}
-          className="mb-4 inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-4 inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground active:text-foreground pointer-coarse:min-h-11"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a la sesión
@@ -316,14 +298,14 @@ export function DeliverableEditor({
         <p className="text-sm text-muted-foreground">{dateLabel}</p>
       </div>
 
-      {processingStatus === 'generando' && !isStuck && (
+      {isGenerating && !isStuck && (
         <p className="text-sm text-muted-foreground text-center rounded-lg border border-border/50 px-4 py-3">
           Generando síntesis del audio y la narrativa… Esto puede tardar unos
           minutos.
         </p>
       )}
 
-      {processingStatus === 'generando' && isStuck && (
+      {isGenerating && isStuck && (
         <div className="flex flex-col items-center gap-2 text-center rounded-lg border border-amber-500/30 px-4 py-3">
           <p className="text-sm text-amber-600 dark:text-amber-400">
             Esto está tardando más de lo esperado. Puede que el proceso se
@@ -382,7 +364,7 @@ export function DeliverableEditor({
               href={audioUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground active:text-foreground pointer-coarse:min-h-11"
             >
               Abrir audio
               <ExternalLink className="h-3 w-3" />
@@ -467,7 +449,6 @@ export function DeliverableEditor({
               disabled={
                 approving ||
                 isGenerating ||
-                processingStatus === 'generando' ||
                 saveStatus === 'saving'
               }
             >

@@ -3,6 +3,9 @@ import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { resolvePermissionsFromGrants, type Role } from '@/lib/permissions'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 const coAdminsSchema = z.object({
   co_admin_ids: z.array(z.string().uuid('ID de administrador inválido')),
@@ -12,10 +15,10 @@ const coAdminsSchema = z.object({
  *  da acceso total de edición (mismo trato que el moderador original en
  *  resolveDeliverableAccess). Por eso cada destino debe ya tener el módulo
  *  de Encuentros · Terapia otorgado, no basta con ser community_admin. */
-export async function PATCH(
+export const PATCH = withApiErrors(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id: sessionId } = await params
 
   const auth = await requireApiPermission('sessions:delegate_admin')
@@ -41,10 +44,13 @@ export async function PATCH(
   const { co_admin_ids } = result.data
 
   if (co_admin_ids.length > 0) {
-    const { data: targets } = await supabase
-      .from('profiles')
-      .select('id, role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
-      .in('id', co_admin_ids)
+    const targets = must(
+      await supabase
+        .from('profiles')
+        .select('id, role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
+        .in('id', co_admin_ids),
+      'profiles'
+    )
 
     const validIds = new Set(
       (targets ?? [])
@@ -68,11 +74,14 @@ export async function PATCH(
     }
   }
 
-  const { data: session } = await supabase
-    .from('therapy_sessions')
-    .select('id')
-    .eq('id', sessionId)
-    .single()
+  const session = must(
+    await supabase
+      .from('therapy_sessions')
+      .select('id')
+      .eq('id', sessionId)
+      .single(),
+    'therapy_sessions'
+  )
 
   if (!session) {
     return NextResponse.json({ error: 'Sesión no encontrada' }, { status: 404 })
@@ -84,7 +93,7 @@ export async function PATCH(
     .eq('id', sessionId)
 
   if (error) {
-    console.error('[co-admins/terapia] Supabase error:', error)
+    logError('[co-admins/terapia] Supabase error', error)
     return NextResponse.json(
       { error: 'No se pudo actualizar los coadministradores' },
       { status: 500 }
@@ -92,4 +101,4 @@ export async function PATCH(
   }
 
   return NextResponse.json({ success: true })
-}
+})

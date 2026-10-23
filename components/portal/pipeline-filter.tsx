@@ -69,7 +69,7 @@ export function PipelineFilter({
             type="button"
             onClick={() => onChange(opcion.key)}
             aria-pressed={activo}
-            className={`flex items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors sm:order-none ${MOBILE_ORDER[opcion.key]} ${
+            className={`flex items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11 sm:order-none ${MOBILE_ORDER[opcion.key]} ${
               activo
                 ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
                 : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'

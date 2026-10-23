@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { archivedSessionError } from '@/lib/deliverables/archived'
 import { deliverableSessionSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
@@ -10,15 +10,18 @@ import {
   toDeliverableContent,
   uploadDeliverablePdf,
 } from '@/lib/therapy/deliverable-render'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { claimProcessing, runClaimed } from '@/lib/deliverables/claim'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -52,136 +55,157 @@ export async function POST(request: NextRequest) {
 
   const archived = archivedSessionError(access.session.status)
   if (archived) {
-    return NextResponse.json({ error: archived }, { status: 403 })
+    return NextResponse.json({ error: archived }, { status: 409 })
   }
 
   if (access.session.status === 'entregado') {
     return NextResponse.json(
       { error: 'El entregable ya fue enviado' },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
-  const [inputsRes, audiosRes, sessionRes] = await Promise.all([
-    supabase
-      .from('therapy_session_inputs')
-      .select(
-        'reto_problema, recomendaciones_incomodas, foto_sesion_url, frase_texto, frase_autor'
+  // Claim atómico (lib/deliverables/claim.ts): antes cada apertura del editor relanzaba la transcripción y la llamada al
+  // modelo, y dos pestañas se pisaban. Solo gana quien encuentre el entregable en 'generando' o en un 'procesando'
+  // vencido; el resto recibe 409 y se limita a esperar el resultado.
+  if (!(await claimProcessing(supabase, 'therapy_deliverables', session_id))) {
+    return NextResponse.json(
+      { error: 'La síntesis de este entregable ya está en curso' },
+      { status: 409 }
+    )
+  }
+
+  const session = access.session
+  return runClaimed(supabase, 'therapy_deliverables', session_id, async () => {
+    const [inputsRes, audiosRes, sessionRes] = await Promise.all([
+      supabase
+        .from('therapy_session_inputs')
+        .select(
+          'reto_problema, recomendaciones_incomodas, foto_sesion_url, frase_texto, frase_autor'
+        )
+        .eq('session_id', session_id)
+        .single(),
+      supabase
+        .from('therapy_session_audios')
+        .select('audio_url')
+        .eq('session_id', session_id)
+        .order('created_at', { ascending: true })
+        .limit(1),
+      supabase
+        .from('therapy_sessions')
+        .select('invitados ( nombre, descripcion )')
+        .eq('id', session_id)
+        .single(),
+    ])
+    const inputs = must(inputsRes, 'therapy_session_inputs')
+    const audios = must(audiosRes, 'therapy_session_audios')
+    const sessionRow = must(sessionRes, 'therapy_sessions')
+
+    if (!inputs) {
+      // Con el claim ya tomado: se deja en 'error' (el editor ofrece reintentar) y no atascado en 'procesando'.
+      await supabase
+        .from('therapy_deliverables')
+        .update({ processing_status: 'error' })
+        .eq('session_id', session_id)
+
+      return NextResponse.json(
+        { error: 'Faltan inputs de la sesión' },
+        { status: 400 }
       )
-      .eq('session_id', session_id)
-      .single(),
-    supabase
-      .from('therapy_session_audios')
-      .select('audio_url')
-      .eq('session_id', session_id)
-      .order('created_at', { ascending: true })
-      .limit(1),
-    supabase
-      .from('therapy_sessions')
-      .select('invitados ( nombre, descripcion )')
-      .eq('id', session_id)
-      .single(),
-  ])
+    }
 
-  const inputs = inputsRes.data
-  if (!inputs) {
-    return NextResponse.json(
-      { error: 'Faltan inputs de la sesión' },
-      { status: 400 }
-    )
-  }
+    const audioUrl = audios?.[0]?.audio_url ?? null
+    const reto = inputs.reto_problema?.trim() ?? ''
+    const recomendaciones = inputs.recomendaciones_incomodas?.trim() ?? ''
+    // supabase-js tipa la relación invitados como array; en runtime es un
+    // objeto|null (FK hacia adelante). Cliente <any>.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const invitado = (sessionRow as any)?.invitados
+    const empresaNombre = invitado?.nombre ?? null
+    const empresaDescripcion = invitado?.descripcion ?? null
 
-  const audioUrl = audiosRes.data?.[0]?.audio_url ?? null
-  const reto = inputs.reto_problema?.trim() ?? ''
-  const recomendaciones = inputs.recomendaciones_incomodas?.trim() ?? ''
-  // supabase-js tipa la relación invitados como array; en runtime es un
-  // objeto|null (FK hacia adelante). Cliente <any>.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const invitado = (sessionRes.data as any)?.invitados
-  const empresaNombre = invitado?.nombre ?? null
-  const empresaDescripcion = invitado?.descripcion ?? null
-
-  const synthesis = await synthesizeDeliverable({
-    sessionTitle: access.session.title,
-    retoProblema: reto,
-    recomendacionesIncomodas: recomendaciones,
-    empresaNombre,
-    empresaDescripcion,
-    audioUrl,
-  })
-
-  const hadHardFailure =
-    Boolean(synthesis.warning) && !synthesis.resumen_audio.trim()
-  const processingStatus = hadHardFailure ? 'error' : 'listo'
-
-  const content = toDeliverableContent({
-    sessionId: session_id,
-    sessionTitle: access.session.title,
-    sessionDate: access.session.session_date,
-    problemaRecordatorio: synthesis.problema_recordatorio,
-    resumenAudio: synthesis.resumen_audio,
-    recomendacionesIncomodas: synthesis.recomendaciones_incomodas,
-    fotoSesionUrl: inputs.foto_sesion_url,
-    audioUrl,
-    invitadoNombre: empresaNombre,
-    fraseTexto: inputs.frase_texto,
-    fraseAutor: inputs.frase_autor,
-  })
-
-  const contentHtml = rebuildHtmlFromFields({
-    sessionId: session_id,
-    sessionTitle: access.session.title,
-    sessionDate: access.session.session_date,
-    problemaRecordatorio: synthesis.problema_recordatorio,
-    resumenAudio: synthesis.resumen_audio,
-    recomendacionesIncomodas: synthesis.recomendaciones_incomodas,
-    fotoSesionUrl: inputs.foto_sesion_url,
-    audioUrl,
-    invitadoNombre: empresaNombre,
-    fraseTexto: inputs.frase_texto,
-    fraseAutor: inputs.frase_autor,
-  })
-
-  let pdfUrl: string | null = null
-  try {
-    pdfUrl = await uploadDeliverablePdf({ sessionId: session_id, content })
-  } catch (err) {
-    console.error('[deliverables/process] PDF error:', err)
-  }
-
-  const { error: updateError } = await supabase
-    .from('therapy_deliverables')
-    .update({
-      problema_recordatorio: synthesis.problema_recordatorio,
-      resumen_audio: synthesis.resumen_audio,
-      recomendaciones_incomodas: synthesis.recomendaciones_incomodas,
-      content_html: contentHtml,
-      pdf_url: pdfUrl,
-      processing_status: processingStatus,
-      generated_by: user.id,
-      generated_at: new Date().toISOString(),
+    const synthesis = await synthesizeDeliverable({
+      sessionTitle: session.title,
+      retoProblema: reto,
+      recomendacionesIncomodas: recomendaciones,
+      empresaNombre,
+      empresaDescripcion,
+      audioUrl,
     })
-    .eq('session_id', session_id)
 
-  if (updateError) {
-    console.error('[deliverables/process] update error:', updateError)
-    return NextResponse.json(
-      { error: 'No se pudo guardar el entregable' },
-      { status: 500 }
-    )
-  }
+    const hadHardFailure =
+      Boolean(synthesis.warning) && !synthesis.resumen_audio.trim()
+    const processingStatus = hadHardFailure ? 'error' : 'listo'
 
-  // `in` en vez de pisar a ciegas: una sesión archivada desde Supabase no
-  // vuelve sola al ciclo de vida por haberle regenerado el entregable.
-  await supabase
-    .from('therapy_sessions')
-    .update({ status: 'generado' })
-    .eq('id', session_id)
-    .in('status', ['borrador', 'generado'])
+    const content = toDeliverableContent({
+      sessionId: session_id,
+      sessionTitle: session.title,
+      sessionDate: session.session_date,
+      problemaRecordatorio: synthesis.problema_recordatorio,
+      resumenAudio: synthesis.resumen_audio,
+      recomendacionesIncomodas: synthesis.recomendaciones_incomodas,
+      fotoSesionUrl: inputs.foto_sesion_url,
+      audioUrl,
+      invitadoNombre: empresaNombre,
+      fraseTexto: inputs.frase_texto,
+      fraseAutor: inputs.frase_autor,
+    })
 
-  return NextResponse.json({
-    processing_status: processingStatus,
-    warning: synthesis.warning ?? null,
-    pdf_url: pdfUrl,
+    const contentHtml = rebuildHtmlFromFields({
+      sessionId: session_id,
+      sessionTitle: session.title,
+      sessionDate: session.session_date,
+      problemaRecordatorio: synthesis.problema_recordatorio,
+      resumenAudio: synthesis.resumen_audio,
+      recomendacionesIncomodas: synthesis.recomendaciones_incomodas,
+      fotoSesionUrl: inputs.foto_sesion_url,
+      audioUrl,
+      invitadoNombre: empresaNombre,
+      fraseTexto: inputs.frase_texto,
+      fraseAutor: inputs.frase_autor,
+    })
+
+    let pdfUrl: string | null = null
+    try {
+      pdfUrl = await uploadDeliverablePdf({ sessionId: session_id, content })
+    } catch (err) {
+      logError('[deliverables/process] PDF error', err)
+    }
+
+    const { error: updateError } = await supabase
+      .from('therapy_deliverables')
+      .update({
+        problema_recordatorio: synthesis.problema_recordatorio,
+        resumen_audio: synthesis.resumen_audio,
+        recomendaciones_incomodas: synthesis.recomendaciones_incomodas,
+        content_html: contentHtml,
+        pdf_url: pdfUrl,
+        processing_status: processingStatus,
+        generated_by: user.id,
+        generated_at: new Date().toISOString(),
+      })
+      .eq('session_id', session_id)
+
+    if (updateError) {
+      logError('[deliverables/process] update error', updateError)
+      return NextResponse.json(
+        { error: 'No se pudo guardar el entregable' },
+        { status: 500 }
+      )
+    }
+
+    // `in` en vez de pisar a ciegas: una sesión archivada desde Supabase no
+    // vuelve sola al ciclo de vida por haberle regenerado el entregable.
+    await supabase
+      .from('therapy_sessions')
+      .update({ status: 'generado' })
+      .eq('id', session_id)
+      .in('status', ['borrador', 'generado'])
+
+    return NextResponse.json({
+      processing_status: processingStatus,
+      warning: synthesis.warning ?? null,
+      pdf_url: pdfUrl,
+    })
   })
-}
+})

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { archivedSessionError } from '@/lib/deliverables/archived'
 import { educationSessionRefSchema } from '@/lib/validations/education'
 import { resolveEducationAccess } from '@/lib/education/session-access'
@@ -11,19 +11,18 @@ import {
   toEducationContent,
   uploadEducationPdf,
 } from '@/lib/education/deliverable-render'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { claimProcessing, runClaimed } from '@/lib/deliverables/claim'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
 
-/** Un 'procesando' más viejo que esto se considera muerto y se puede retomar.
- *  Por encima de maxDuration, así que nunca pisa a un proceso vivo. */
-const STALE_PROCESSING_MS = 6 * 60 * 1000
-
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -53,128 +52,118 @@ export async function POST(request: NextRequest) {
 
   const archived = archivedSessionError(access.session.status)
   if (archived) {
-    return NextResponse.json({ error: archived }, { status: 403 })
+    return NextResponse.json({ error: archived }, { status: 409 })
   }
 
   if (access.session.status === 'entregado') {
     return NextResponse.json(
       { error: 'El entregable ya fue enviado' },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
-  // Claim atómico: solo gana quien encuentre el entregable en 'generando'.
-  // Sin esto, dos pestañas abiertas disparan dos transcripciones y dos
-  // llamadas al modelo sobre la misma sesión, pisándose entre sí.
-  //
-  // También se retoma un 'procesando' viejo: si la función murió a mitad de
-  // camino (timeout, deploy), el registro quedaría atascado para siempre y el
-  // botón de reintentar no podría hacer nada.
-  const staleBefore = new Date(Date.now() - STALE_PROCESSING_MS).toISOString()
-
-  const { data: claimed } = await supabase
-    .from('education_deliverables')
-    .update({ processing_status: 'procesando' })
-    .eq('session_id', session_id)
-    .or(
-      `processing_status.eq.generando,and(processing_status.eq.procesando,generated_at.lt.${staleBefore})`
-    )
-    .select('id')
-
-  if (!claimed || claimed.length === 0) {
+  // Claim atómico (lib/deliverables/claim.ts): solo gana quien encuentre el entregable en 'generando' o en un
+  // 'procesando' vencido.
+  if (!(await claimProcessing(supabase, 'education_deliverables', session_id))) {
     return NextResponse.json(
       { error: 'La síntesis de este entregable ya está en curso' },
       { status: 409 }
     )
   }
 
-  const { data: inputs } = await supabase
-    .from('education_session_inputs')
-    .select(
-      'ponente_nombre, ponente_rol, objetivo, notas_moderador, transcripcion_texto, audio_url, capsulas_emprendimiento'
+  const session = access.session
+  return runClaimed(supabase, 'education_deliverables', session_id, async () => {
+    const inputs = must(
+      await supabase
+        .from('education_session_inputs')
+        .select(
+          'ponente_nombre, ponente_rol, objetivo, notas_moderador, transcripcion_texto, audio_url, capsulas_emprendimiento'
+        )
+        .eq('session_id', session_id)
+        .single(),
+      'education_session_inputs'
     )
-    .eq('session_id', session_id)
-    .single()
 
-  if (!inputs) {
-    await supabase
+    if (!inputs) {
+      await supabase
+        .from('education_deliverables')
+        .update({ processing_status: 'error' })
+        .eq('session_id', session_id)
+
+      return NextResponse.json(
+        { error: 'Faltan los datos de la sesión' },
+        { status: 400 }
+      )
+    }
+
+    const synthesis = await synthesizeEducation({
+      sessionTitle: session.title,
+      objetivo: inputs.objetivo ?? '',
+      notasModerador: inputs.notas_moderador ?? '',
+      ponenteNombre: inputs.ponente_nombre,
+      ponenteRol: inputs.ponente_rol,
+      transcripcionTexto: inputs.transcripcion_texto,
+      audioUrl: inputs.audio_url,
+      capsulas: inputs.capsulas_emprendimiento ?? '',
+    })
+
+    // Sin conclusiones no hay entregable útil: se marca error para que el editor
+    // ofrezca reintentar en vez de dejar una página vacía como "lista".
+    const hadHardFailure =
+      Boolean(synthesis.warning) && !synthesis.conclusiones_clave.trim()
+    const processingStatus = hadHardFailure ? 'error' : 'listo'
+
+    const source = await loadEducationContentSource(supabase, session, {
+      conclusionesClave: synthesis.conclusiones_clave,
+      capsulas: synthesis.capsulas,
+    })
+
+    let pdfUrl: string | null = null
+    try {
+      pdfUrl = await uploadEducationPdf({
+        sessionId: session_id,
+        content: toEducationContent(source),
+      })
+    } catch (err) {
+      logError('[education/process] PDF error', err)
+    }
+
+    // El enlace al PDF va dentro del HTML, así que se reconstruye ya con la URL.
+    const contentHtml = rebuildEducationHtml({ ...source, pdfUrl })
+
+    const { error: updateError } = await supabase
       .from('education_deliverables')
-      .update({ processing_status: 'error' })
+      .update({
+        conclusiones_clave: synthesis.conclusiones_clave,
+        capsulas: synthesis.capsulas,
+        content_html: contentHtml,
+        pdf_url: pdfUrl,
+        processing_status: processingStatus,
+        generated_by: user.id,
+        generated_at: new Date().toISOString(),
+      })
       .eq('session_id', session_id)
 
-    return NextResponse.json(
-      { error: 'Faltan los datos de la sesión' },
-      { status: 400 }
-    )
-  }
+    if (updateError) {
+      logError('[education/process] update error', updateError)
+      return NextResponse.json(
+        { error: 'No se pudo guardar el entregable' },
+        { status: 500 }
+      )
+    }
 
-  const synthesis = await synthesizeEducation({
-    sessionTitle: access.session.title,
-    objetivo: inputs.objetivo ?? '',
-    notasModerador: inputs.notas_moderador ?? '',
-    ponenteNombre: inputs.ponente_nombre,
-    ponenteRol: inputs.ponente_rol,
-    transcripcionTexto: inputs.transcripcion_texto,
-    audioUrl: inputs.audio_url,
-    capsulas: inputs.capsulas_emprendimiento ?? '',
-  })
+    // `in` en vez de pisar a ciegas: una sesión archivada desde Supabase no
+    // vuelve sola al ciclo de vida por haberle regenerado el entregable.
+    await supabase
+      .from('education_sessions')
+      .update({ status: 'generado' })
+      .eq('id', session_id)
+      .in('status', ['borrador', 'generado'])
 
-  // Sin conclusiones no hay entregable útil: se marca error para que el editor
-  // ofrezca reintentar en vez de dejar una página vacía como "lista".
-  const hadHardFailure =
-    Boolean(synthesis.warning) && !synthesis.conclusiones_clave.trim()
-  const processingStatus = hadHardFailure ? 'error' : 'listo'
-
-  const source = await loadEducationContentSource(supabase, access.session, {
-    conclusionesClave: synthesis.conclusiones_clave,
-    capsulas: synthesis.capsulas,
-  })
-
-  let pdfUrl: string | null = null
-  try {
-    pdfUrl = await uploadEducationPdf({
-      sessionId: session_id,
-      content: toEducationContent(source),
-    })
-  } catch (err) {
-    console.error('[education/process] PDF error:', err)
-  }
-
-  // El enlace al PDF va dentro del HTML, así que se reconstruye ya con la URL.
-  const contentHtml = rebuildEducationHtml({ ...source, pdfUrl })
-
-  const { error: updateError } = await supabase
-    .from('education_deliverables')
-    .update({
-      conclusiones_clave: synthesis.conclusiones_clave,
-      capsulas: synthesis.capsulas,
-      content_html: contentHtml,
-      pdf_url: pdfUrl,
+    return NextResponse.json({
       processing_status: processingStatus,
-      generated_by: user.id,
-      generated_at: new Date().toISOString(),
+      warning: synthesis.warning ?? null,
+      pdf_url: pdfUrl,
     })
-    .eq('session_id', session_id)
-
-  if (updateError) {
-    console.error('[education/process] update error:', updateError)
-    return NextResponse.json(
-      { error: 'No se pudo guardar el entregable' },
-      { status: 500 }
-    )
-  }
-
-  // `in` en vez de pisar a ciegas: una sesión archivada desde Supabase no
-  // vuelve sola al ciclo de vida por haberle regenerado el entregable.
-  await supabase
-    .from('education_sessions')
-    .update({ status: 'generado' })
-    .eq('id', session_id)
-    .in('status', ['borrador', 'generado'])
-
-  return NextResponse.json({
-    processing_status: processingStatus,
-    warning: synthesis.warning ?? null,
-    pdf_url: pdfUrl,
   })
-}
+})

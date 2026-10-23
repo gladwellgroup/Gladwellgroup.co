@@ -5,7 +5,7 @@ import { Plus, X } from 'lucide-react'
 import { BrandField } from '@/components/brand/brand-field'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
 import { CountryPhoneSelect } from '@/components/shared/country-phone-select'
-import { DEFAULT_PHONE_COUNTRY, getPhoneCodeByIso } from '@/lib/data/americas-phone-codes'
+import { DEFAULT_PHONE_COUNTRY, getPhoneCodeByIso, inferPhoneCountryIso } from '@/lib/data/americas-phone-codes'
 import { WHATSAPP_MAX_DIGITS, buildWhatsappE164, normalizePhoneDigits } from '@/lib/phone'
 import type { CofounderData } from '@/components/portal/session-detail-form'
 
@@ -33,7 +33,12 @@ export function CofounderFields({
   hideContact,
 }: CofounderFieldsProps) {
   const [confirmIndex, setConfirmIndex] = useState<number | null>(null)
+  // El país que la persona eligió en esta sesión; mientras no elija, el que dice el número guardado (un +52 se ve como
+  // México, no como Colombia con el 52 pegado al número, que además se corrompía al editarlo).
   const [paisPorIndice, setPaisPorIndice] = useState<Record<number, string>>({})
+
+  const paisDe = (index: number) =>
+    paisPorIndice[index] ?? inferPhoneCountryIso(cofounders[index]?.whatsapp) ?? DEFAULT_PHONE_COUNTRY
 
   function addCofounder() {
     onChange([
@@ -58,13 +63,15 @@ export function CofounderFields({
   }
 
   function updateWhatsappPais(index: number, pais: string) {
+    const numero = digitsFromStored(cofounders[index].whatsapp, paisDe(index))
     setPaisPorIndice((prev) => ({ ...prev, [index]: pais }))
-    const numero = digitsFromStored(cofounders[index].whatsapp, paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY)
     const dialCode = getPhoneCodeByIso(pais)?.dialCode ?? ''
     updateField(index, 'whatsapp', numero ? buildWhatsappE164(dialCode, numero) : '')
   }
 
   function updateWhatsappNumero(index: number, pais: string, rawValue: string) {
+    // Se fija el país que se está viendo: si se borra el número, el selector no debe saltar al de por defecto.
+    setPaisPorIndice((prev) => (prev[index] === pais ? prev : { ...prev, [index]: pais }))
     const numero = normalizePhoneDigits(rawValue).slice(0, WHATSAPP_MAX_DIGITS)
     const dialCode = getPhoneCodeByIso(pais)?.dialCode ?? ''
     updateField(index, 'whatsapp', numero ? buildWhatsappE164(dialCode, numero) : '')
@@ -81,7 +88,7 @@ export function CofounderFields({
             <button
               type="button"
               onClick={() => setConfirmIndex(index)}
-              className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive pointer-coarse:top-2 pointer-coarse:right-2 pointer-coarse:size-11"
               aria-label={`Eliminar fundador ${index + 1}`}
             >
               <X className="h-4 w-4" />
@@ -137,7 +144,7 @@ export function CofounderFields({
                 <div className="grid grid-cols-[8rem_1fr] gap-2">
                   <CountryPhoneSelect
                     id={`cofounder-whatsapp-pais-${index}`}
-                    value={paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY}
+                    value={paisDe(index)}
                     onChange={(iso) => updateWhatsappPais(index, iso)}
                     disabled={disabled}
                   />
@@ -147,10 +154,8 @@ export function CofounderFields({
                     inputMode="numeric"
                     autoComplete="tel-national"
                     placeholder="300 123 4567"
-                    value={digitsFromStored(cofounder.whatsapp, paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY)}
-                    onChange={(e) =>
-                      updateWhatsappNumero(index, paisPorIndice[index] ?? DEFAULT_PHONE_COUNTRY, e.target.value)
-                    }
+                    value={digitsFromStored(cofounder.whatsapp, paisDe(index))}
+                    onChange={(e) => updateWhatsappNumero(index, paisDe(index), e.target.value)}
                     disabled={disabled}
                     className="modal-field"
                   />
@@ -165,7 +170,7 @@ export function CofounderFields({
         <button
           type="button"
           onClick={addCofounder}
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:min-h-11"
         >
           <Plus className="h-4 w-4" />
           Agregar fundador

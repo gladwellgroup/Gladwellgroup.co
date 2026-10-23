@@ -2,10 +2,25 @@ import { z } from 'zod'
 import { getPhoneCodeByIso, isValidAmericasPhoneIso } from '@/lib/data/americas-phone-codes'
 import { buildWhatsappE164, normalizePhoneDigits } from '@/lib/phone'
 
+// Topes de longitud: el endpoint es PÚBLICO y guarda lo que llegue; sin ellos, una sola petición podía meter megabytes en
+// cada campo de la tabla de leads (que luego se pinta entera en el CRM).
 const walkingListBaseSchema = z.object({
-  nombre: z.string().trim().min(2, 'El nombre debe tener al menos 2 caracteres'),
-  apellidos: z.string().trim().min(2, 'Los apellidos deben tener al menos 2 caracteres'),
-  correo: z.string().trim().toLowerCase().email('Ingresa un correo electrónico válido'),
+  nombre: z
+    .string()
+    .trim()
+    .min(2, 'El nombre debe tener al menos 2 caracteres')
+    .max(80, 'El nombre es demasiado largo'),
+  apellidos: z
+    .string()
+    .trim()
+    .min(2, 'Los apellidos deben tener al menos 2 caracteres')
+    .max(80, 'Los apellidos son demasiado largos'),
+  correo: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(254, 'El correo es demasiado largo')
+    .email('Ingresa un correo electrónico válido'),
   whatsapp_pais: z.string().length(2, 'Selecciona un país válido'),
   whatsapp_numero: z
     .string()
@@ -15,7 +30,11 @@ const walkingListBaseSchema = z.object({
   red_social: z.enum(['linkedin', 'instagram'], {
     errorMap: () => ({ message: 'Selecciona una red social' }),
   }),
-  perfil: z.string().trim().min(1, 'Ingresa tu usuario o enlace de red social'),
+  perfil: z
+    .string()
+    .trim()
+    .min(1, 'Ingresa tu usuario o enlace de red social')
+    .max(200, 'El usuario o enlace es demasiado largo'),
 })
 
 export const walkingListSchema = walkingListBaseSchema

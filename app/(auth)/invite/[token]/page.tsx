@@ -1,4 +1,5 @@
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { ROLE_LABELS, isValidRole } from '@/lib/permissions/roles'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandButton } from '@/components/brand/brand-button'
@@ -29,11 +30,16 @@ export default async function InvitePage({
   const { token } = await params
   const supabase = getSupabaseServer()
 
-  const { data: invitation } = await supabase
-    .from('invitations')
-    .select('email, role, accepted_at, expires_at')
-    .eq('token', token)
-    .single()
+  // Sin filas o un token que no es UUID: `must` devuelve null y se muestra «Enlace no válido»; un fallo de la base
+  // lanza y se muestra la pantalla de error con «Reintentar».
+  const invitation = must(
+    await supabase
+      .from('invitations')
+      .select('email, role, accepted_at, expires_at')
+      .eq('token', token)
+      .single(),
+    'Invitación'
+  )
 
   if (!invitation) {
     return (

@@ -1,5 +1,6 @@
 import { requireAuth } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { ROLE_LABELS, type Role } from '@/lib/permissions'
 import type { ModuleKey } from '@/lib/permissions/modules'
 import { BrandCard } from '@/components/brand/brand-card'
@@ -16,10 +17,12 @@ export default async function PerfilPage() {
   // avatar_url/cargo no vienen en SessionUser (solo carga permisos ya
   // resueltos) — una consulta chica, ya cubierta por la policy "Users read
   // own module grants" para los módulos.
-  const [{ data: profile }, { data: grants }] = await Promise.all([
+  const [profileResult, grantsResult] = await Promise.all([
     supabase.from('profiles').select('avatar_url, cargo').eq('id', user.id).single(),
     supabase.from('profile_module_grants').select('module_key').eq('profile_id', user.id),
   ])
+  const profile = must(profileResult, 'Perfil')
+  const grants = must(grantsResult, 'Módulos otorgados')
 
   const grantedModules = (grants ?? []).map((g) => g.module_key as ModuleKey)
 

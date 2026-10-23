@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { importAttendeesSchema } from '@/lib/validations/attendees'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   const supabase = getSupabaseServer()
 
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
         error:
           'La sesión ya no está en borrador; la lista de asistentes no se puede modificar.',
       },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -66,10 +68,13 @@ export async function POST(request: NextRequest) {
     byEmail.set(attendee.correo.trim().toLowerCase(), attendee)
   }
 
-  const { data: existing } = await supabase
-    .from('therapy_session_attendees')
-    .select('correo')
-    .eq('session_id', session_id)
+  const existing = must(
+    await supabase
+      .from('therapy_session_attendees')
+      .select('correo')
+      .eq('session_id', session_id),
+    'therapy_session_attendees'
+  )
 
   const existingEmails = new Set(
     (existing ?? []).map((row: { correo: string }) => row.correo.toLowerCase())
@@ -88,7 +93,7 @@ export async function POST(request: NextRequest) {
     const { error } = await supabase.from('therapy_session_attendees').insert(rows)
 
     if (error) {
-      console.error('[therapy/attendees/import] Supabase error:', error)
+      logError('[therapy/attendees/import] Supabase error', error)
       return NextResponse.json(
         { error: 'No se pudieron guardar los asistentes' },
         { status: 500 }
@@ -100,4 +105,4 @@ export async function POST(request: NextRequest) {
     imported: rows.length,
     skipped: byEmail.size - rows.length,
   })
-}
+})

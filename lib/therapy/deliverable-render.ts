@@ -5,6 +5,7 @@ import {
 } from '@/lib/therapy/deliverable-template'
 import { buildDeliverablePdfBuffer } from '@/lib/therapy/deliverable-pdf'
 import { formatSessionDate } from '@/lib/therapy/deliverable-access'
+import { logError } from '@/lib/log'
 
 const BUCKET = 'therapy-media'
 
@@ -22,7 +23,7 @@ export async function uploadDeliverablePdf(params: {
   })
 
   if (error) {
-    console.error('[uploadDeliverablePdf]', error)
+    logError('[uploadDeliverablePdf]', error)
     throw new Error('No se pudo subir el PDF')
   }
 

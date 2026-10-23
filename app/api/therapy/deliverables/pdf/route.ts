@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { deliverableSessionSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
 import {
   toDeliverableContent,
   uploadDeliverablePdf,
 } from '@/lib/therapy/deliverable-render'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 60
 export const runtime = 'nodejs'
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -47,13 +49,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   }
 
-  const { data: deliverable } = await supabase
-    .from('therapy_deliverables')
-    .select(
-      'problema_recordatorio, resumen_audio, recomendaciones_incomodas'
-    )
-    .eq('session_id', session_id)
-    .single()
+  const deliverable = must(
+    await supabase
+      .from('therapy_deliverables')
+      .select(
+        'problema_recordatorio, resumen_audio, recomendaciones_incomodas'
+      )
+      .eq('session_id', session_id)
+      .single(),
+    'therapy_deliverables'
+  )
 
   if (!deliverable) {
     return NextResponse.json(
@@ -75,6 +80,8 @@ export async function POST(request: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(1),
   ])
+  const inputs = must(inputsRes, 'therapy_session_inputs')
+  const audios = must(audiosRes, 'therapy_session_audios')
 
   const content = toDeliverableContent({
     sessionId: session_id,
@@ -83,11 +90,11 @@ export async function POST(request: NextRequest) {
     problemaRecordatorio: deliverable.problema_recordatorio ?? '',
     resumenAudio: deliverable.resumen_audio ?? '',
     recomendacionesIncomodas: deliverable.recomendaciones_incomodas ?? '',
-    fotoSesionUrl: inputsRes.data?.foto_sesion_url,
-    audioUrl: audiosRes.data?.[0]?.audio_url,
+    fotoSesionUrl: inputs?.foto_sesion_url,
+    audioUrl: audios?.[0]?.audio_url,
     invitadoNombre: access.session.invitadoNombre,
-    fraseTexto: inputsRes.data?.frase_texto,
-    fraseAutor: inputsRes.data?.frase_autor,
+    fraseTexto: inputs?.frase_texto,
+    fraseAutor: inputs?.frase_autor,
   })
 
   try {
@@ -99,10 +106,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ pdf_url: pdfUrl })
   } catch (err) {
-    console.error('[deliverables/pdf]', err)
+    logError('[deliverables/pdf]', err)
     return NextResponse.json(
       { error: 'No se pudo generar el PDF' },
       { status: 500 }
     )
   }
-}
+})

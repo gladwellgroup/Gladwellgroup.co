@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { archivedSessionError } from '@/lib/deliverables/archived'
 import { deliverableSessionSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
@@ -12,6 +12,10 @@ import {
 } from '@/lib/therapy/deliverable-render'
 import { buildDeliverableHtmlFor } from '@/lib/therapy/deliverable-template'
 import { sendPersonalizedBatch, type BatchRecipient } from '@/lib/deliverables/send-batch'
+import { SEND_IN_PROGRESS_MESSAGE, idempotencyKey, isDuplicateSend } from '@/lib/deliverables/idempotency'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 // 300s (máximo del plan Hobby, ver commit 3beb363) y no 60: además del PDF y
 // del correo grupal, esta ruta ahora envía un correo personalizado por cada
@@ -20,11 +24,10 @@ import { sendPersonalizedBatch, type BatchRecipient } from '@/lib/deliverables/s
 export const maxDuration = 300
 export const runtime = 'nodejs'
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -61,13 +64,13 @@ export async function POST(request: NextRequest) {
 
   const archived = archivedSessionError(access.session.status)
   if (archived) {
-    return NextResponse.json({ error: archived }, { status: 403 })
+    return NextResponse.json({ error: archived }, { status: 409 })
   }
 
   if (access.session.status === 'entregado') {
     return NextResponse.json(
       { error: 'Este entregable ya fue enviado' },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -83,13 +86,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: deliverable } = await supabase
-    .from('therapy_deliverables')
-    .select(
-      'problema_recordatorio, resumen_audio, recomendaciones_incomodas, processing_status'
-    )
-    .eq('session_id', session_id)
-    .single()
+  const deliverable = must(
+    await supabase
+      .from('therapy_deliverables')
+      .select(
+        'problema_recordatorio, resumen_audio, recomendaciones_incomodas, processing_status'
+      )
+      .eq('session_id', session_id)
+      .single(),
+    'therapy_deliverables'
+  )
 
   if (!deliverable) {
     return NextResponse.json(
@@ -132,8 +138,11 @@ export async function POST(request: NextRequest) {
       .select('nombre, correo')
       .eq('session_id', session_id),
   ])
+  const inputs = must(inputsRes, 'therapy_session_inputs')
+  const audios = must(audiosRes, 'therapy_session_audios')
+  const cofounders = must(cofoundersRes, 'therapy_session_cofounders')
 
-  const emails = (cofoundersRes.data ?? [])
+  const emails = (cofounders ?? [])
     .map((c) => c.correo?.trim())
     .filter((e): e is string => Boolean(e && e.includes('@')))
 
@@ -150,10 +159,10 @@ export async function POST(request: NextRequest) {
   const problema = deliverable.problema_recordatorio ?? ''
   const resumen = deliverable.resumen_audio ?? ''
   const recomendaciones = deliverable.recomendaciones_incomodas ?? ''
-  const foto = inputsRes.data?.foto_sesion_url
-  const audioUrl = audiosRes.data?.[0]?.audio_url
-  const fraseTexto = inputsRes.data?.frase_texto
-  const fraseAutor = inputsRes.data?.frase_autor
+  const foto = inputs?.foto_sesion_url
+  const audioUrl = audios?.[0]?.audio_url
+  const fraseTexto = inputs?.frase_texto
+  const fraseAutor = inputs?.frase_autor
 
   const contentHtml = rebuildHtmlFromFields({
     sessionId: session_id,
@@ -187,7 +196,7 @@ export async function POST(request: NextRequest) {
   try {
     pdfUrl = await uploadDeliverablePdf({ sessionId: session_id, content })
   } catch (err) {
-    console.error('[deliverables/approve] PDF error:', err)
+    logError('[deliverables/approve] PDF error', err)
     return NextResponse.json(
       { error: 'No se pudo generar el PDF final' },
       { status: 500 }
@@ -204,15 +213,23 @@ export async function POST(request: NextRequest) {
     .eq('session_id', session_id)
 
   const resend = new Resend(resendKey)
-  const { error: mailError } = await resend.emails.send({
+  const groupMail = {
     from: fromEmail,
     to: emails,
     subject: `Entregable Gladwell — ${access.session.title}`,
     html: contentHtml,
+  }
+  const { error: mailError } = await resend.emails.send(groupMail, {
+    // Dos peticiones idénticas (doble toque, otra pestaña) comparten clave y Resend envía el correo UNA vez.
+    idempotencyKey: idempotencyKey('approve-therapy', session_id, JSON.stringify(groupMail)),
   })
 
+  if (mailError && isDuplicateSend(mailError)) {
+    return NextResponse.json({ error: SEND_IN_PROGRESS_MESSAGE }, { status: 409 })
+  }
+
   if (mailError) {
-    console.error('[deliverables/approve] Resend error:', mailError)
+    logError('[deliverables/approve] Resend error', mailError)
     return NextResponse.json(
       {
         error:
@@ -235,12 +252,15 @@ export async function POST(request: NextRequest) {
   // QR — separado del correo grupal de arriba, que no cambia. Es best-effort:
   // un fallo puntual queda reflejado en email_status/email_error de esa fila
   // sin bloquear ni revertir el correo grupal, que ya se envió.
-  const { data: qrAttendees } = await supabase
-    .from('therapy_session_attendees')
-    .select('id, nombre, correo')
-    .eq('session_id', session_id)
-    .neq('email_status', 'enviado')
-    .order('created_at', { ascending: true })
+  const qrAttendees = must(
+    await supabase
+      .from('therapy_session_attendees')
+      .select('id, nombre, correo')
+      .eq('session_id', session_id)
+      .neq('email_status', 'enviado')
+      .order('created_at', { ascending: true }),
+    'therapy_session_attendees'
+  )
 
   let qrSent = 0
   let qrFailed = 0
@@ -254,6 +274,7 @@ export async function POST(request: NextRequest) {
       fromEmail,
       subject: `Entregable Gladwell — ${access.session.title}`,
       recipients: qrAttendees as BatchRecipient[],
+      idempotencyScope: session_id,
       buildHtml: (attendee) => buildDeliverableHtmlFor(attendeeContent, attendee.nombre),
     })
     qrSent = result.sent
@@ -267,4 +288,4 @@ export async function POST(request: NextRequest) {
     qr_sent: qrSent,
     qr_failed: qrFailed,
   })
-}
+})

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { walkingListSchema } from '@/lib/validations/walking-list'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { logError } from '@/lib/log'
 
-export async function POST(request: NextRequest) {
+export const POST = withApiErrors(async (request: NextRequest) => {
   let body: unknown
 
   try {
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       )
     }
-    console.error('[walking-list] Supabase error:', error)
+    logError('[walking-list] Supabase error', error)
     return NextResponse.json(
       { error: 'No pudimos registrar tu solicitud. Intenta de nuevo.' },
       { status: 500 }
@@ -59,4 +61,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true }, { status: 201 })
-}
+})

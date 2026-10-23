@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Trash2 } from 'lucide-react'
 import { BrandButton } from '@/components/brand/brand-button'
@@ -81,7 +81,12 @@ export function ParrillaQuoteForm({ quote, authors, onClose }: ParrillaQuoteForm
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
+  // Tras guardar o eliminar bien, el diálogo tarda ≈200 ms en cerrarse (su animación de salida): durante ese rato el
+  // botón NO se reactiva. Antes el `finally` lo reactivaba al instante y un segundo toque volvía a crear la frase.
+  const closingRef = useRef(false)
+
   function finish() {
+    closingRef.current = true
     onClose()
     router.refresh()
   }
@@ -115,6 +120,7 @@ export function ParrillaQuoteForm({ quote, authors, onClose }: ParrillaQuoteForm
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    if (submitting || closingRef.current) return
     setSubmitting(true)
     setError(null)
 
@@ -124,12 +130,12 @@ export function ParrillaQuoteForm({ quote, authors, onClose }: ParrillaQuoteForm
     } catch {
       setError('Error de red al guardar la frase')
     } finally {
-      setSubmitting(false)
+      if (!closingRef.current) setSubmitting(false)
     }
   }
 
   async function handleDelete() {
-    if (!quote) return
+    if (!quote || deleting || closingRef.current) return
     setDeleting(true)
     setError(null)
 
@@ -154,7 +160,7 @@ export function ParrillaQuoteForm({ quote, authors, onClose }: ParrillaQuoteForm
       setConfirmDelete(false)
       setError('Error de red al eliminar la frase')
     } finally {
-      setDeleting(false)
+      if (!closingRef.current) setDeleting(false)
     }
   }
 

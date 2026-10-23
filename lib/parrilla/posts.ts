@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isAssignedTo, isUuid } from '@/lib/parrilla/rules'
+import { must } from '@/lib/supabase/must'
 
 // El flujo, en orden: 'idea' = recién anotada, nada empezado. 'agendado' = la
 // idea pasó a la etapa de creación. 'en_produccion' cubre guion, diseño y
@@ -175,17 +176,18 @@ export const PARRILLA_PENDING_COLUMNS =
 /** Sin scoping por dueño: quien tiene el módulo "parrilla" ve y edita todas
  *  las publicaciones, no solo las que creó — es la premisa del producto. */
 export async function loadParrillaPosts(supabase: SupabaseClient): Promise<ParrillaPostSummary[]> {
-  const { data, error } = await supabase
-    .from('parrilla_posts')
-    .select(PARRILLA_LIST_COLUMNS)
-    .order('publish_date')
-    // Desempate: sin él, las piezas de un mismo día cambian de orden al
-    // editarlas (Postgres devuelve empates en orden físico, y un UPDATE lo mueve).
-    .order('created_at')
-
-  // Sin este log, un select roto (p. ej. una columna nueva cuya migración aún
-  // no se aplicó) se ve como un calendario vacío, sin rastro de por qué.
-  if (error) console.error('[parrilla] No se pudieron cargar las publicaciones:', error)
+  // `must`: un select roto (p. ej. una columna nueva cuya migración aún no se aplicó) o un tope de tiempo se veía
+  // como un calendario vacío, sin rastro de por qué. Ahora llega a la pantalla de error, con «Reintentar».
+  const data = must(
+    await supabase
+      .from('parrilla_posts')
+      .select(PARRILLA_LIST_COLUMNS)
+      .order('publish_date')
+      // Desempate: sin él, las piezas de un mismo día cambian de orden al
+      // editarlas (Postgres devuelve empates en orden físico, y un UPDATE lo mueve).
+      .order('created_at'),
+    'Publicaciones de la parrilla'
+  )
 
   return (data ?? []) as ParrillaPostSummary[]
 }
@@ -202,15 +204,16 @@ export async function loadParrillaPending(
   // se valida antes de armarlo.
   if (!isUuid(userId)) return []
 
-  const { data, error } = await supabase
-    .from('parrilla_posts')
-    .select(PARRILLA_PENDING_COLUMNS)
-    .in('status', ['idea', 'agendado', 'en_produccion'])
-    .or(`editor_ids.cs.{${userId}},filmmaker_ids.cs.{${userId}}`)
-    .order('publish_date')
-    .order('created_at')
-
-  if (error) console.error('[parrilla] No se pudo cargar la cola pendiente:', error)
+  const data = must(
+    await supabase
+      .from('parrilla_posts')
+      .select(PARRILLA_PENDING_COLUMNS)
+      .in('status', ['idea', 'agendado', 'en_produccion'])
+      .or(`editor_ids.cs.{${userId}},filmmaker_ids.cs.{${userId}}`)
+      .order('publish_date')
+      .order('created_at'),
+    'Cola pendiente de la parrilla'
+  )
 
   return ((data ?? []) as ParrillaPostPending[]).filter((post) => isAssignedTo(post, userId))
 }
@@ -219,15 +222,11 @@ export async function loadParrillaPending(
  *  array plano (sin FK real, así que no hay embed de PostgREST posible),
  *  por eso se resuelve aparte y se cruza en el cliente por id. */
 export async function loadParrillaEditors(supabase: SupabaseClient): Promise<ParrillaEditor[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, nombre')
-    .eq('role', 'community_admin')
-    .order('nombre')
-
-  // Igual que con las publicaciones: un fallo aquí se vería como un selector
-  // de Editor vacío, sin explicación.
-  if (error) console.error('[parrilla] No se pudieron cargar los editores:', error)
+  // Igual que con las publicaciones: un fallo aquí se vería como un selector de Editor vacío.
+  const data = must(
+    await supabase.from('profiles').select('id, nombre').eq('role', 'community_admin').order('nombre'),
+    'Editores de la parrilla'
+  )
 
   return (data ?? []) as ParrillaEditor[]
 }

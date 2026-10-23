@@ -84,7 +84,7 @@ export function CountryPhoneSelect({
                   aria-selected={isSelected}
                   onClick={() => handleSelect(iso)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted",
+                    "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted pointer-coarse:min-h-11",
                     isSelected && "bg-muted"
                   )}
                 >

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Mic, Square, Upload, Trash2 } from 'lucide-react'
 import { BrandButton } from '@/components/brand/brand-button'
 import { uploadTherapyMedia, normalizeMime } from '@/lib/therapy/upload-media'
+import { nowMs, recordedSeconds } from '@/lib/therapy/recording'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
 import type { AudioData } from '@/components/portal/session-detail-form'
 
@@ -51,27 +52,42 @@ export function AudioRecorder({
   const [error, setError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  // Todo lo que vive mientras se graba, en un solo objeto (su identidad no cambia; solo se mutan sus campos): el
+  // `onstop` del grabador y el cierre al desmontar leen siempre lo último, sin clausuras viejas.
+  const capture = useRef({
+    recorder: null as MediaRecorder | null,
+    stream: null as MediaStream | null,
+    timer: null as ReturnType<typeof setInterval> | null,
+    startedAt: 0,
+    /** Al desmontar a mitad de una grabación se descarta: no se sube un audio que nadie va a ver. */
+    discard: false,
+  })
   const chunksRef = useRef<Blob[]>([])
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
+    const state = capture.current
+    if (state.recorder && state.recorder.state !== 'inactive') {
+      state.recorder.stop()
     }
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
+    if (state.timer) {
+      clearInterval(state.timer)
+      state.timer = null
     }
     setRecording(false)
   }, [])
 
+  // Navegar durante una grabación dejaba el micrófono abierto (y el intervalo corriendo): al desmontar se detiene todo
+  // y se suelta el micrófono.
   useEffect(() => {
-    if (recording && elapsed >= MAX_DURATION) {
-      stopRecording()
+    const state = capture.current
+    return () => {
+      state.discard = true
+      if (state.timer) clearInterval(state.timer)
+      if (state.recorder && state.recorder.state !== 'inactive') state.recorder.stop()
+      state.stream?.getTracks().forEach((track) => track.stop())
     }
-  }, [elapsed, recording, stopRecording])
+  }, [])
 
   async function startRecording() {
     setError(null)
@@ -85,23 +101,34 @@ export function AudioRecorder({
         if (e.data.size > 0) chunksRef.current.push(e.data)
       }
 
+      const state = capture.current
+      state.discard = false
+
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop())
+        if (state.discard) return
         const baseMime = normalizeMime(mimeType) || 'audio/webm'
         const blob = new Blob(chunksRef.current, { type: baseMime })
         const ext = getExtForMime(baseMime)
         const file = new File([blob], `grabacion.${ext}`, { type: baseMime })
-        await uploadFile(file, elapsed)
+        // La duración sale del reloj al parar: el `elapsed` que veía esta función era el del momento de EMPEZAR (0),
+        // y todas las grabaciones se guardaban con duración 0.
+        await uploadFile(file, recordedSeconds(state.startedAt, nowMs(), MAX_DURATION))
         setElapsed(0)
       }
 
-      mediaRecorderRef.current = recorder
+      state.stream = stream
+      state.recorder = recorder
       recorder.start()
+      state.startedAt = nowMs()
       setRecording(true)
       setElapsed(0)
 
-      timerRef.current = setInterval(() => {
-        setElapsed((prev) => prev + 1)
+      state.timer = setInterval(() => {
+        const seconds = recordedSeconds(state.startedAt, nowMs(), MAX_DURATION)
+        setElapsed(seconds)
+        // El tope se aplica aquí mismo, no desde un efecto que mira el estado un render después.
+        if (seconds >= MAX_DURATION) stopRecording()
       }, 1000)
     } catch {
       setError('No se pudo acceder al micrófono')
@@ -197,7 +224,7 @@ export function AudioRecorder({
                   <button
                     type="button"
                     onClick={() => setConfirmDeleteId(audio.id)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-11"
                     aria-label="Eliminar audio"
                   >
                     <Trash2 className="h-4 w-4" />

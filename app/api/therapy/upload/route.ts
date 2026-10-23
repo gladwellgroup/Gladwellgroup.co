@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { logError } from '@/lib/log'
 
 const AUDIO_TYPES = new Set([
   'audio/webm',
@@ -37,11 +39,10 @@ function normalizeMime(type: string): string {
   return type.split(';')[0]?.trim().toLowerCase() ?? ''
 }
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   const supabase = getSupabaseServer()
 
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
         error:
           'La sesión ya no está en borrador; los datos de captura no se pueden modificar.',
       },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -143,7 +144,7 @@ export async function POST(request: NextRequest) {
     })
 
   if (uploadError) {
-    console.error('[therapy/upload] Storage error:', uploadError)
+    logError('[therapy/upload] Storage error', uploadError)
     return NextResponse.json(
       { error: 'Error al subir el archivo' },
       { status: 500 }
@@ -158,4 +159,4 @@ export async function POST(request: NextRequest) {
     { url: publicUrl.publicUrl, path },
     { status: 201 }
   )
-}
+})

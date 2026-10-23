@@ -1,4 +1,4 @@
-import { describe, mock, test } from 'node:test'
+import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -287,16 +287,13 @@ describe('loadParrillaQuotes', () => {
     assert.deepEqual(await loadParrillaQuotes(fake.client), [{ ...quote(), used_count: 1 }])
   })
 
-  test('ante un error de la base devuelve [] y lo registra (no rompe la página)', async () => {
-    const spy = mock.method(console, 'error', () => {})
-    try {
-      const fake = listFake({ data: null, error: { code: 'PGRST205', message: 'Could not find the table' } })
-      assert.deepEqual(await loadParrillaQuotes(fake.client), [])
-      assert.equal(spy.mock.calls.length, 1)
-      assert.match(String(spy.mock.calls[0].arguments[0]), /^\[parrilla\] No se pudieron cargar las frases/)
-    } finally {
-      spy.mock.restore()
-    }
+  test('ante un error de la base LANZA (la pantalla de error ofrece «Reintentar»): una biblioteca vacía haría creer que se perdió', async () => {
+    const fake = listFake({ data: null, error: { code: 'PGRST205', message: 'Could not find the table' } })
+    await assert.rejects(loadParrillaQuotes(fake.client), (error: Error) => {
+      assert.equal(error.name, 'QueryFailedError')
+      assert.match(error.message, /^Frases de la parrilla: Could not find the table/)
+      return true
+    })
   })
 
   test('con data null y sin error también devuelve []', async () => {
@@ -336,7 +333,7 @@ describe('las rutas de frases verifican quién llama', () => {
       const source = read(file)
       assert.ok(source.includes("requireApiPermission('parrilla:manage')"), `${file} no verifica parrilla:manage`)
       // Cada manejador (POST / PATCH / DELETE) lo pide; ninguno escribe sin pasar por ahí.
-      const handlers = (source.match(/export async function (POST|PATCH|DELETE)\b/g) ?? []).length
+      const handlers = (source.match(/export (?:async function|const) (POST|PATCH|DELETE)\b/g) ?? []).length
       const checks = (source.match(/requireApiPermission\('parrilla:manage'\)/g) ?? []).length
       assert.equal(checks, handlers, `${file}: ${handlers} manejadores y ${checks} verificaciones de permiso`)
     })

@@ -1,10 +1,9 @@
 'use client'
 
 import { LogOut, Menu } from 'lucide-react'
-import { useAppRouter } from '@/hooks/use-app-router'
+import { useSignOut } from '@/hooks/use-sign-out'
 import { BrandLogo } from '@/components/brand/brand-logo'
 import { ThemeToggle } from '@/components/brand/theme-toggle'
-import { getSupabaseBrowser } from '@/lib/supabase/browser'
 import { useSidebar } from '@/components/ui/sidebar'
 
 interface PortalNavbarProps {
@@ -19,7 +18,7 @@ function CollapseTrigger() {
     <button
       type="button"
       onClick={toggleSidebar}
-      className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:size-11"
       aria-label={open ? 'Colapsar menu' : 'Expandir menu'}
     >
       <Menu className="size-5" />
@@ -37,7 +36,7 @@ function MobileMenuTrigger() {
     <button
       type="button"
       onClick={toggleSidebar}
-      className="flex lg:hidden items-center justify-center size-9 rounded-full border border-border text-muted-foreground transition-colors hover:border-[#7C3AED]/40 hover:text-foreground"
+      className="flex lg:hidden items-center justify-center size-9 rounded-full border border-border text-muted-foreground transition-colors hover:border-[#7C3AED]/40 hover:text-foreground pointer-coarse:size-11"
       aria-label="Abrir menú"
     >
       <Menu className="size-4" />
@@ -46,14 +45,7 @@ function MobileMenuTrigger() {
 }
 
 export function PortalNavbar({ userName, roleLabel }: PortalNavbarProps) {
-  const router = useAppRouter()
-
-  async function handleSignOut() {
-    const supabase = getSupabaseBrowser()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
+  const { signOut, signingOut } = useSignOut()
 
   return (
     <header
@@ -84,8 +76,9 @@ export function PortalNavbar({ userName, roleLabel }: PortalNavbarProps) {
                 sesión se hace desde Perfil. */}
             <button
               type="button"
-              onClick={handleSignOut}
-              className="hidden lg:flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:border-[#7C3AED]/40 hover:text-foreground"
+              onClick={signOut}
+              disabled={signingOut}
+              className="hidden lg:flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:border-[#7C3AED]/40 hover:text-foreground disabled:opacity-50 pointer-coarse:min-h-11 pointer-coarse:px-4"
             >
               <LogOut className="size-4" />
               <span>Salir</span>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandButton } from '@/components/brand/brand-button'
 import { parseDateOnly } from '@/lib/date'
@@ -31,18 +32,21 @@ export default async function SessionAudioPage({
   const { id } = await params
   const supabase = getSupabaseServer()
 
-  const { data } = await supabase
-    .from('therapy_sessions')
-    .select(
-      `
+  const data = must(
+    await supabase
+      .from('therapy_sessions')
+      .select(
+        `
       title, session_date,
       therapy_session_inputs ( foto_sesion_url ),
       therapy_session_audios ( audio_url, created_at )
     `
-    )
-    .eq('id', id)
-    .order('created_at', { referencedTable: 'therapy_session_audios' })
-    .maybeSingle()
+      )
+      .eq('id', id)
+      .order('created_at', { referencedTable: 'therapy_session_audios' })
+      .maybeSingle(),
+    'Audio de la sesión'
+  )
 
   if (!data) {
     return (

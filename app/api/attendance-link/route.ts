@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
 import { resolveEducationAccess } from '@/lib/education/session-access'
 import { resolveCharlaAccess } from '@/lib/charlas/access'
 import { buildAttendanceToken } from '@/lib/deliverables/slugify'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 export const runtime = 'nodejs'
 
@@ -28,11 +31,10 @@ const SESSION_COLUMN = {
 /** Genera o regenera el link/QR de asistencia de una sesión o charla. Sirve
  *  para ambos casos: si ya existe una fila para ese encuentro se actualiza (eso
  *  es lo que invalida el token anterior al instante); si no, se crea. */
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -94,11 +96,14 @@ export async function POST(request: NextRequest) {
   const expiresAt = new Date(Date.now() + EXPIRES_IN_MS).toISOString()
   const now = new Date().toISOString()
 
-  const { data: existing } = await supabase
-    .from('session_attendance_links')
-    .select('id')
-    .eq(sessionColumn, session_id)
-    .maybeSingle()
+  const existing = must(
+    await supabase
+      .from('session_attendance_links')
+      .select('id')
+      .eq(sessionColumn, session_id)
+      .maybeSingle(),
+    'session_attendance_links'
+  )
 
   const result = existing
     ? await supabase
@@ -124,7 +129,7 @@ export async function POST(request: NextRequest) {
         .single()
 
   if (result.error || !result.data) {
-    console.error('[attendance-link] error:', result.error)
+    logError('[attendance-link] error', result.error)
     return NextResponse.json(
       { error: 'No se pudo generar el enlace de asistencia' },
       { status: 500 }
@@ -138,4 +143,4 @@ export async function POST(request: NextRequest) {
     url,
     expires_at: result.data.expires_at,
   })
-}
+})

@@ -1,6 +1,7 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js'
-import { resolvePermissionsFromGrants } from '@/lib/permissions/resolve'
-import type { Role } from '@/lib/permissions/roles'
+import { loadSessionUser } from '@/lib/auth/session-user'
+import { ACCESS_UNAVAILABLE_MESSAGE } from '@/lib/auth/unavailable'
+import { isQueryFailure } from '@/lib/supabase/must'
 
 export type EducationAccess = {
   allowed: boolean
@@ -24,6 +25,19 @@ export type EducationAccess = {
   statusCode?: number
 }
 
+/** La base no contestó: no se sabe si la persona puede entrar ni si la sesión existe. */
+function unavailable(): EducationAccess {
+  return {
+    allowed: false,
+    isAdminOrSuper: false,
+    isAdminOrCoAdminOrSuper: false,
+    role: null,
+    session: null,
+    error: ACCESS_UNAVAILABLE_MESSAGE,
+    statusCode: 503,
+  }
+}
+
 /** El cliente server usa la service role key, que ignora RLS por completo:
  *  esta función es la autorización real de todas las rutas de Education. */
 export async function resolveEducationAccess(
@@ -31,20 +45,15 @@ export async function resolveEducationAccess(
   user: User,
   sessionId: string
 ): Promise<EducationAccess> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
-    .eq('id', user.id)
-    .single()
-
-  const permissions = profile
-    ? resolvePermissionsFromGrants(profile.role as Role, profile.profile_module_grants)
-    : []
+  const lookup = await loadSessionUser(supabase, user.id)
+  // Una consulta caída NO es «Sin permisos» ni «Sesión no encontrada»: 503, reintentable.
+  if (lookup.status === 'error') return unavailable()
+  const profile = lookup.status === 'ok' ? lookup.user : null
 
   // 'education:create' es el permiso que otorga el módulo Encuentros ·
   // Educación — revocarlo debe cortar el acceso real a estas rutas, no
   // solo el ítem del menú (antes esto solo miraba el rol a secas).
-  if (!profile || !permissions.includes('education:create')) {
+  if (!profile || !profile.permissions.includes('education:create')) {
     return {
       allowed: false,
       isAdminOrSuper: false,
@@ -56,11 +65,13 @@ export async function resolveEducationAccess(
     }
   }
 
-  const { data: session } = await supabase
+  const { data: session, error: sessionError } = await supabase
     .from('education_sessions')
     .select('id, title, session_date, admin_id, status, created_by, co_admin_ids')
     .eq('id', sessionId)
-    .single()
+    .maybeSingle()
+
+  if (isQueryFailure(sessionError)) return unavailable()
 
   if (!session) {
     return {

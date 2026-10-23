@@ -4,6 +4,9 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { useAppRouter } from '@/hooks/use-app-router'
+import { useFlushOnLeave } from '@/hooks/use-flush-on-leave'
+import { useSaveQueue } from '@/hooks/use-save-queue'
+import type { KeepaliveRequest } from '@/lib/keepalive'
 import { BrandField, BrandTextarea } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
 import { CofounderFields } from '@/components/portal/cofounder-fields'
@@ -211,6 +214,7 @@ export function SessionDetailForm({
   const empresaPaginaWebRef = useRef(empresaPaginaWeb)
   const fraseTextoRef = useRef(fraseTexto)
   const fraseAutorRef = useRef(fraseAutor)
+  const saveStatusRef = useRef(saveStatus)
 
   useEffect(() => {
     retoRef.current = retoProblema
@@ -223,10 +227,9 @@ export function SessionDetailForm({
     empresaPaginaWebRef.current = empresaPaginaWeb
     fraseTextoRef.current = fraseTexto
     fraseAutorRef.current = fraseAutor
+    saveStatusRef.current = saveStatus
   })
 
-  const isSavingRef = useRef(false)
-  const pendingRef = useRef(false)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isFirstRender = useRef(true)
 
@@ -251,63 +254,66 @@ export function SessionDetailForm({
     }
   }, [session.id])
 
-  const saveNow = useCallback(async () => {
-    if (isReadOnly) return
-    if (isSavingRef.current) {
-      pendingRef.current = true
-      return
-    }
-
-    isSavingRef.current = true
-
-    do {
-      pendingRef.current = false
-      setSaveStatus('saving')
-      setSaveErrorMessage(null)
-
-      try {
-        const payload = buildPayload()
-        const requests = [
-          fetch('/api/therapy/inputs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }),
+  /** Lo que guarda el formulario ahora mismo. Lo usan el autoguardado y el guardado al salir (useFlushOnLeave): así
+   *  los dos mandan exactamente lo mismo. */
+  const buildRequests = (): KeepaliveRequest[] => [
+    { url: '/api/therapy/inputs', method: 'POST', body: buildPayload() },
+    ...(invitado
+      ? [
+          {
+            url: `/api/therapy/invitados/${invitado.id}`,
+            method: 'PATCH' as const,
+            body: {
+              nombre: empresaNombreRef.current,
+              descripcion: empresaDescripcionRef.current || undefined,
+              red_social: empresaRedSocialRef.current || undefined,
+              pagina_web: empresaPaginaWebRef.current || undefined,
+            },
+          },
         ]
+      : []),
+  ]
 
-        if (invitado) {
-          requests.push(
-            fetch(`/api/therapy/invitados/${invitado.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                nombre: empresaNombreRef.current,
-                descripcion: empresaDescripcionRef.current || undefined,
-                red_social: empresaRedSocialRef.current || undefined,
-                pagina_web: empresaPaginaWebRef.current || undefined,
-              }),
-            })
-          )
-        }
+  /** Un guardado; la cola (useSaveQueue) lo repite mientras haya algo nuevo y nunca corre dos a la vez. */
+  const saveOnce = async () => {
+    if (isReadOnly) return
+    setSaveStatus('saving')
+    setSaveErrorMessage(null)
 
-        const results = await Promise.all(requests)
-        const failed = results.find((r) => !r.ok)
+    try {
+      const results = await Promise.all(
+        buildRequests().map((request) =>
+          fetch(request.url, {
+            method: request.method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request.body),
+          })
+        )
+      )
+      const failed = results.find((r) => !r.ok)
 
-        if (failed) {
-          const data = await failed.json().catch(() => ({}))
-          setSaveStatus('error')
-          setSaveErrorMessage(data.error ?? null)
-        } else {
-          setSaveStatus('saved')
-        }
-      } catch {
+      if (failed) {
+        const data = await failed.json().catch(() => ({}))
         setSaveStatus('error')
-        setSaveErrorMessage('Error de red al guardar')
+        setSaveErrorMessage(data.error ?? null)
+      } else {
+        setSaveStatus('saved')
       }
-    } while (pendingRef.current)
+    } catch {
+      setSaveStatus('error')
+      setSaveErrorMessage('Error de red al guardar')
+    }
+  }
+  // Estable: ya no cambia con cada `router.refresh()` (antes dependía de `invitado`, que llega como un objeto nuevo en
+  // cada refresco, y disparaba un guardado espurio).
+  const saveNow = useSaveQueue(saveOnce)
 
-    isSavingRef.current = false
-  }, [buildPayload, isReadOnly, invitado])
+  // Al salir (navegar, cerrar, pasar a segundo plano) se manda lo pendiente: el temporizador del autoguardado se
+  // cancela al desmontar y el último texto se perdía sin aviso.
+  useFlushOnLeave({
+    isDirty: () => !isReadOnly && (saveStatusRef.current === 'dirty' || saveStatusRef.current === 'saving'),
+    buildRequests,
+  })
 
   // Debounced autosave on text/cofounders changes
   useEffect(() => {
@@ -402,7 +408,7 @@ export function SessionDetailForm({
       <div className="flex flex-col items-center text-center gap-1 pt-6 sm:pt-8">
         <Link
           href={basePath}
-          className="mb-4 inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-4 inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground active:text-foreground pointer-coarse:min-h-11"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver

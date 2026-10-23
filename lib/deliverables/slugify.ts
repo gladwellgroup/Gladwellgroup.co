@@ -16,9 +16,11 @@ export function slugify(text: string): string {
 
 const SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
-/** 6 caracteres de un alfabeto de 36 (~31 bits), con crypto.randomInt (CSPRNG):
- *  es la parte que de verdad hace el token no adivinable, no el slug. */
-export function randomSuffix(length = 6): string {
+/** 10 caracteres de un alfabeto de 36 (~52 bits), con crypto.randomInt (CSPRNG): es la parte que de verdad hace el
+ *  token no adivinable, no el slug. Eran 6 (~31 bits): con el título adivinable, unas 2 mil millones de combinaciones se
+ *  prueban rápido contra una página pública. Los enlaces ya emitidos (con 6) siguen valiendo: el token se compara tal
+ *  cual, sin exigir una longitud. */
+export function randomSuffix(length = 10): string {
   let out = ''
   for (let i = 0; i < length; i += 1) {
     out += SUFFIX_ALPHABET[randomInt(SUFFIX_ALPHABET.length)]

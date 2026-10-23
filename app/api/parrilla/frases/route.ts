@@ -3,10 +3,11 @@ import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { parrillaQuoteSchema } from '@/lib/validations/parrilla'
 import { createQuote } from '@/lib/parrilla/quote-mutations'
+import { withApiErrors } from '@/lib/api/with-errors'
 
 /** Crea una frase de la biblioteca (pestaña «Frases» de la parrilla). Quien tiene
  *  el módulo `parrilla` gestiona todas las frases: no hay dueño. */
-export async function POST(request: NextRequest) {
+export const POST = withApiErrors(async (request: NextRequest) => {
   const auth = await requireApiPermission('parrilla:manage')
   if (!auth.ok) return auth.response
 
@@ -31,4 +32,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ id: created.id }, { status: 201 })
-}
+})

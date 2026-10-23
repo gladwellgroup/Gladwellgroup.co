@@ -4,7 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDays, ChevronDown, ExternalLink, Info, Link2, Mail, Phone, Shield } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
+import { BrandButton } from '@/components/brand/brand-button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { formatDay } from '@/lib/date'
+import { LEADS_PAGE_SIZE, POSTGREST_MAX_ROWS, type CrmLead as Lead } from '@/lib/crm/leads'
 import { cn } from '@/lib/utils'
 import {
   ContactStatusBadge,
@@ -15,20 +18,6 @@ import {
   type ContactStatus,
 } from '@/components/portal/crm-status-badge'
 
-interface Lead {
-  id: string
-  nombre: string
-  apellidos?: string
-  correo: string
-  whatsapp_e164?: string
-  red_social?: string
-  perfil?: string
-  status?: string
-  assigned_to?: string
-  contact_status?: string
-  created_at: string
-}
-
 interface Admin {
   id: string
   nombre: string
@@ -37,6 +26,8 @@ interface Admin {
 
 interface CrmLeadsTableProps {
   leads: Lead[]
+  /** La consulta llegó al tope de filas de la API: hay más leads de los que se muestran. */
+  truncated?: boolean
   admins: Admin[]
   currentUserId: string
   canDelegate: boolean
@@ -82,7 +73,7 @@ function ProfileLink({ redSocial, perfil }: { redSocial?: string; perfil?: strin
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
+      className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground active:text-foreground pointer-coarse:-m-[15px] pointer-coarse:p-[15px]"
       aria-label="Visitar perfil"
     >
       <ExternalLink className="h-3.5 w-3.5" />
@@ -119,7 +110,7 @@ function ContactStatusDropdown({
           aria-label="Cambiar estado de contacto"
           aria-expanded={open}
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-opacity disabled:opacity-60',
+            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-opacity disabled:opacity-60 pointer-coarse:min-h-11 pointer-coarse:px-4',
             DISPLAY_STATUS_COLORS[display]
           )}
         >
@@ -143,7 +134,7 @@ function ContactStatusDropdown({
                     setOpen(false)
                   }}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted',
+                    'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted pointer-coarse:min-h-11',
                     isSelected && 'bg-muted font-medium'
                   )}
                 >
@@ -198,7 +189,7 @@ function AdminDelegateDropdown({
           disabled={delegating}
           aria-label="Asignar administrador"
           aria-expanded={open}
-          className="modal-field flex w-auto max-w-[11rem] items-center justify-between gap-1.5 px-2.5 py-1.5 text-left text-xs disabled:opacity-60"
+          className="modal-field flex w-auto max-w-[11rem] items-center justify-between gap-1.5 px-2.5 py-1.5 text-left text-xs disabled:opacity-60 pointer-coarse:min-h-11"
         >
           <span className={cn('truncate', !assignedAdmin && 'text-muted-foreground')}>
             {delegating
@@ -228,7 +219,7 @@ function AdminDelegateDropdown({
                 setOpen(false)
               }}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted',
+                'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted pointer-coarse:min-h-11',
                 !assignedTo ? 'bg-[#7C3AED]/15 font-medium text-[#A78BFA]' : 'text-foreground'
               )}
             >
@@ -250,7 +241,7 @@ function AdminDelegateDropdown({
                     setOpen(false)
                   }}
                   className={cn(
-                    'flex w-full items-center rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted',
+                    'flex w-full items-center rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted pointer-coarse:min-h-11',
                     isSelected ? 'bg-[#7C3AED]/15 font-medium text-[#A78BFA]' : 'text-foreground'
                   )}
                 >
@@ -310,7 +301,7 @@ function ContactStatusFilter({
             type="button"
             onClick={() => onChange(opcion.key)}
             aria-pressed={activo}
-            className={`flex items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors sm:order-none ${MOBILE_ORDER[opcion.key]} ${
+            className={`flex items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11 sm:order-none ${MOBILE_ORDER[opcion.key]} ${
               activo
                 ? 'border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]'
                 : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -327,6 +318,7 @@ function ContactStatusFilter({
 
 export function CrmLeadsTable({
   leads,
+  truncated = false,
   admins,
   canDelegate,
   canUpdateStatus,
@@ -336,6 +328,9 @@ export function CrmLeadsTable({
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<LeadFilter>('todos')
+  // Cuántos leads se pintan: de 50 en 50 con «Cargar más». Sobrevive a `router.refresh()` (delegar o cambiar un estado
+  // no repliega la lista).
+  const [visibleCount, setVisibleCount] = useState(LEADS_PAGE_SIZE)
 
   async function handleDelegate(leadId: string, adminId: string | null) {
     setDelegating(leadId)
@@ -394,16 +389,30 @@ export function CrmLeadsTable({
     filtro === 'todos'
       ? leads
       : leads.filter((l) => normalizeContactStatus(l.contact_status) === filtro)
+  const mostrados = visibles.slice(0, visibleCount)
+  const restantes = visibles.length - mostrados.length
 
   return (
     <div className="space-y-4">
       {/* Mismo ancho y centrado que la barra de búsqueda + filtro de
           Terapia/Education — aquí no hay búsqueda, solo el filtro. */}
       <div className="mx-auto flex w-full max-w-xl flex-col gap-3">
-        <ContactStatusFilter leads={leads} value={filtro} onChange={setFiltro} />
+        <ContactStatusFilter
+          leads={leads}
+          value={filtro}
+          onChange={(next) => {
+            setFiltro(next)
+            setVisibleCount(LEADS_PAGE_SIZE)
+          }}
+        />
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
+      {truncated && (
+        <p role="status" className="text-center text-sm text-amber-600 dark:text-amber-400">
+          Se muestran los primeros {POSTGREST_MAX_ROWS} leads: hay más registrados de los que la lista puede traer.
+        </p>
+      )}
       {noAdmins && (
         <div className="flex items-center gap-3 rounded-xl border border-[#7C3AED]/20 bg-[#7C3AED]/5 px-4 py-3">
           <Info className="size-5 shrink-0 text-[#A78BFA]" />
@@ -440,7 +449,7 @@ export function CrmLeadsTable({
             </tr>
           </thead>
           <tbody>
-            {visibles.map((lead) => {
+            {mostrados.map((lead) => {
               const contactStatus = normalizeContactStatus(lead.contact_status)
               return (
                 <tr key={lead.id} className="border-b border-border last:border-0">
@@ -471,7 +480,7 @@ export function CrmLeadsTable({
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {new Date(lead.created_at).toLocaleDateString('es-CO')}
+                    {formatDay(lead.created_at)}
                   </td>
                   {canDelegate && !noAdmins && (
                     <td className="px-4 py-3">
@@ -493,7 +502,7 @@ export function CrmLeadsTable({
 
       {/* Cards movil */}
       <div className="flex flex-col gap-3 lg:hidden">
-        {visibles.map((lead) => {
+        {mostrados.map((lead) => {
           const contactStatus = normalizeContactStatus(lead.contact_status)
           return (
             <BrandCard key={lead.id} padding="sm" border="solid" className="space-y-2.5 p-4">
@@ -533,7 +542,7 @@ export function CrmLeadsTable({
                 )}
                 <p className="flex items-center gap-1.5">
                   <CalendarDays className="size-3.5 shrink-0" aria-hidden="true" />
-                  {new Date(lead.created_at).toLocaleDateString('es-CO')}
+                  {formatDay(lead.created_at)}
                 </p>
               </div>
               {canDelegate && !noAdmins && (
@@ -552,6 +561,23 @@ export function CrmLeadsTable({
           )
         })}
       </div>
+
+      {restantes > 0 && (
+        <div className="flex flex-col items-center gap-2">
+          <p role="status" className="text-xs text-muted-foreground">
+            Mostrando {mostrados.length} de {visibles.length}
+          </p>
+          <BrandButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-auto"
+            onClick={() => setVisibleCount((count) => count + LEADS_PAGE_SIZE)}
+          >
+            Cargar más ({Math.min(restantes, LEADS_PAGE_SIZE)})
+          </BrandButton>
+        </div>
+      )}
     </div>
   )
 }

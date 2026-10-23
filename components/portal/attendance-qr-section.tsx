@@ -33,29 +33,37 @@ export function AttendanceQrSection({
   onLinkChange,
   disabled,
 }: AttendanceQrSectionProps) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  // El QR que ya se dibujó y de qué token es: si el token cambia (o desaparece), el anterior deja de valer solo, sin
+  // tener que borrarlo desde el efecto.
+  const [qr, setQr] = useState<{ token: string; dataUrl: string } | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [confirmRegenerate, setConfirmRegenerate] = useState(false)
 
-  useEffect(() => {
-    if (!link) {
-      setUrl(null)
-      setQrDataUrl(null)
-      return
-    }
+  // La fecha de vencimiento, si ya venció y el origen de la URL dependen del navegador: el servidor (Node) y Safari no
+  // escriben igual «5:48 p. m.», y con el acordeón de una charla abierto de entrada eso rompía la hidratación (#418).
+  const isClient = useIsClient()
+  const token = link?.token ?? null
+  const url = isClient && token ? `${window.location.origin}/asistencia/${token}` : null
+  const qrDataUrl = qr && qr.token === token ? qr.dataUrl : null
+  const expired = isClient && link ? new Date(link.expires_at) <= new Date() : false
 
-    const fullUrl = `${window.location.origin}/asistencia/${link.token}`
-    setUrl(fullUrl)
-    QRCode.toDataURL(fullUrl)
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null))
-    // Basta con el token: expires_at cambia en cada regeneración pero no
-    // hace falta recalcular el QR por eso.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [link?.token])
+  // Basta con el token: expires_at cambia en cada regeneración pero no hace falta recalcular el QR por eso.
+  useEffect(() => {
+    if (!token) return
+    // Si el token cambia (o el componente se desmonta) antes de que termine, esa imagen ya no corresponde.
+    let cancelled = false
+    QRCode.toDataURL(`${window.location.origin}/asistencia/${token}`)
+      .then((dataUrl) => {
+        if (!cancelled) setQr({ token, dataUrl })
+      })
+      // Sin imagen: el enlace sigue a la vista y se puede copiar.
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [token])
 
   async function generate() {
     setGenerating(true)
@@ -85,16 +93,17 @@ export function AttendanceQrSection({
 
   async function handleCopy() {
     if (!url) return
-    await navigator.clipboard.writeText(url)
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      // El portapapeles puede negarse (permiso, página sin HTTPS, Safari fuera de un toque): sin esto no pasaba nada.
+      setError('No se pudo copiar el enlace. Selecciónalo del texto y cópialo a mano.')
+      return
+    }
+    setError(null)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  // La fecha de vencimiento y si ya venció dependen del reloj y del formato del
-  // navegador: el servidor (Node) y Safari no escriben igual «5:48 p. m.», y con el
-  // acordeón de una charla abierto de entrada eso rompía la hidratación (#418).
-  const isClient = useIsClient()
-  const expired = isClient && link ? new Date(link.expires_at) <= new Date() : false
 
   return (
     <div className="space-y-3">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { archivedSessionError } from '@/lib/deliverables/archived'
 import { educationSessionRefSchema } from '@/lib/validations/education'
 import { resolveEducationAccess } from '@/lib/education/session-access'
@@ -12,15 +12,18 @@ import {
   uploadEducationPdf,
 } from '@/lib/education/deliverable-render'
 import { sendPersonalizedBatch, type BatchRecipient } from '@/lib/deliverables/send-batch'
+import { SEND_IN_PROGRESS_MESSAGE } from '@/lib/deliverables/idempotency'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -50,13 +53,13 @@ export async function POST(request: NextRequest) {
 
   const archived = archivedSessionError(access.session.status)
   if (archived) {
-    return NextResponse.json({ error: archived }, { status: 403 })
+    return NextResponse.json({ error: archived }, { status: 409 })
   }
 
   if (access.session.status === 'entregado') {
     return NextResponse.json(
       { error: 'Este entregable ya fue enviado' },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -69,11 +72,14 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: deliverable } = await supabase
-    .from('education_deliverables')
-    .select('processing_status')
-    .eq('session_id', session_id)
-    .single()
+  const deliverable = must(
+    await supabase
+      .from('education_deliverables')
+      .select('processing_status')
+      .eq('session_id', session_id)
+      .single(),
+    'education_deliverables'
+  )
 
   if (!deliverable) {
     return NextResponse.json(
@@ -101,12 +107,15 @@ export async function POST(request: NextRequest) {
 
   // Solo los que aún no recibieron: reintentar tras un envío parcial no
   // duplica correos a quien ya lo tiene.
-  const { data: pending } = await supabase
-    .from('education_attendees')
-    .select('id, nombre, correo')
-    .eq('session_id', session_id)
-    .neq('email_status', 'enviado')
-    .order('created_at', { ascending: true })
+  const pending = must(
+    await supabase
+      .from('education_attendees')
+      .select('id, nombre, correo')
+      .eq('session_id', session_id)
+      .neq('email_status', 'enviado')
+      .order('created_at', { ascending: true }),
+    'education_attendees'
+  )
 
   const attendees = (pending ?? []) as BatchRecipient[]
 
@@ -129,7 +138,7 @@ export async function POST(request: NextRequest) {
       content: toEducationContent(source),
     })
   } catch (err) {
-    console.error('[education/approve] PDF error:', err)
+    logError('[education/approve] PDF error', err)
     return NextResponse.json(
       { error: 'No se pudo generar el PDF final' },
       { status: 500 }
@@ -150,17 +159,24 @@ export async function POST(request: NextRequest) {
   const resend = new Resend(resendKey)
   const subject = `Gladwell Education — ${access.session.title}`
 
-  const { sent, failed } = await sendPersonalizedBatch({
+  const { sent, failed, skipped } = await sendPersonalizedBatch({
     supabase,
     tableName: 'education_attendees',
     resend,
     fromEmail,
     subject,
     recipients: attendees,
+    idempotencyScope: session_id,
     // El saludo es lo único que cambia por destinatario.
     buildHtml: (attendee) =>
       rebuildEducationHtml({ ...withPdf, attendeeNombre: attendee.nombre }),
   })
+
+  // Resend reconoció el lote como ya enviado o en marcha (doble toque, otra pestaña): no es un fallo ni hay que marcar
+  // nada; quien lo envió primero termina el trabajo.
+  if (sent === 0 && failed.length === 0 && skipped > 0) {
+    return NextResponse.json({ error: SEND_IN_PROGRESS_MESSAGE }, { status: 409 })
+  }
 
   if (sent === 0) {
     return NextResponse.json(
@@ -192,4 +208,4 @@ export async function POST(request: NextRequest) {
     failed: failed.length,
     status: failed.length === 0 ? 'entregado' : 'generado',
   })
-}
+})

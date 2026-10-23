@@ -47,7 +47,12 @@ describe('calendario de Encuentros', () => {
 })
 
 describe('layout de login, invitación y asistencia', () => {
-  const source = read('app/(auth)/layout.tsx')
+  // El marco (barra + fondo + `main`) vive en CenteredPage, que también usan las pantallas de error y de «no encontrado».
+  const source = read('components/layout/centered-page.tsx')
+
+  test('el layout de (auth) usa ese marco', () => {
+    assert.match(read('app/(auth)/layout.tsx'), /<CenteredPage>/)
+  })
 
   test('reserva el alto de la barra fija: ninguna tarjeta alta queda por debajo de ella', () => {
     // La barra (components/layout/auth-navbar.tsx) es `fixed` y no ocupa espacio: sin este
@@ -143,4 +148,75 @@ describe('vista «Tabla» del Banco de contenido y de las Frases', () => {
   test('el orden de las filas se hace con `Intl.Collator` en español, no con `<` (sin tildes ni mayúsculas)', () => {
     assert.match(read('lib/parrilla/table.ts'), /new Intl\.Collator\('es'/)
   })
+})
+
+describe('objetivos táctiles de 44 px en los controles pequeños del portal', () => {
+  /** Los literales de texto (entre comillas) que contienen `anchor`: la cadena de clases de ese elemento. */
+  function classLiterals(source: string, anchor: string): string[] {
+    const quote = /["'`]/
+    const found: string[] = []
+    for (let at = source.indexOf(anchor); at !== -1; at = source.indexOf(anchor, at + 1)) {
+      let start = at
+      while (start > 0 && !quote.test(source[start - 1])) start--
+      let end = at + anchor.length
+      while (end < source.length && !quote.test(source[end])) end++
+      found.push(source.slice(start, end))
+    }
+    return found
+  }
+
+  // [archivo, un trozo único de las clases del elemento, lo que debe llevar al tacto]
+  const TARGETS: [file: string, anchor: string, token: string][] = [
+    ['components/portal/portal-navbar.tsx', 'inline-flex size-9 items-center justify-center rounded-md', 'pointer-coarse:size-11'],
+    ['components/portal/portal-navbar.tsx', 'flex lg:hidden items-center justify-center size-9', 'pointer-coarse:size-11'],
+    ['components/portal/portal-navbar.tsx', 'hidden lg:flex items-center gap-2 rounded-full border', 'pointer-coarse:min-h-11'],
+    ['components/layout/navbar.tsx', 'md:hidden p-2 ', 'pointer-coarse:p-3'],
+    ['components/portal/cofounder-fields.tsx', 'absolute top-3 right-3 flex h-8 w-8', 'pointer-coarse:size-11'],
+    ['components/portal/cofounder-fields.tsx', 'flex items-center gap-2 rounded-xl px-4 py-2.5', 'pointer-coarse:min-h-11'],
+    ['components/portal/education-tool-fields.tsx', 'absolute top-3 right-3 flex h-8 w-8', 'pointer-coarse:size-11'],
+    ['components/portal/education-tool-fields.tsx', 'flex items-center gap-2 rounded-xl px-4 py-2.5', 'pointer-coarse:min-h-11'],
+    ['components/portal/education-transcript-input.tsx', 'flex h-8 w-8 shrink-0 items-center', 'pointer-coarse:size-11'],
+    ['components/portal/education-transcript-input.tsx', 'flex items-center gap-2 rounded-xl px-4 py-2.5', 'pointer-coarse:min-h-11'],
+    ['components/portal/audio-recorder.tsx', 'flex h-8 w-8 shrink-0 items-center', 'pointer-coarse:size-11'],
+    ['components/portal/education-attendees.tsx', 'inline-flex items-center gap-1.5 text-xs', 'pointer-coarse:min-h-11'],
+    ['components/portal/education-attendees.tsx', 'flex h-7 w-7 items-center justify-center', 'pointer-coarse:size-11'],
+    ['components/portal/therapy-attendees.tsx', 'inline-flex items-center gap-1.5 text-xs', 'pointer-coarse:min-h-11'],
+    ['components/portal/therapy-attendees.tsx', 'flex h-7 w-7 items-center justify-center', 'pointer-coarse:size-11'],
+    ['components/portal/photo-upload.tsx', 'absolute -top-1 -right-1 flex h-7 w-7', 'pointer-coarse:size-11'],
+    ['components/portal/photo-upload.tsx', 'absolute top-3 right-3 flex h-8 w-8', 'pointer-coarse:size-11'],
+    ['components/portal/photo-upload.tsx', 'text-sm font-medium text-[#A78BFA]', 'pointer-coarse:min-h-11'],
+    ['components/portal/usuarios-table.tsx', 'rounded p-1.5 text-muted-foreground', 'pointer-coarse:size-11'],
+    ['components/portal/usuarios-table.tsx', 'flex items-center gap-2 text-sm', 'pointer-coarse:min-h-11'],
+    ['components/portal/usuarios-table.tsx', 'size-4 rounded border-border', 'pointer-coarse:size-5'],
+    ['components/portal/crm-leads-table.tsx', 'rounded-full px-2.5 py-1 text-xs font-medium', 'pointer-coarse:min-h-11'],
+    ['components/portal/crm-leads-table.tsx', 'inline-flex items-center text-muted-foreground transition-colors hover:text-foreground', 'pointer-coarse:p-[15px]'],
+    ['components/portal/crm-leads-table.tsx', 'modal-field flex w-auto max-w-[11rem]', 'pointer-coarse:min-h-11'],
+    ['components/portal/session-detail-form.tsx', 'mb-4 inline-flex items-center gap-1.5 self-start', 'pointer-coarse:min-h-11'],
+    ['components/portal/education-session-form.tsx', 'mb-4 inline-flex items-center gap-1.5 self-start', 'pointer-coarse:min-h-11'],
+    ['components/portal/education-deliverable-editor.tsx', 'mb-4 inline-flex items-center gap-1.5 self-start', 'pointer-coarse:min-h-11'],
+    ['components/portal/deliverable-editor.tsx', 'mb-4 inline-flex items-center gap-1.5 self-start', 'pointer-coarse:min-h-11'],
+    ['components/portal/deliverable-editor.tsx', 'inline-flex items-center gap-1 text-xs text-muted-foreground', 'pointer-coarse:min-h-11'],
+    ['components/portal/charla-detail.tsx', 'mb-4 inline-flex items-center gap-1.5 self-start', 'pointer-coarse:min-h-11'],
+    ['components/brand/brand-logo.tsx', 'flex items-center', 'pointer-coarse:min-h-11'],
+    // Un interruptor de 56 × 28 px: el área táctil se amplía con un `::after` invisible (el diseño no cambia).
+    ['components/brand/theme-toggle.tsx', 'relative flex items-center w-14 h-7', 'pointer-coarse:after:-inset-2'],
+    ['components/portal/crm-leads-table.tsx', 'rounded-md px-2 py-2 text-left text-xs', 'pointer-coarse:min-h-11'],
+    ['components/portal/crm-leads-table.tsx', 'rounded-full border px-3 py-1 text-xs', 'pointer-coarse:min-h-11'],
+    ['components/portal/pipeline-filter.tsx', 'rounded-full border px-3 py-1 text-xs', 'pointer-coarse:min-h-11'],
+    ['components/portal/password-generator-field.tsx', 'inline-flex items-center gap-1 text-xs font-medium', 'pointer-coarse:min-h-11'],
+    ['components/portal/password-generator-field.tsx', 'absolute inset-y-0 right-0 flex w-9', 'pointer-coarse:w-11'],
+    // El botón de «mostrar contraseña» crece a 44 px (w-11): el campo reserva ese mismo ancho a la derecha.
+    ['components/portal/password-generator-field.tsx', 'modal-field pr-9', 'pointer-coarse:pr-11'],
+    ['components/shared/country-phone-select.tsx', 'flex w-full items-center gap-2 rounded-md px-2 py-2', 'pointer-coarse:min-h-11'],
+  ]
+
+  for (const [file, anchor, token] of TARGETS) {
+    test(`${path.basename(file)} · «${anchor}» → ${token}`, () => {
+      const literals = classLiterals(read(file), anchor)
+      assert.ok(literals.length > 0, `no encuentro «${anchor}» en ${file}: si cambió, actualiza esta lista`)
+      for (const literal of literals) {
+        assert.ok(literal.includes(token), `a ${file} le falta ${token} en «${literal.slice(0, 90)}…»`)
+      }
+    })
+  }
 })

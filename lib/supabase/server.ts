@@ -1,5 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { fetchWithTimeout } from '@/lib/supabase/fetch'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: SupabaseClient<any> | null = null
@@ -15,6 +15,7 @@ export function getSupabaseServer(): SupabaseClient<any> {
       'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.'
     )
   }
-  _client = createClient(url, key, { auth: { persistSession: false } })
+  // `fetchWithTimeout`: una consulta que Supabase no contesta falla en 8 s en vez de colgar la página (ver fetch.ts).
+  _client = createClient(url, key, { auth: { persistSession: false }, global: { fetch: fetchWithTimeout } })
   return _client
 }

@@ -347,7 +347,12 @@ export function ParrillaPostForm({
     })
   }
 
+  // Tras guardar o eliminar bien, el diálogo tarda ≈200 ms en cerrarse (su animación de salida): durante ese rato el
+  // botón NO se reactiva. Antes el `finally` lo reactivaba al instante y un segundo toque volvía a crear la publicación.
+  const closingRef = useRef(false)
+
   function finish() {
+    closingRef.current = true
     onClose()
     router.refresh()
   }
@@ -429,7 +434,7 @@ export function ParrillaPostForm({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    if (!ready) return
+    if (!ready || submitting || closingRef.current) return
 
     setSubmitting(true)
     setError(null)
@@ -441,12 +446,12 @@ export function ParrillaPostForm({
     } catch {
       setError('Error de red al guardar la publicación')
     } finally {
-      setSubmitting(false)
+      if (!closingRef.current) setSubmitting(false)
     }
   }
 
   async function handleDelete() {
-    if (!post) return
+    if (!post || deleting || closingRef.current) return
     setDeleting(true)
     setError(null)
     try {
@@ -462,7 +467,7 @@ export function ParrillaPostForm({
     } catch {
       setError('Error de red al eliminar la publicación')
     } finally {
-      setDeleting(false)
+      if (!closingRef.current) setDeleting(false)
     }
   }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { getSupabaseBrowser } from '@/lib/supabase/browser'
+import { logError } from '@/lib/log'
 
 export const MAX_AVATAR_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -40,7 +41,7 @@ export async function uploadAvatar({
   })
 
   if (error) {
-    console.error('[uploadAvatar] Storage error:', error)
+    logError('[uploadAvatar] Storage error', error)
     throw new Error('Error al subir la foto')
   }
 

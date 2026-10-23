@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { resetPasswordSchema } from '@/lib/validations/usuarios'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
-export async function POST(
+export const POST = withApiErrors(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params
   const auth = await requireApiPermission('users:create_admin')
   if (!auth.ok) return auth.response
@@ -30,11 +33,14 @@ export async function POST(
 
   // El UI esconde este botón para filas super_admin, pero eso no protege un
   // POST directo a la ruta — el servidor tiene que rechazarlo también.
-  const { data: target } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', id)
-    .single()
+  const target = must(
+    await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', id)
+      .single(),
+    'profiles'
+  )
 
   if (!target) {
     return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
@@ -51,9 +57,9 @@ export async function POST(
   })
 
   if (error) {
-    console.error('[admin/usuarios/[id]/reset-password] error:', error)
+    logError('[admin/usuarios/[id]/reset-password] error', error)
     return NextResponse.json({ error: 'No se pudo restablecer la contraseña' }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })
-}
+})

@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useAppRouter } from '@/hooks/use-app-router'
 import { getSupabaseBrowser } from '@/lib/supabase/browser'
-import { AUTH_FIELDS, AUTH_LOGIN_COPY } from '@/lib/data/auth-copy'
+import { AUTH_FIELDS, AUTH_LOGIN_COPY, authQueryError } from '@/lib/data/auth-copy'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandField } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
@@ -24,26 +24,33 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [magicSent, setMagicSent] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // El aviso que dejó otra parte del sitio en la URL (`?error=auth` tras un enlace o Google que falló, `?error=perfil`
+  // tras cerrar una cuenta sin perfil): antes la página lo ignoraba y la persona no veía por qué volvía al login.
+  const [error, setError] = useState<string | null>(authQueryError(searchParams.get('error')))
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    const supabase = getSupabaseBrowser()
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    })
-
-    if (authError) {
-      const message = authError.message.toLowerCase()
-      setError(
-        message.includes('invalid login credentials')
+    // El `try`: sin él, un fallo inesperado dejaba el botón en «Ingresando...» para siempre.
+    let failure: string | null = null
+    try {
+      const { error: authError } = await getSupabaseBrowser().auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
+      if (authError) {
+        failure = authError.message.toLowerCase().includes('invalid login credentials')
           ? AUTH_LOGIN_COPY.errorInvalid
           : AUTH_LOGIN_COPY.errorGeneric
-      )
+      }
+    } catch {
+      failure = AUTH_LOGIN_COPY.errorGeneric
+    }
+
+    if (failure) {
+      setError(failure)
       setLoading(false)
       return
     }
@@ -61,15 +68,20 @@ function LoginForm() {
     setLoading(true)
     setError(null)
 
-    const supabase = getSupabaseBrowser()
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-      },
-    })
+    let failed = false
+    try {
+      const { error: authError } = await getSupabaseBrowser().auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+        },
+      })
+      failed = Boolean(authError)
+    } catch {
+      failed = true
+    }
 
-    if (authError) {
+    if (failed) {
       setError(AUTH_LOGIN_COPY.errorMagic)
       setLoading(false)
       return
@@ -80,13 +92,28 @@ function LoginForm() {
   }
 
   async function handleGoogleLogin() {
-    const supabase = getSupabaseBrowser()
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
-      },
-    })
+    // Ocupado mientras se manda a Google (el navegador sale de la página): evita un segundo toque. Si el resultado
+    // es un error —proveedor mal configurado—, antes no pasaba nada y no se avisaba.
+    setLoading(true)
+    setError(null)
+
+    let failed = false
+    try {
+      const { error: authError } = await getSupabaseBrowser().auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/api/auth/callback`,
+        },
+      })
+      failed = Boolean(authError)
+    } catch {
+      failed = true
+    }
+
+    if (failed) {
+      setError(AUTH_LOGIN_COPY.errorGoogle)
+      setLoading(false)
+    }
   }
 
   if (magicSent) {
@@ -138,7 +165,11 @@ function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-red-400">
+            {error}
+          </p>
+        )}
         <BrandButton type="submit" disabled={loading}>
           {loading ? AUTH_LOGIN_COPY.submitting : AUTH_LOGIN_COPY.submit}
         </BrandButton>

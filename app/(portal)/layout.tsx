@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { requireAuth } from '@/lib/auth/session'
 import { ROLE_LABELS, type Role } from '@/lib/permissions'
 import { PortalSidebar } from '@/components/portal/portal-sidebar'
@@ -5,6 +6,11 @@ import { PortalNavbar } from '@/components/portal/portal-navbar'
 import { PortalBottomNav } from '@/components/portal/portal-bottom-nav'
 import { BrandPageBackground } from '@/components/brand/brand-page-background'
 import { SidebarProvider } from '@/components/ui/sidebar'
+
+/** El portal pide sesión: nada de él debe indexarse. */
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default async function PortalLayout({
   children,

@@ -8,7 +8,7 @@ interface BrandLogoProps {
 
 export function BrandLogo({ href = '/', className }: BrandLogoProps) {
   return (
-    <Link href={href} className="flex items-center">
+    <Link href={href} className="flex items-center pointer-coarse:min-h-11">
       <span
         className={cn(
           'text-xl md:text-2xl font-bold tracking-tight gladwell-gradient-text no-underline decoration-transparent',

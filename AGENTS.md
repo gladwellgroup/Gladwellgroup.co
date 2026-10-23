@@ -170,7 +170,9 @@ las demás vistas del portal deben adoptarlas al tocarlas:
 - **Tablas (Banco y Frases de la Parrilla, `parrilla-table.tsx`):** una celda de texto libre lleva siempre un
   ancho tope + `line-clamp-2` (y `title` con el texto completo): un valor largo ensancha TODA la tabla (un
   referente de 120 caracteres sumaba 657 px). Las columnas secundarias se ocultan por el ancho de la TABLA
-  (`@container` + `hidden @min-[…px]:table-cell`) y no por el de la pantalla, para que la acción principal —la
+  (`@container` + `hidden` con `table-cell` desde un ancho mínimo, ver `parrilla-quotes.tsx`; no se escribe aquí la
+  clase literal porque Tailwind también escanea este archivo y generaría CSS inválido) y no por el de la pantalla,
+  para que la acción principal —la
   última columna— no quede fuera de vista en un iPad horizontal; si se añade una columna, hay que revisar ese
   umbral. Se verifica en WebKit con datos de peor caso, no con los de ejemplo.
 - **Verificar con WebKit real** (el motor de Safari; Chrome no reproduce estos fallos), con perfil de

@@ -1,11 +1,20 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js'
+import { loadSessionUser } from '@/lib/auth/session-user'
+import { ACCESS_UNAVAILABLE_MESSAGE } from '@/lib/auth/unavailable'
 import type { CharlaFields } from '@/lib/charlas/types'
-import { resolvePermissionsFromGrants } from '@/lib/permissions/resolve'
+import { isQueryFailure } from '@/lib/supabase/must'
 import type { Role } from '@/lib/permissions/roles'
 
 export type CharlaAccess =
   | { allowed: true; role: Role; charla: CharlaFields }
   | { allowed: false; error: string; statusCode: number }
+
+/** La base no contestó: no se sabe si la persona puede entrar ni si la charla existe. */
+const UNAVAILABLE: CharlaAccess = {
+  allowed: false,
+  error: ACCESS_UNAVAILABLE_MESSAGE,
+  statusCode: 503,
+}
 
 /** El cliente server usa la service role key, que ignora RLS por completo:
  *  esta función es la autorización real de las rutas de Charlas.
@@ -18,29 +27,26 @@ export async function resolveCharlaAccess(
   user: User,
   charlaId: string
 ): Promise<CharlaAccess> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
-    .eq('id', user.id)
-    .single()
+  const lookup = await loadSessionUser(supabase, user.id)
+  // Una consulta caída NO es «Sin permisos» ni «Charla no encontrada»: 503, reintentable.
+  if (lookup.status === 'error') return UNAVAILABLE
+  const profile = lookup.status === 'ok' ? lookup.user : null
 
-  const permissions = profile
-    ? resolvePermissionsFromGrants(profile.role as Role, profile.profile_module_grants)
-    : []
-
-  if (!profile || !permissions.includes('charlas:manage')) {
+  if (!profile || !profile.permissions.includes('charlas:manage')) {
     return { allowed: false, error: 'Sin permisos', statusCode: 403 }
   }
 
-  const { data: charla } = await supabase
+  const { data: charla, error: charlaError } = await supabase
     .from('charlas')
     .select('id, title, session_date, photo_url')
     .eq('id', charlaId)
-    .single()
+    .maybeSingle()
+
+  if (isQueryFailure(charlaError)) return UNAVAILABLE
 
   if (!charla) {
     return { allowed: false, error: 'Charla no encontrada', statusCode: 404 }
   }
 
-  return { allowed: true, role: profile.role as Role, charla: charla as CharlaFields }
+  return { allowed: true, role: profile.role, charla: charla as CharlaFields }
 }

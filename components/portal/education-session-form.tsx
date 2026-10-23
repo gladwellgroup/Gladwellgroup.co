@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { useAppRouter } from '@/hooks/use-app-router'
+import { useFlushOnLeave } from '@/hooks/use-flush-on-leave'
+import { useSaveQueue } from '@/hooks/use-save-queue'
 import { BrandField, BrandTextarea } from '@/components/brand/brand-field'
 import { BrandButton } from '@/components/brand/brand-button'
 import { PhotoUpload } from '@/components/portal/photo-upload'
@@ -197,6 +199,7 @@ export function EducationSessionForm({
   )
 
   const isReadOnly = !canEdit || session.status !== 'borrador'
+  const saveStatusRef = useRef(saveStatus)
 
   // Refs para la cola single-flight: leer el estado más reciente sin closures
   // obsoletos.
@@ -234,10 +237,9 @@ export function EducationSessionForm({
       audioUrl,
       tools,
     }
+    saveStatusRef.current = saveStatus
   })
 
-  const isSavingRef = useRef(false)
-  const pendingRef = useRef(false)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isFirstRender = useRef(true)
 
@@ -276,42 +278,39 @@ export function EducationSessionForm({
     }
   }, [session.id])
 
-  const saveNow = useCallback(async () => {
+  /** Un guardado; la cola (useSaveQueue) lo repite mientras haya algo nuevo y nunca corre dos a la vez. */
+  const saveOnce = async () => {
     if (isReadOnly) return
-    if (isSavingRef.current) {
-      pendingRef.current = true
-      return
-    }
+    setSaveStatus('saving')
+    setSaveErrorMessage(null)
 
-    isSavingRef.current = true
+    try {
+      const res = await fetch('/api/education/inputs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      })
 
-    do {
-      pendingRef.current = false
-      setSaveStatus('saving')
-      setSaveErrorMessage(null)
-
-      try {
-        const res = await fetch('/api/education/inputs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildPayload()),
-        })
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          setSaveStatus('error')
-          setSaveErrorMessage(data.error ?? null)
-        } else {
-          setSaveStatus('saved')
-        }
-      } catch {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
         setSaveStatus('error')
-        setSaveErrorMessage('Error de red al guardar')
+        setSaveErrorMessage(data.error ?? null)
+      } else {
+        setSaveStatus('saved')
       }
-    } while (pendingRef.current)
+    } catch {
+      setSaveStatus('error')
+      setSaveErrorMessage('Error de red al guardar')
+    }
+  }
+  const saveNow = useSaveQueue(saveOnce)
 
-    isSavingRef.current = false
-  }, [buildPayload, isReadOnly])
+  // Al salir (navegar, cerrar, pasar a segundo plano) se manda lo pendiente: el temporizador del autoguardado se
+  // cancela al desmontar y el último texto se perdía sin aviso.
+  useFlushOnLeave({
+    isDirty: () => !isReadOnly && (saveStatusRef.current === 'dirty' || saveStatusRef.current === 'saving'),
+    buildRequests: () => [{ url: '/api/education/inputs', method: 'POST', body: buildPayload() }],
+  })
 
   useEffect(() => {
     if (isReadOnly) return
@@ -404,7 +403,7 @@ export function EducationSessionForm({
       <div className="flex flex-col items-center text-center gap-1 pt-6 sm:pt-8">
         <Link
           href={basePath}
-          className="mb-4 inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-4 inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground active:text-foreground pointer-coarse:min-h-11"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver

@@ -10,7 +10,7 @@ import {
 } from '@/lib/charlas/queries'
 import { CHARLA_LABELS, bucketCharla } from '@/lib/charlas/status'
 import { CHARLA_TITLE_MAX, CHARLA_TITLE_MIN } from '@/lib/charlas/types'
-import { toDateKey } from '@/lib/date'
+import { toDateKey, todayKey } from '@/lib/date'
 import { isUpcoming } from '@/lib/deliverables/sessions'
 import {
   CALENDAR_PROGRAMAS,
@@ -35,11 +35,10 @@ import { createUserSchema, updateUserSchema } from '@/lib/validations/usuarios'
 const ROOT = process.cwd()
 const read = (file: string) => fs.readFileSync(path.join(ROOT, file), 'utf8')
 
-/** Hoy +/- `offsetDays`, como "YYYY-MM-DD" local (el mismo criterio de la app). */
+/** Hoy +/- `offsetDays`, como "YYYY-MM-DD" (el mismo criterio de la app: «hoy» en la zona de la plataforma). */
 function dayFromToday(offsetDays: number): string {
-  const date = new Date()
-  date.setDate(date.getDate() + offsetDays)
-  return toDateKey(date)
+  const [year, month, day] = todayKey().split('-').map(Number)
+  return toDateKey(new Date(year, month - 1, day + offsetDays))
 }
 
 describe('isRealDate', () => {
@@ -396,7 +395,7 @@ describe('las rutas y páginas de charlas verifican quién llama', () => {
       assert.ok(checksPermission, `${name} no verifica charlas:manage (ni con requireApiPermission ni con resolveCharlaAccess)`)
       // Quien no ha iniciado sesión recibe 401 antes de tocar nada.
       assert.ok(
-        source.includes("requireApiPermission('charlas:manage')") || source.includes('getAuthUser()'),
+        source.includes("requireApiPermission('charlas:manage')") || source.includes('requireApiUser()'),
         `${name} no comprueba la sesión`
       )
     })

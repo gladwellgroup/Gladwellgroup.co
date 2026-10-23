@@ -25,7 +25,8 @@ export interface ParrillaTableColumn<T> {
   primary?: boolean
   /** Clases del encabezado Y de la celda de la columna (ancho, alineación, visibilidad…). La
    *  tabla es un contenedor de consultas (`@container`): una columna secundaria se oculta
-   *  con `hidden @min-[…px]:table-cell` según el ancho de la TABLA y no el de la pantalla,
+   *  con `hidden` y reaparece como `table-cell` desde un ancho mínimo de la TABLA (variante de
+   *  contenedor con ancho mínimo, ver las columnas de parrilla-quotes.tsx) y no el de la pantalla,
    *  que cambia con el menú lateral y los márgenes. */
   className?: string
 }

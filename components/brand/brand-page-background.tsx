@@ -1,7 +1,7 @@
 'use client'
 
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useIsClient } from '@/hooks/use-is-client'
 
 interface BrandPageBackgroundProps {
   children: React.ReactNode
@@ -13,11 +13,7 @@ export function BrandPageBackground({
   orbOpacity = 1,
 }: BrandPageBackgroundProps) {
   const { resolvedTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const mounted = useIsClient()
 
   const isDark = !mounted || resolvedTheme === 'dark'
   const decorClass = mounted

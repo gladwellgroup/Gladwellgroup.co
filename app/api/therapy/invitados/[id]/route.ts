@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { patchInvitadoSchema } from '@/lib/validations/therapy'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
-export async function PATCH(
+export const PATCH = withApiErrors(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params
   const auth = await requireApiPermission('therapy:create')
   if (!auth.ok) return auth.response
@@ -14,11 +17,14 @@ export async function PATCH(
 
   const supabase = getSupabaseServer()
 
-  const { data: invitado } = await supabase
-    .from('invitados')
-    .select('id, created_by')
-    .eq('id', id)
-    .single()
+  const invitado = must(
+    await supabase
+      .from('invitados')
+      .select('id, created_by')
+      .eq('id', id)
+      .single(),
+    'invitados'
+  )
 
   if (!invitado) {
     return NextResponse.json({ error: 'Invitado no encontrado' }, { status: 404 })
@@ -51,9 +57,9 @@ export async function PATCH(
     .single()
 
   if (error) {
-    console.error('[invitados/[id]] PATCH error:', error)
+    logError('[invitados/[id]] PATCH error', error)
     return NextResponse.json({ error: 'No se pudo actualizar el invitado' }, { status: 500 })
   }
 
   return NextResponse.json(data)
-}
+})

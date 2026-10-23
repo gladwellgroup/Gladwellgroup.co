@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EducationContentSource } from '@/lib/education/deliverable-render'
+import { must } from '@/lib/supabase/must'
 
 interface SessionRef {
   id: string
@@ -34,9 +35,10 @@ export async function loadEducationContentSource(
       .eq('session_id', session.id)
       .single(),
   ])
+  const inputs = must(inputsRes, 'education_session_inputs')
+  const tools = must(toolsRes, 'education_tools')
+  const deliverable = must(deliverableRes, 'education_deliverables')
 
-  const inputs = inputsRes.data
-  const deliverable = deliverableRes.data
 
   return {
     sessionTitle: session.title,
@@ -46,7 +48,7 @@ export async function loadEducationContentSource(
     ponenteFotoUrl: inputs?.ponente_foto_url ?? null,
     conclusionesClave: deliverable?.conclusiones_clave ?? '',
     capsulas: deliverable?.capsulas ?? '',
-    tools: toolsRes.data ?? [],
+    tools: tools ?? [],
     fotoSesionUrl: inputs?.foto_sesion_url ?? null,
     fraseTexto: inputs?.frase_texto ?? null,
     fraseAutor: inputs?.frase_autor ?? null,

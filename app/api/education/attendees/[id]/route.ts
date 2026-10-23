@@ -1,25 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { resolveEducationAccess } from '@/lib/education/session-access'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
-export async function DELETE(
+export const DELETE = withApiErrors(async (
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   const { id } = await params
   const supabase = getSupabaseServer()
 
-  const { data: attendee } = await supabase
-    .from('education_attendees')
-    .select('id, session_id')
-    .eq('id', id)
-    .single()
+  const attendee = must(
+    await supabase
+      .from('education_attendees')
+      .select('id, session_id')
+      .eq('id', id)
+      .single(),
+    'education_attendees'
+  )
 
   if (!attendee) {
     return NextResponse.json({ error: 'Asistente no encontrado' }, { status: 404 })
@@ -44,7 +49,7 @@ export async function DELETE(
         error:
           'La sesión ya no está en borrador; la lista de asistentes no se puede modificar.',
       },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -54,7 +59,7 @@ export async function DELETE(
     .eq('id', id)
 
   if (error) {
-    console.error('[education/attendees/delete] Supabase error:', error)
+    logError('[education/attendees/delete] Supabase error', error)
     return NextResponse.json(
       { error: 'No se pudo eliminar el asistente' },
       { status: 500 }
@@ -62,4 +67,4 @@ export async function DELETE(
   }
 
   return NextResponse.json({ success: true })
-}
+})

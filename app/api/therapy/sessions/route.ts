@@ -3,8 +3,11 @@ import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { therapySessionSchema } from '@/lib/validations/therapy'
 import { resolvePermissionsFromGrants, type Role } from '@/lib/permissions'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
-export async function POST(request: NextRequest) {
+export const POST = withApiErrors(async (request: NextRequest) => {
   const auth = await requireApiPermission('therapy:create')
   if (!auth.ok) return auth.response
   const { user, role } = auth
@@ -29,11 +32,14 @@ export async function POST(request: NextRequest) {
   // No basta con "es community_admin": si además no tiene el módulo de
   // Encuentros · Terapia otorgado, quedaría con una sesión asignada que
   // jamás puede abrir (resolveDeliverableAccess la bloquearía igual).
-  const { data: moderator } = await supabase
-    .from('profiles')
-    .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
-    .eq('id', result.data.moderator_id)
-    .single()
+  const moderator = must(
+    await supabase
+      .from('profiles')
+      .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
+      .eq('id', result.data.moderator_id)
+      .single(),
+    'profiles'
+  )
 
   const moderatorPermissions = moderator
     ? resolvePermissionsFromGrants(moderator.role as Role, moderator.profile_module_grants)
@@ -46,11 +52,14 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: invitado } = await supabase
-    .from('invitados')
-    .select('id, created_by')
-    .eq('id', result.data.invitado_id)
-    .single()
+  const invitado = must(
+    await supabase
+      .from('invitados')
+      .select('id, created_by')
+      .eq('id', result.data.invitado_id)
+      .single(),
+    'invitados'
+  )
 
   if (!invitado) {
     return NextResponse.json({ error: 'Invitado no encontrado' }, { status: 400 })
@@ -73,7 +82,7 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) {
-    console.error('[therapy/sessions] Supabase error:', error)
+    logError('[therapy/sessions] Supabase error', error)
     return NextResponse.json(
       { error: 'No se pudo crear la sesión' },
       { status: 500 }
@@ -81,4 +90,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ id: session.id }, { status: 201 })
-}
+})

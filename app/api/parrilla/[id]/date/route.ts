@@ -4,15 +4,16 @@ import { requireApiPermission } from '@/lib/auth/api'
 import { parrillaRescheduleSchema } from '@/lib/validations/parrilla'
 import { applyPostUpdate } from '@/lib/parrilla/mutations'
 import { respond } from '@/lib/parrilla/http'
+import { withApiErrors } from '@/lib/api/with-errors'
 
 /** Mueve solo una fecha (producción o publicación, según la vista activa del
  *  calendario) — es lo que dispara el arrastre de una publicación a otro
  *  día, sin tocar el resto del post. Es de un solo campo, así que no lleva
  *  token de concurrencia: mover una fecha no pisa lo que otra persona editó. */
-export async function PATCH(
+export const PATCH = withApiErrors(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params
   const auth = await requireApiPermission('parrilla:manage')
   if (!auth.ok) return auth.response
@@ -40,4 +41,4 @@ export async function PATCH(
       fallback: 'No se pudo mover la publicación',
     })
   )
-}
+})

@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { createUserSchema } from '@/lib/validations/usuarios'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { logError } from '@/lib/log'
 
-export async function POST(request: NextRequest) {
+export const POST = withApiErrors(async (request: NextRequest) => {
   const auth = await requireApiPermission('users:create_admin')
   if (!auth.ok) return auth.response
 
@@ -26,13 +28,18 @@ export async function POST(request: NextRequest) {
   const supabase = getSupabaseServer()
 
   // El alta es directa (correo + contraseña que fija el super_admin, sin
-  // invitación previa) — admin_created en el metadata es lo que le permite
-  // pasar el trigger check_invitation_before_signup (ver migración
-  // 20260905_profile_module_grants.sql).
+  // invitación previa) — admin_created es lo que le permite pasar el trigger
+  // check_invitation_before_signup (ver migración 20260905_profile_module_grants.sql).
+  //
+  // Va en `app_metadata`, que solo escribe el servidor con la llave de servicio. En `user_metadata` lo
+  // escribe el propio cliente al registrarse (`signInWithOtp({ options: { data } })`): quien lo pusiera
+  // se saltaba la invitación. El trigger de hoy todavía lee `user_metadata`, así que van los dos hasta
+  // que se aplique 20260923_signup_app_metadata.sql (después se quita el de `user_metadata`).
   const { data: created, error: createError } = await supabase.auth.admin.createUser({
     email: correo,
     password,
     email_confirm: true,
+    app_metadata: { admin_created: true },
     user_metadata: { admin_created: true, full_name: nombre },
   })
 
@@ -57,7 +64,7 @@ export async function POST(request: NextRequest) {
   })
 
   if (profileError) {
-    console.error('[admin/usuarios] profiles insert error:', profileError)
+    logError('[admin/usuarios] profiles insert error', profileError)
     // No dejar una cuenta de auth huérfana sin perfil.
     await supabase.auth.admin.deleteUser(created.user.id)
     return NextResponse.json({ error: 'No se pudo crear el perfil' }, { status: 500 })
@@ -70,7 +77,7 @@ export async function POST(request: NextRequest) {
       _granted_by: auth.user.id,
     })
     if (grantsError) {
-      console.error('[admin/usuarios] set_profile_module_grants error:', grantsError)
+      logError('[admin/usuarios] set_profile_module_grants error', grantsError)
       return NextResponse.json(
         { error: 'La cuenta se creó, pero no se pudieron asignar los módulos' },
         { status: 500 }
@@ -79,4 +86,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ id: created.user.id }, { status: 201 })
-}
+})

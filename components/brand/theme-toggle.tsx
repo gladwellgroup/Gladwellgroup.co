@@ -1,7 +1,7 @@
 'use client'
 
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useIsClient } from '@/hooks/use-is-client'
 
 function SunIcon() {
   return (
@@ -22,11 +22,8 @@ function MoonIcon() {
 
 export function ThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // El tema solo lo conoce el navegador: el servidor no pinta el interruptor.
+  const mounted = useIsClient()
 
   if (!mounted) return null
 
@@ -36,7 +33,7 @@ export function ThemeToggle() {
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       aria-label={isDark ? 'Activar modo claro' : 'Activar modo oscuro'}
-      className="relative flex items-center w-14 h-7 rounded-full p-0.5 transition-all duration-300 gladwell-border-gradient focus:outline-none"
+      className="relative flex items-center w-14 h-7 rounded-full p-0.5 transition-all duration-300 gladwell-border-gradient focus:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-2"
       style={{
         background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(124,58,237,0.08)',
       }}

@@ -13,6 +13,7 @@ import {
   type EducationTool,
 } from '@/lib/education/deliverable-template'
 import { firstName } from '@/lib/deliverables/names'
+import { normalizeHttpUrl } from '@/lib/url'
 import {
   BODY,
   BulletList,
@@ -205,8 +206,8 @@ function ToolList({ tools }: { tools: EducationTool[] }) {
         <View key={i} style={educationStyles.toolRow}>
           <Text style={educationStyles.toolMarker}>•</Text>
           <Text style={educationStyles.toolBody}>
-            {tool.url?.trim() ? (
-              <Link src={tool.url.trim()} style={educationStyles.toolNombreLink}>
+            {normalizeHttpUrl(tool.url) ? (
+              <Link src={normalizeHttpUrl(tool.url) as string} style={educationStyles.toolNombreLink}>
                 {tool.nombre.trim()}
               </Link>
             ) : (

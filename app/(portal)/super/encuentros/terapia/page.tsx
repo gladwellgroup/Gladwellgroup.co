@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { TherapyDashboard } from '@/components/portal/therapy-dashboard'
 
 export default async function SuperTerapiaPage() {
@@ -8,7 +9,7 @@ export default async function SuperTerapiaPage() {
   if (user.role !== 'super_admin') redirect('/admin/encuentros/terapia')
   const supabase = getSupabaseServer()
 
-  const [{ data: sessions }, { data: moderators }, { data: invitados }] =
+  const [sessionsResult, moderatorsResult, invitadosResult] =
     await Promise.all([
       supabase
         .from('therapy_sessions')
@@ -24,6 +25,9 @@ export default async function SuperTerapiaPage() {
         .order('nombre'),
       supabase.from('invitados').select('id, nombre').order('nombre'),
     ])
+  const sessions = must(sessionsResult, 'Sesiones de Terapia')
+  const moderators = must(moderatorsResult, 'Moderadores')
+  const invitados = must(invitadosResult, 'Invitados')
 
   return (
     <TherapyDashboard

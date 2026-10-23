@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Download } from 'lucide-react'
@@ -13,6 +13,9 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { ConfirmDialog } from '@/components/portal/confirm-dialog'
+import { useDeliverableProcessing } from '@/hooks/use-deliverable-processing'
+import { useFlushOnLeave } from '@/hooks/use-flush-on-leave'
+import { useSaveQueue } from '@/hooks/use-save-queue'
 import { parseDateOnly } from '@/lib/date'
 
 export interface EducationDeliverableData {
@@ -42,7 +45,6 @@ interface EducationDeliverableEditorProps {
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
 const DEBOUNCE_MS = 1200
-const RETRY_THRESHOLD_MS = 6 * 60 * 1000
 
 const SAVE_COPY: Record<SaveStatus, string> = {
   idle: '',
@@ -67,73 +69,102 @@ export function EducationDeliverableEditor({
   const [capsulas, setCapsulas] = useState(initial.capsulas ?? '')
   const [contentHtml, setContentHtml] = useState(initial.content_html ?? '')
   const [pdfUrl, setPdfUrl] = useState(initial.pdf_url)
-  const [processingStatus, setProcessingStatus] = useState(initial.processing_status)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [approving, setApproving] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [isStuck, setIsStuck] = useState(false)
-  const [retrying, setRetrying] = useState(false)
 
   const canEdit = !isEntregado
+
+  // La síntesis (generando → procesando → listo/error): arranque, sondeo ligero y «Reintentar» (ver el gancho).
   // 'procesando' es el claim que toma la ruta de síntesis mientras trabaja.
-  const isBusy = ['generando', 'procesando'].includes(processingStatus)
-
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isSavingRef = useRef(false)
-  const pendingRef = useRef(false)
-  const isFirst = useRef(true)
-
-  const fieldsRef = useRef({ conclusiones, capsulas })
-  useEffect(() => {
-    fieldsRef.current = { conclusiones, capsulas }
+  const {
+    status: processingStatus,
+    isBusy,
+    isStuck,
+    retrying,
+    retry: handleRetry,
+  } = useDeliverableProcessing({
+    sessionId: session.id,
+    initialStatus: initial.processing_status,
+    initialGeneratedAt: initial.generated_at,
+    processUrl: '/api/education/deliverables/process',
+    statusUrl: '/api/education/deliverables/status',
+    onSettled: () => router.refresh(),
+    onError: setActionError,
+    onProcessed: (data) => setNotice(data.warning ?? null),
   })
 
-  const saveNow = useCallback(async () => {
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFirst = useRef(true)
+  // Un doble toque en «Confirmar envío» entra antes de que el diálogo termine de cerrarse (su animación de salida):
+  // sin esta guarda, el segundo toque mandaba el correo otra vez.
+  const approvingRef = useRef(false)
+  // Los valores recién traídos del servidor no cuentan como «cambios del usuario»: no deben disparar un autoguardado.
+  const skipAutosaveRef = useRef(false)
+
+  const fieldsRef = useRef({ conclusiones, capsulas })
+  const saveStatusRef = useRef(saveStatus)
+  useEffect(() => {
+    fieldsRef.current = { conclusiones, capsulas }
+    saveStatusRef.current = saveStatus
+  })
+
+  /** Lo que guarda el editor ahora mismo (lo usan el autoguardado y el guardado al salir). */
+  const buildRequest = () => ({
+    url: '/api/education/deliverables',
+    method: 'PATCH' as const,
+    body: {
+      session_id: session.id,
+      conclusiones_clave: fieldsRef.current.conclusiones,
+      capsulas: fieldsRef.current.capsulas,
+    },
+  })
+
+  /** Un guardado; la cola (useSaveQueue) lo repite mientras haya algo nuevo y nunca corre dos a la vez. */
+  const saveOnce = async () => {
     if (!canEdit) return
-    if (isSavingRef.current) {
-      pendingRef.current = true
-      return
-    }
-    isSavingRef.current = true
+    setSaveStatus('saving')
 
-    do {
-      pendingRef.current = false
-      setSaveStatus('saving')
-
-      try {
-        const res = await fetch('/api/education/deliverables', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: session.id,
-            conclusiones_clave: fieldsRef.current.conclusiones,
-            capsulas: fieldsRef.current.capsulas,
-          }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          setSaveStatus('error')
-          setActionError(data.error ?? 'Error al guardar')
-        } else {
-          setSaveStatus('saved')
-          if (data.content_html) setContentHtml(data.content_html)
-          setActionError(null)
-        }
-      } catch {
+    try {
+      const request = buildRequest()
+      const res = await fetch(request.url, {
+        method: request.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request.body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
         setSaveStatus('error')
+        setActionError(data.error ?? 'Error al guardar')
+      } else {
+        setSaveStatus('saved')
+        if (data.content_html) setContentHtml(data.content_html)
+        setActionError(null)
       }
-    } while (pendingRef.current)
+    } catch {
+      setSaveStatus('error')
+    }
+  }
+  const saveNow = useSaveQueue(saveOnce)
 
-    isSavingRef.current = false
-  }, [canEdit, session.id])
+  // Al salir (navegar, cerrar, pasar a segundo plano) se manda lo pendiente: el temporizador del autoguardado se
+  // cancela al desmontar y el último texto se perdía sin aviso.
+  useFlushOnLeave({
+    isDirty: () => canEdit && !isBusy && (saveStatusRef.current === 'dirty' || saveStatusRef.current === 'saving'),
+    buildRequests: () => [buildRequest()],
+  })
 
   useEffect(() => {
     if (!canEdit || isBusy) return
     if (isFirst.current) {
       isFirst.current = false
+      return
+    }
+    if (skipAutosaveRef.current) {
+      skipAutosaveRef.current = false
       return
     }
     setSaveStatus('dirty')
@@ -146,98 +177,24 @@ export function EducationDeliverableEditor({
     }
   }, [conclusiones, capsulas, canEdit, isBusy, saveNow])
 
-  const processStartedRef = useRef(false)
-
-  const triggerProcess = useCallback(async () => {
-    try {
-      const res = await fetch('/api/education/deliverables/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: session.id }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        // 409 = otra pestaña ya está sintetizando; el polling la seguirá.
-        if (res.status !== 409) {
-          setActionError(
-            data.error ?? 'No se pudo completar la síntesis del entregable'
-          )
-        }
-      } else {
-        const data = await res.json().catch(() => ({}))
-        setActionError(null)
-        setNotice(data.warning ?? null)
-      }
-      router.refresh()
-    } catch {
-      setActionError('Error de red al sintetizar el entregable')
-      router.refresh()
-    }
-  }, [session.id, router])
-
-  // Arranca o retoma el procesamiento cuando el shell está en 'generando'.
+  // Trae lo que el servidor tenga de nuevo (p. ej. la síntesis recién terminada), pero NUNCA pisa lo que se está
+  // escribiendo: antes un refresco a mitad de una edición devolvía el texto anterior.
   useEffect(() => {
-    if (processingStatus !== 'generando') {
-      processStartedRef.current = false
-      setIsStuck(false)
-      return
-    }
-    if (processStartedRef.current) return
-    processStartedRef.current = true
-
-    let cancelled = false
-
-    void triggerProcess()
-
-    const checkStuck = () => {
-      if (!initial.generated_at) return
-      const elapsed = Date.now() - new Date(initial.generated_at).getTime()
-      if (!cancelled) setIsStuck(elapsed > RETRY_THRESHOLD_MS)
-    }
-    checkStuck()
-
-    const poll = setInterval(() => {
-      if (!cancelled) {
-        checkStuck()
-        router.refresh()
-      }
-    }, 4000)
-
-    return () => {
-      cancelled = true
-      clearInterval(poll)
-    }
-  }, [processingStatus, triggerProcess, initial.generated_at, router])
-
-  // Mientras otra pestaña procesa, este cliente solo refresca hasta ver el
-  // resultado; no vuelve a llamar a la ruta de síntesis.
-  useEffect(() => {
-    if (processingStatus !== 'procesando') return
-
-    let cancelled = false
-    const poll = setInterval(() => {
-      if (!cancelled) router.refresh()
-    }, 4000)
-
-    return () => {
-      cancelled = true
-      clearInterval(poll)
-    }
-  }, [processingStatus, router])
-
-  async function handleRetry() {
-    setIsStuck(false)
-    setRetrying(true)
-    await triggerProcess()
-    setRetrying(false)
-  }
-
-  useEffect(() => {
-    setConclusiones(initial.conclusiones_clave ?? '')
-    setCapsulas(initial.capsulas ?? '')
+    // Sincroniza lo que llega del servidor con el borrador, y solo si no hay cambios sin guardar (`saveStatusRef`, que el
+    // compilador no puede seguir): derivado del render o con `key` se perdería lo que la persona está escribiendo.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- ver arriba
     setContentHtml(initial.content_html ?? '')
     setPdfUrl(initial.pdf_url)
-    setProcessingStatus(initial.processing_status)
+    if (saveStatusRef.current === 'dirty' || saveStatusRef.current === 'saving') return
+    const next = {
+      conclusiones: initial.conclusiones_clave ?? '',
+      capsulas: initial.capsulas ?? '',
+    }
+    if (next.conclusiones !== fieldsRef.current.conclusiones || next.capsulas !== fieldsRef.current.capsulas) {
+      skipAutosaveRef.current = true
+      setConclusiones(next.conclusiones)
+      setCapsulas(next.capsulas)
+    }
   }, [initial])
 
   async function handleDownloadPdf() {
@@ -245,7 +202,7 @@ export function EducationDeliverableEditor({
     setPdfBusy(true)
     try {
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      if (canEdit && saveStatus === 'dirty') await saveNow()
+      if (canEdit && (saveStatus === 'dirty' || saveStatus === 'saving')) await saveNow()
 
       const res = await fetch('/api/education/deliverables/pdf', {
         method: 'POST',
@@ -267,6 +224,8 @@ export function EducationDeliverableEditor({
   }
 
   async function handleApprove() {
+    if (approvingRef.current) return
+    approvingRef.current = true
     setConfirmOpen(false)
     setActionError(null)
     setNotice(null)
@@ -296,6 +255,7 @@ export function EducationDeliverableEditor({
     } catch {
       setActionError('Error de red al enviar')
     } finally {
+      approvingRef.current = false
       setApproving(false)
     }
   }
@@ -312,7 +272,7 @@ export function EducationDeliverableEditor({
       <div className="flex flex-col items-center text-center gap-1">
         <Link
           href={`${basePath}/${session.id}`}
-          className="mb-4 inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-4 inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground active:text-foreground pointer-coarse:min-h-11"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a la sesión
@@ -330,7 +290,7 @@ export function EducationDeliverableEditor({
         </p>
       )}
 
-      {processingStatus === 'generando' && isStuck && (
+      {isBusy && isStuck && (
         <div className="flex flex-col items-center gap-2 text-center rounded-lg border border-amber-500/30 px-4 py-3">
           <p className="text-sm text-amber-600 dark:text-amber-400">
             Esto está tardando más de lo esperado. Puede que el proceso se haya

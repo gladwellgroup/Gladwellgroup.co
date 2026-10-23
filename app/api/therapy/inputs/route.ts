@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { therapyInputsSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { replaceSessionRows } from '@/lib/supabase/replace-rows'
+import { logError } from '@/lib/log'
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   const supabase = getSupabaseServer()
 
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
         error:
           'La sesión ya no está en borrador; los datos de captura no se pueden modificar.',
       },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
     .upsert(inputFields, { onConflict: 'session_id' })
 
   if (inputError) {
-    console.error('[therapy/inputs] Supabase error:', inputError)
+    logError('[therapy/inputs] Supabase error', inputError)
     return NextResponse.json(
       { error: 'No se pudieron guardar los inputs' },
       { status: 500 }
@@ -80,37 +82,32 @@ export async function POST(request: NextRequest) {
   }
 
   if (cofounders !== undefined) {
-    const { error: deleteError } = await supabase
-      .from('therapy_session_cofounders')
-      .delete()
-      .eq('session_id', result.data.session_id)
-
-    if (deleteError) {
-      console.error('[therapy/inputs] Error limpiando cofundadores:', deleteError)
-    }
-
-    if (cofounders.length > 0) {
-      const cofoundersWithSession = cofounders.map((c, i) => ({
+    // Sin dejar nunca la lista vacía: inserta lo nuevo y después borra lo de antes (ver replaceSessionRows).
+    const replaced = await replaceSessionRows(
+      supabase,
+      'therapy_session_cofounders',
+      result.data.session_id,
+      cofounders.map((c, i) => ({
         session_id: result.data.session_id,
         nombre: c.nombre,
         whatsapp: c.whatsapp || null,
         correo: c.correo || null,
         orden: c.orden ?? i,
       }))
+    )
 
-      const { error: insertError } = await supabase
-        .from('therapy_session_cofounders')
-        .insert(cofoundersWithSession)
-
-      if (insertError) {
-        console.error('[therapy/inputs] Error insertando cofundadores:', insertError)
-        return NextResponse.json(
-          { error: 'No se pudieron guardar los fundadores' },
-          { status: 500 }
-        )
-      }
+    if (!replaced.ok) {
+      return NextResponse.json(
+        {
+          error:
+            replaced.step === 'insert'
+              ? 'No se pudieron guardar los fundadores'
+              : 'Los fundadores se guardaron, pero no se pudo quitar la lista anterior. Vuelve a guardar.',
+        },
+        { status: 500 }
+      )
     }
   }
 
   return NextResponse.json({ success: true }, { status: 200 })
-}
+})

@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { archivedSessionError } from '@/lib/deliverables/archived'
 import { educationSessionRefSchema } from '@/lib/validations/education'
 import { resolveEducationAccess } from '@/lib/education/session-access'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { startGeneration } from '@/lib/deliverables/claim'
+import { must } from '@/lib/supabase/must'
 
 export const maxDuration = 60
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   const archived = archivedSessionError(access.session.status)
   if (archived) {
-    return NextResponse.json({ error: archived }, { status: 403 })
+    return NextResponse.json({ error: archived }, { status: 409 })
   }
 
   if (access.session.status === 'entregado') {
@@ -50,15 +52,18 @@ export async function POST(request: NextRequest) {
         error:
           'El entregable ya fue enviado. Puedes verlo, pero no regenerarlo con IA.',
       },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
-  const { data: inputs } = await supabase
-    .from('education_session_inputs')
-    .select('objetivo, notas_moderador, transcripcion_texto, audio_url, capsulas_emprendimiento')
-    .eq('session_id', session_id)
-    .single()
+  const inputs = must(
+    await supabase
+      .from('education_session_inputs')
+      .select('objetivo, notas_moderador, transcripcion_texto, audio_url, capsulas_emprendimiento')
+      .eq('session_id', session_id)
+      .single(),
+    'education_session_inputs'
+  )
 
   if (!inputs) {
     return NextResponse.json(
@@ -87,26 +92,23 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: deliverable, error: upsertError } = await supabase
-    .from('education_deliverables')
-    .upsert(
-      {
-        session_id,
-        generated_by: user.id,
-        processing_status: 'generando',
-        conclusiones_clave: '',
-        capsulas: inputs.capsulas_emprendimiento ?? '',
-        content_html: null,
-        pdf_url: null,
-        generated_at: new Date().toISOString(),
-      },
-      { onConflict: 'session_id' }
-    )
-    .select('id')
-    .single()
+  // Sin pisar una síntesis que sigue viva (antes era un upsert incondicional).
+  const started = await startGeneration(supabase, 'education_deliverables', session_id, {
+    generated_by: user.id,
+    conclusiones_clave: '',
+    capsulas: inputs.capsulas_emprendimiento ?? '',
+    content_html: null,
+    pdf_url: null,
+  })
 
-  if (upsertError || !deliverable) {
-    console.error('[education/generate] upsert error:', upsertError)
+  if (started.status === 'busy') {
+    return NextResponse.json(
+      { error: 'Ya se está generando el entregable de esta sesión. Espera a que termine.' },
+      { status: 409 }
+    )
+  }
+
+  if (started.status === 'error') {
     return NextResponse.json(
       { error: 'No se pudo iniciar el entregable' },
       { status: 500 }
@@ -115,7 +117,7 @@ export async function POST(request: NextRequest) {
 
   // El cliente llama a /api/education/deliverables/process desde el editor.
   return NextResponse.json(
-    { id: deliverable.id, session_id, processing_status: 'generando' },
+    { id: started.id, session_id, processing_status: 'generando' },
     { status: 201 }
   )
-}
+})

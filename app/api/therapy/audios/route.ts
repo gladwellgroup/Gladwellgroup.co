@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
-import { getAuthUser } from '@/lib/auth/api'
+import { requireApiUser } from '@/lib/auth/api'
 import { audioMetaSchema } from '@/lib/validations/therapy'
 import { resolveDeliverableAccess } from '@/lib/therapy/deliverable-access'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const POST = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   let body: unknown
   try {
@@ -50,7 +52,7 @@ export async function POST(request: NextRequest) {
         error:
           'La sesión ya no está en borrador; los datos de captura no se pueden modificar.',
       },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) {
-    console.error('[therapy/audios] Insert error:', error)
+    logError('[therapy/audios] Insert error', error)
     return NextResponse.json(
       { error: 'No se pudo guardar el audio' },
       { status: 500 }
@@ -69,13 +71,12 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json(data, { status: 201 })
-}
+})
 
-export async function DELETE(request: NextRequest) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export const DELETE = withApiErrors(async (request: NextRequest) => {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+  const { user } = auth
 
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
@@ -86,11 +87,14 @@ export async function DELETE(request: NextRequest) {
 
   const supabase = getSupabaseServer()
 
-  const { data: audio } = await supabase
-    .from('therapy_session_audios')
-    .select('session_id')
-    .eq('id', id)
-    .single()
+  const audio = must(
+    await supabase
+      .from('therapy_session_audios')
+      .select('session_id')
+      .eq('id', id)
+      .single(),
+    'therapy_session_audios'
+  )
 
   if (!audio) {
     return NextResponse.json({ error: 'Audio no encontrado' }, { status: 404 })
@@ -115,7 +119,7 @@ export async function DELETE(request: NextRequest) {
         error:
           'La sesión ya no está en borrador; los datos de captura no se pueden modificar.',
       },
-      { status: 403 }
+      { status: 409 }
     )
   }
 
@@ -125,7 +129,7 @@ export async function DELETE(request: NextRequest) {
     .eq('id', id)
 
   if (error) {
-    console.error('[therapy/audios] Delete error:', error)
+    logError('[therapy/audios] Delete error', error)
     return NextResponse.json(
       { error: 'No se pudo eliminar el audio' },
       { status: 500 }
@@ -133,4 +137,4 @@ export async function DELETE(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true }, { status: 200 })
-}
+})

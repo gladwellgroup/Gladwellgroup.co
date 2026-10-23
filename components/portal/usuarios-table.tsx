@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Briefcase, KeyRound, Mail, Pencil, UserPlus } from 'lucide-react'
 import { BrandCard } from '@/components/brand/brand-card'
@@ -78,12 +78,12 @@ function ModuleCheckboxList({
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
       {MODULE_KEYS.map((key) => (
-        <label key={key} className="flex items-center gap-2 text-sm">
+        <label key={key} className="flex items-center gap-2 text-sm pointer-coarse:min-h-11">
           <input
             type="checkbox"
             checked={selected.includes(key)}
             onChange={() => onToggle(key)}
-            className="size-4 rounded border-border accent-[#7C3AED]"
+            className="size-4 rounded border-border accent-[#7C3AED] pointer-coarse:size-5"
           />
           {MODULE_LABELS[key]}
         </label>
@@ -109,16 +109,21 @@ function CreateUserDialog({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!open) return
-    setRole('community_admin')
-    setNombre('')
-    setCorreo('')
-    setPassword('')
-    setCargo('')
-    setGrantedModules([])
-    setError(null)
-  }, [open])
+  // El formulario arranca en blanco cada vez que el diálogo se abre. Se ajusta durante el render (el patrón de React para
+  // «reiniciar estado cuando cambia una propiedad») y no en un efecto: así no se pinta antes un render con lo anterior.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setRole('community_admin')
+      setNombre('')
+      setCorreo('')
+      setPassword('')
+      setCargo('')
+      setGrantedModules([])
+      setError(null)
+    }
+  }
 
   function toggleModule(key: ModuleKey) {
     setGrantedModules((prev) =>
@@ -258,13 +263,17 @@ function EditUserDialog({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  // Al elegir a otra persona se cargan sus datos (ajuste durante el render, como en `CreateUserDialog`); al cerrarse
+  // (`user` pasa a null) se conservan hasta que se abra de nuevo, para no vaciar el diálogo mientras se desvanece.
+  const [shownUser, setShownUser] = useState(user)
+  if (user !== shownUser) {
+    setShownUser(user)
     if (user) {
       setCargo(user.cargo ?? '')
       setGrantedModules(user.granted_modules)
       setError(null)
     }
-  }, [user])
+  }
 
   function toggleModule(key: ModuleKey) {
     setGrantedModules((prev) =>
@@ -351,13 +360,16 @@ function ResetPasswordDialog({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  useEffect(() => {
+  // Cada vez que se elige a una persona el formulario arranca limpio (ajuste durante el render, como en `EditUserDialog`).
+  const [shownUser, setShownUser] = useState(user)
+  if (user !== shownUser) {
+    setShownUser(user)
     if (user) {
       setPassword('')
       setError(null)
       setSuccess(false)
     }
-  }, [user])
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -483,7 +495,7 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
                               type="button"
                               onClick={() => setEditingUser(u)}
                               aria-label="Editar usuario"
-                              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:size-11"
                             >
                               <Pencil className="size-4" />
                             </button>
@@ -491,7 +503,7 @@ export function UsuariosTable({ users, canManage }: UsuariosTableProps) {
                               type="button"
                               onClick={() => setResettingUser(u)}
                               aria-label="Restablecer contraseña"
-                              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:size-11"
                             >
                               <KeyRound className="size-4" />
                             </button>

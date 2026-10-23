@@ -58,3 +58,18 @@ export function getPhoneCodeByIso(iso: string): AmericasPhoneCode | undefined {
 export function isValidAmericasPhoneIso(iso: string): boolean {
   return byIso.has(iso)
 }
+
+/** El país de un número E.164 ya guardado («+523001234567» → «MX»). Solo reconoce números con «+»: uno escrito sin
+ *  código (los de antes del selector de país) no dice de dónde es.
+ *
+ *  Basta el primer código de la lista que sea prefijo del número porque ninguno lo es de otro distinto (lo vigila
+ *  `tests/phone.test.ts`: si un día entra uno como «+1809», habrá que elegir el más largo).
+ *
+ *  Los países que comparten «+1» (EE.UU., Canadá, Jamaica…) no se distinguen por el número: devuelve «US», que va
+ *  primero en la lista. Da igual para guardar —el número se reconstruye solo con el código de marcación—, pero la
+ *  bandera de un número canadiense se verá como la de EE.UU. */
+export function inferPhoneCountryIso(e164: string | null | undefined): string | undefined {
+  if (!e164?.trim().startsWith("+")) return undefined
+  const digits = e164.replace(/\D/g, "")
+  return AMERICAS_PHONE_CODES.find((entry) => digits.startsWith(entry.dialCode.replace(/\D/g, "")))?.iso
+}

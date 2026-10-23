@@ -1,5 +1,6 @@
 import { requirePermission } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { TherapyDashboard } from '@/components/portal/therapy-dashboard'
 
 export default async function AdminTerapiaPage() {
@@ -11,7 +12,7 @@ export default async function AdminTerapiaPage() {
   // community_admin) solo lo usa el selector del formulario "Nueva sesión"
   // — pedirlo para quien no puede crear filtraría el correo de todo el
   // equipo a un payload que nunca lo va a mostrar.
-  const [{ data: sessions }, { data: moderators }, { data: invitados }] =
+  const [sessionsResult, moderatorsResult, invitadosResult] =
     await Promise.all([
       supabase
         .from('therapy_sessions')
@@ -26,13 +27,16 @@ export default async function AdminTerapiaPage() {
             .select('id, nombre, correo')
             .in('role', ['super_admin', 'community_admin'])
             .order('nombre')
-        : Promise.resolve({ data: [] }),
+        : Promise.resolve({ data: [], error: null }),
       supabase
         .from('invitados')
         .select('id, nombre')
         .eq('created_by', user.id)
         .order('nombre'),
     ])
+  const sessions = must(sessionsResult, 'Sesiones de Terapia')
+  const moderators = must(moderatorsResult, 'Moderadores')
+  const invitados = must(invitadosResult, 'Invitados')
 
   return (
     <TherapyDashboard

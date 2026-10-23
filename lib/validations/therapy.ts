@@ -1,4 +1,12 @@
 import { z } from 'zod'
+import { isProjectStorageUrl } from '@/lib/storage/hosts'
+
+/** Una URL de un archivo del Storage de ESTE proyecto (fotos y audio que sube el propio portal). El servidor las
+ *  descarga: aceptarlas de cualquier host dejaba que se le pidiera una dirección interna o un archivo enorme. */
+const storageUrl = z
+  .string()
+  .url()
+  .refine((value) => isProjectStorageUrl(value), 'La URL debe ser un archivo subido al portal')
 
 export const therapySessionSchema = z.object({
   title: z.string().trim().min(3, 'El título debe tener al menos 3 caracteres'),
@@ -28,7 +36,7 @@ export const therapyInputsSchema = z.object({
   session_id: z.string().uuid(),
   reto_problema: z.string().optional(),
   recomendaciones_incomodas: z.string().optional(),
-  foto_sesion_url: z.string().url().optional().or(z.literal('')),
+  foto_sesion_url: storageUrl.optional().or(z.literal('')),
   frase_texto: z.string().optional(),
   frase_autor: z.string().optional(),
   cofounders: z.array(cofounderSchema).optional(),
@@ -41,7 +49,7 @@ export const uploadFileSchema = z.object({
 
 export const audioMetaSchema = z.object({
   session_id: z.string().uuid(),
-  audio_url: z.string().url(),
+  audio_url: storageUrl,
   autor_nombre: z.string().trim().optional(),
   duracion_segundos: z.number().int().min(0).optional(),
 })

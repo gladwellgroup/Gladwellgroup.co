@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SessionUser } from '@/lib/auth/session'
 import { loadCharlaSessions } from '@/lib/charlas/queries'
+import { must } from '@/lib/supabase/must'
 import { bucketCharla } from '@/lib/charlas/status'
 import { bucketSession } from '@/lib/deliverables/pipeline'
 import type { CalendarPrograma, Programa } from '@/lib/encuentros/programas'
@@ -116,20 +117,20 @@ export async function loadPipelineSessions(
     ),
   ])
 
-  const terapiaSessions: DeliverableSession[] = ((terapia.data ?? []) as EmbeddedRow[]).map(
-    (s) => ({
-      id: s.id,
-      title: s.title,
-      session_date: s.session_date,
-      status: s.status,
-      programa: 'terapia' as const,
-      subtitulo: s.invitados?.nombre ?? null,
-      responsable: s.profiles?.nombre ?? null,
-    })
-  )
+  const terapiaSessions: DeliverableSession[] = (
+    (must(terapia, 'Sesiones de Terapia') ?? []) as EmbeddedRow[]
+  ).map((s) => ({
+    id: s.id,
+    title: s.title,
+    session_date: s.session_date,
+    status: s.status,
+    programa: 'terapia' as const,
+    subtitulo: s.invitados?.nombre ?? null,
+    responsable: s.profiles?.nombre ?? null,
+  }))
 
   const educationSessions: DeliverableSession[] = (
-    (education.data ?? []) as EmbeddedRow[]
+    (must(education, 'Sesiones de Education') ?? []) as EmbeddedRow[]
   ).map((s) => ({
     id: s.id,
     title: s.title,

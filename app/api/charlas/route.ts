@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { charlaCreateSchema } from '@/lib/validations/charlas'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { logError } from '@/lib/log'
 
 export const runtime = 'nodejs'
 
 /** Crea una charla: solo nombre y fecha. La foto y la asistencia se agregan
  *  desde su ficha. */
-export async function POST(request: NextRequest) {
+export const POST = withApiErrors(async (request: NextRequest) => {
   const auth = await requireApiPermission('charlas:manage')
   if (!auth.ok) return auth.response
 
@@ -33,9 +35,9 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error || !data) {
-    console.error('[charlas] insert error:', error)
+    logError('[charlas] insert error', error)
     return NextResponse.json({ error: 'No se pudo crear la charla' }, { status: 500 })
   }
 
   return NextResponse.json({ id: data.id }, { status: 201 })
-}
+})

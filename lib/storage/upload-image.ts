@@ -1,6 +1,7 @@
 'use client'
 
 import { getSupabaseBrowser } from '@/lib/supabase/browser'
+import { logError } from '@/lib/log'
 
 // Subida directa desde el navegador a un bucket público (sin pasar por una API
 // route: evita el límite de 4,5 MB del cuerpo de las funciones de Vercel). Lo que
@@ -156,7 +157,7 @@ export async function uploadImage({
     .upload(path, toUpload, { contentType: mime, upsert: false })
 
   if (error) {
-    console.error('[uploadImage] Storage error:', error)
+    logError('[uploadImage] Storage error', error)
     throw new Error('Error al subir el archivo')
   }
 

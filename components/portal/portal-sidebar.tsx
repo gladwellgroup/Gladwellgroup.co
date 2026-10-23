@@ -13,8 +13,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useAppRouter } from '@/hooks/use-app-router'
-import { getSupabaseBrowser } from '@/lib/supabase/browser'
+import { useSignOut } from '@/hooks/use-sign-out'
 import { type Role, type Permission } from '@/lib/permissions'
 import {
   PORTAL_NAV_ITEMS,
@@ -63,21 +62,30 @@ function HoverableSidebarShell({ children }: { children: React.ReactNode }) {
   const { setOpen, open, isMobile } = useSidebar()
   const expandedByHover = useRef(false)
 
-  const handleMouseEnter = useCallback(() => {
-    if (isMobile) return
-    if (!open) {
-      expandedByHover.current = true
-      setOpen(true)
-    }
-  }, [isMobile, open, setOpen])
+  // Solo con RATÓN (`pointerType === 'mouse'`). Un iPad horizontal supera los 1024 px y no es «móvil» para el sidebar, pero
+  // sigue siendo un dedo: `mouseenter` se dispara también al tocar (Safari lo emula), así que el toque expandía el riel y
+  // empujaba el contenido 208 px. Los eventos de puntero sí dicen quién los causó; el toque no los pasa.
+  const handlePointerEnter = useCallback(
+    (event: React.PointerEvent) => {
+      if (isMobile || event.pointerType !== 'mouse') return
+      if (!open) {
+        expandedByHover.current = true
+        setOpen(true)
+      }
+    },
+    [isMobile, open, setOpen]
+  )
 
-  const handleMouseLeave = useCallback(() => {
-    if (isMobile) return
-    if (expandedByHover.current) {
-      expandedByHover.current = false
-      setOpen(false)
-    }
-  }, [isMobile, setOpen])
+  const handlePointerLeave = useCallback(
+    (event: React.PointerEvent) => {
+      if (isMobile || event.pointerType !== 'mouse') return
+      if (expandedByHover.current) {
+        expandedByHover.current = false
+        setOpen(false)
+      }
+    },
+    [isMobile, setOpen]
+  )
 
   return (
     <Sidebar
@@ -85,8 +93,8 @@ function HoverableSidebarShell({ children }: { children: React.ReactNode }) {
       mobileSide="right"
       className="portal-header border-r border-border/50 !top-[calc(4rem+env(safe-area-inset-top,0px))] !bottom-0 md:!top-[calc(5rem+env(safe-area-inset-top,0px))] [&_[data-slot=sidebar-inner]]:!bg-transparent"
       mobileOverlayClassName="!top-[calc(4rem+env(safe-area-inset-top,0px))] md:!top-[calc(5rem+env(safe-area-inset-top,0px))]"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
     >
       {children}
     </Sidebar>
@@ -95,7 +103,7 @@ function HoverableSidebarShell({ children }: { children: React.ReactNode }) {
 
 export function PortalSidebar({ role, permissions }: PortalSidebarProps) {
   const pathname = usePathname()
-  const router = useAppRouter()
+  const { signOut, signingOut } = useSignOut()
   const { isMobile, setOpenMobile } = useSidebar()
 
   const visibleItems = PORTAL_NAV_ITEMS.filter((item) => {
@@ -108,11 +116,8 @@ export function PortalSidebar({ role, permissions }: PortalSidebarProps) {
   }
 
   async function handleSignOut() {
-    const supabase = getSupabaseBrowser()
-    await supabase.auth.signOut()
     setOpenMobile(false)
-    router.push('/login')
-    router.refresh()
+    await signOut()
   }
 
   return (
@@ -160,7 +165,7 @@ export function PortalSidebar({ role, permissions }: PortalSidebarProps) {
           <SidebarSeparator className="mb-2" />
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleSignOut}>
+              <SidebarMenuButton onClick={handleSignOut} disabled={signingOut}>
                 <LogOut className="size-5 text-muted-foreground" />
                 <span className="text-muted-foreground">Cerrar sesión</span>
               </SidebarMenuButton>

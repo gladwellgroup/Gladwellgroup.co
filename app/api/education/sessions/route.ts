@@ -3,8 +3,11 @@ import { getSupabaseServer } from '@/lib/supabase/server'
 import { requireApiPermission } from '@/lib/auth/api'
 import { educationSessionSchema } from '@/lib/validations/education'
 import { resolvePermissionsFromGrants, type Role } from '@/lib/permissions'
+import { withApiErrors } from '@/lib/api/with-errors'
+import { must } from '@/lib/supabase/must'
+import { logError } from '@/lib/log'
 
-export async function POST(request: NextRequest) {
+export const POST = withApiErrors(async (request: NextRequest) => {
   const auth = await requireApiPermission('education:create')
   if (!auth.ok) return auth.response
   const { user, role } = auth
@@ -37,11 +40,14 @@ export async function POST(request: NextRequest) {
   // No basta con "es community_admin": si además no tiene el módulo de
   // Encuentros · Educación otorgado, quedaría con una sesión asignada que
   // jamás puede abrir (resolveEducationAccess la bloquearía igual).
-  const { data: admin } = await supabase
-    .from('profiles')
-    .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
-    .eq('id', result.data.admin_id)
-    .single()
+  const admin = must(
+    await supabase
+      .from('profiles')
+      .select('role, profile_module_grants!profile_module_grants_profile_id_fkey(module_key)')
+      .eq('id', result.data.admin_id)
+      .single(),
+    'profiles'
+  )
 
   const adminPermissions = admin
     ? resolvePermissionsFromGrants(admin.role as Role, admin.profile_module_grants)
@@ -61,7 +67,7 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) {
-    console.error('[education/sessions] Supabase error:', error)
+    logError('[education/sessions] Supabase error', error)
     return NextResponse.json(
       { error: 'No se pudo crear la sesión' },
       { status: 500 }
@@ -69,4 +75,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ id: session.id }, { status: 201 })
-}
+})

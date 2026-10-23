@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { requireAuth } from '@/lib/auth/session'
 import { getSupabaseServer } from '@/lib/supabase/server'
+import { must } from '@/lib/supabase/must'
 import { BrandCard } from '@/components/brand/brand-card'
 import { BrandButton } from '@/components/brand/brand-button'
 import {
@@ -104,10 +105,16 @@ async function loadAttention(
       .in('session_id', ids.education),
   ])
 
+  // `must`: una consulta caída dejaba «Requiere atención» vacío, como si todo estuviera bien.
+  const fallidosT = must(terrT, 'Entregables con error (Terapia)') ?? []
+  const fallidosE = must(terrE, 'Entregables con error (Education)') ?? []
+  const correosT = must(mailT, 'Correos fallidos (Terapia)') ?? []
+  const correosE = must(mailE, 'Correos fallidos (Education)') ?? []
+
   const items: AttentionItem[] = []
   const path = (s: DeliverableSession) => sessionHref(basePath, s)
 
-  for (const row of [...(terrT.data ?? []), ...(terrE.data ?? [])]) {
+  for (const row of [...fallidosT, ...fallidosE]) {
     const s = byId.get(row.session_id as string)
     if (s) {
       items.push({
@@ -120,7 +127,7 @@ async function loadAttention(
 
   // Un correo fallido por sesión, no uno por persona: la acción es la misma.
   const fallidos = new Map<string, number>()
-  for (const row of [...(mailT.data ?? []), ...(mailE.data ?? [])]) {
+  for (const row of [...correosT, ...correosE]) {
     const id = row.session_id as string
     fallidos.set(id, (fallidos.get(id) ?? 0) + 1)
   }
@@ -188,7 +195,10 @@ async function loadCommunity(supabase: SupabaseClient, ids: SessionIds) {
       .in('session_id', ids.education),
   ])
 
-  const rows = [...(terapia.data ?? []), ...(education.data ?? [])]
+  const rows = [
+    ...(must(terapia, 'Asistentes de Terapia') ?? []),
+    ...(must(education, 'Asistentes de Education') ?? []),
+  ]
   const sesionesPorCorreo = new Map<string, number>()
   let porQr = 0
 
@@ -259,14 +269,14 @@ export default async function DashboardPage() {
           .eq('assigned_to', user.id)
           .order('created_at', { ascending: false })
           .limit(5)
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
     // La cola ya viene filtrada en SQL (solo las piezas de este usuario, sin
     // terminar), no se carga toda la tabla para filtrar aquí.
     hasParrilla ? loadParrillaPending(supabase, user.id) : Promise.resolve([]),
   ])
 
   const counts = buildCounts(sessions)
-  const crmLeads = (crmLeadsResult.data ?? []) as DashboardLead[]
+  const crmLeads = (must(crmLeadsResult, 'Leads del dashboard') ?? []) as DashboardLead[]
   const parrillaPending = parrillaQueue.slice(0, 5)
 
   // Un solo cálculo de "qué sesiones puede ver este usuario", reutilizado por
