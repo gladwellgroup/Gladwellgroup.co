@@ -54,4 +54,11 @@ export const FOUNDERS: Founder[] = [
       unbroken("ecosistema tech."),
     image: "/images/jhonattan-rodriguez-2.jpg",
   },
+  {
+    name: "María José Sánchez",
+    title: "Treasurer",
+    description:
+      "Médica veterinaria que terminó enamorada de las finanzas. Estudiante eterna, optimista y curiosa por naturaleza. Me encanta aprender, hacer preguntas y descubrir nuevas formas de ver las cosas para crecer y aportar.",
+    image: "/images/maria-jose-sanchez.jpg",
+  },
 ]
